@@ -39,7 +39,18 @@ function formatKlokken(d) {
 function buildUrNode(registerInterval) {
   const el = document.createElement('div');
   el.className = 'ur-display';
-  const tick = () => { el.textContent = formatKlokken(new Date()); };
+  // cqw alene passer kun til boksens BREDDE, ikke hoejden -- en streg-tynd eller kvadratisk
+  // boks ville faa en tekst der enten er alt for stor (klippes af overflow:hidden) eller alt
+  // for lille. Genberegn i stedet ud fra elementets egen, rent faktiske rect (begge akser)
+  // hvert sekund -- virker uanset kontekst (skaerm, Live View, redigerings-canvas), da den
+  // ikke er afhaengig af container-type/cqw at regne rigtigt.
+  const tick = () => {
+    el.textContent = formatKlokken(new Date());
+    const rect = el.getBoundingClientRect();
+    if (rect.width && rect.height) {
+      el.style.fontSize = Math.min(rect.height * 0.7, rect.width / 3) + 'px';
+    }
+  };
   tick();
   registerInterval(setInterval(tick, 1000));
   return el;

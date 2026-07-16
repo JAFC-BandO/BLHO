@@ -8,8 +8,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="render-shared.css?v=2026-07-16-3">
-<script src="render-shared.js?v=2026-07-16-3"></script>
+<link rel="stylesheet" href="render-shared.css?v=2026-07-16-4">
+<script src="render-shared.js?v=2026-07-16-4"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -115,6 +115,11 @@
     min-width: 40px;
     min-height: 30px;
   }
+  /* En streg skal kunne trækkes helt ned til en rigtig tynd linje -- den generelle
+     min-width/min-height ovenfor findes for at andre elementtyper (tekst, billeder osv.)
+     ikke kan resizes ned til et upraktisk lille punkt, men den floor gjorde at en streg
+     ALDRIG visuelt kunne blive tyndere end 30px i editoren, uanset hvad man traak til. */
+  .el[data-type="streg"] { min-width: 4px; min-height: 4px; }
   .el.selectable-target { outline: 2px solid #ffb300; }
   .el.selected { outline: 2px solid #4d5bff; }
   .streg-del { display: none; }
@@ -152,11 +157,6 @@
   .miljoeffekt-desc { line-height: 1.4; margin: 0; }
   .miljoeffekt-amount { font-weight: 800; margin: 2% 0; }
   .miljoeffekt-label { margin: 1% 0; }
-  .miljoeffekt-linkbox { text-align: center; padding: 4% 0 6% 0; }
-  .miljoeffekt-btn {
-    display: inline-block; background: #f23297; color: #fff; font-weight: 800;
-    padding: 2% 6%; border-radius: 10px; text-decoration: none;
-  }
 
   /* render-shared.css's .el/.el-text er beregnet til read-only visning (skaerm.html og Live
      View herunder), men deler klassenavn med redigerings-canvas'ets EGNE .el/.el-text regler
@@ -358,7 +358,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-16-master5';
+  const SCRIPT_VERSION = '2026-07-16-master6';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1715,13 +1715,9 @@
         card.textContent = 'Kunne ikke hente data';
       });
     } else if (el.type === 'ur') {
-      const clock = buildUrNode(id => rotatorIntervals.push(id));
-      body.appendChild(clock);
-      // .ur-display's font-size (10cqw) er beregnet til skaerm.html/Live View, som har
-      // container-type:inline-size -- det har redigerings-canvas'et ikke, saa cqw ville
-      // regne forkert her. Samme pixel-baseret rettelse som miljoeffekt-kortet ovenfor,
-      // udskudt til naeste tick saa clock allerede er i DOM'en (getBoundingClientRect virker).
-      setTimeout(() => { clock.style.fontSize = elementFontSizePx(clock, 10); }, 0);
+      // buildUrNode regner selv sin skriftstoerrelse ud fra elementets egen rect (bredde OG
+      // hoejde) hvert sekund -- ingen ekstra editor-specifik korrektion noedvendig her.
+      body.appendChild(buildUrNode(id => rotatorIntervals.push(id)));
     }
 
     if (el.type === 'streg') {
