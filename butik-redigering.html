@@ -118,6 +118,8 @@
   }
   .el-header .tag { color: #aaa; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; }
   .el-header .del { color: #ff8080; cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 4px; }
+  .fmt-group { display: none; align-items: center; }
+  .el.selected .fmt-group { display: flex; }
   .el-header .fmt-btn {
     background: rgba(255,255,255,.15); color: white; border: none; border-radius: 4px;
     font-size: 10px; padding: 1px 6px; cursor: pointer; line-height: 1.5; margin: 0 2px;
@@ -691,7 +693,7 @@
 
     if (textDiv) {
       const fmtGroup = document.createElement('span');
-      fmtGroup.style.cssText = 'display:flex; align-items:center;';
+      fmtGroup.className = 'fmt-group';
       fmtGroup.appendChild(buildFormatButton('B', 'font-weight:700;', () => {
         document.execCommand('bold');
         el.html = textDiv.innerHTML;
