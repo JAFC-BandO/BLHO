@@ -245,9 +245,9 @@
         <button class="add-btn" data-add="billede">+ Billede</button>
         <button class="add-btn" data-add="video">+ Video</button>
         <button class="add-btn" data-add="boks">+ Boks</button>
-        <button class="add-btn" data-add="rotator">+ Rotator</button>
-        <button class="add-btn" data-add="miljoeffekt">+ Miljøeffekt</button>
-        <button class="add-btn" data-add="streg">+ Streg</button>
+        <button class="add-btn superadmin-only" data-add="rotator" style="display:none;">+ Rotator</button>
+        <button class="add-btn superadmin-only" data-add="miljoeffekt" style="display:none;">+ Miljøeffekt</button>
+        <button class="add-btn superadmin-only" data-add="streg" style="display:none;">+ Streg</button>
       </div>
 
       <div id="propsPanel" style="display:none; margin-bottom:20px; padding:12px; background:#f7f7fb; border-radius:8px;">
@@ -523,6 +523,9 @@
 
     erSuperadmin = !!brugerRow.er_superadmin;
     document.getElementById('superadminBadge').style.display = erSuperadmin ? 'inline-block' : 'none';
+    document.querySelectorAll('.superadmin-only').forEach(elNode => {
+      elNode.style.display = erSuperadmin ? '' : 'none';
+    });
     currentButikId = brugerRow.butik_id;
     document.getElementById('butikNavn').textContent = brugerRow.butikker.navn;
 
