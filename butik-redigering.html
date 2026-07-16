@@ -220,9 +220,17 @@
 </div>
 
 <div id="app">
-  <div class="topbar">
+  <div class="topbar" style="position:relative;">
     <div class="butik-badge" id="butikNavn"></div>
-    <span id="superadminBadge" style="display:none; background:#ffd700; color:#5a4600; font-weight:700; font-size:12px; padding:4px 10px; border-radius:20px; margin-left:8px;">👑 Superadmin</span>
+    <span id="superadminBadge" style="display:none; background:#ffd700; color:#5a4600; font-weight:700; font-size:12px; padding:4px 10px; border-radius:20px; margin-left:8px; cursor:pointer; user-select:none;">👑 Superadmin ▾</span>
+    <div id="superadminMenu" style="display:none; position:absolute; top:100%; left:16px; margin-top:6px; background:white; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.2); padding:14px; width:280px; z-index:1000;">
+      <h2 style="margin:0 0 10px 0; font-size:13px; text-transform:uppercase; letter-spacing:.03em; color:#888;">Superadmin</h2>
+      <button id="saveAsStandardBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">⭐ Gem denne side som standard for alle butikker</button>
+      <div style="font-size:11px; color:#666; line-height:1.5;">
+        <b>Lås et element:</b> vælg det på canvas, brug 🔓-knappen i Egenskaber-panelet.<br>
+        <b>Del/afmærk en skabelon:</b> brug "Gem side" / "Gem valgt element" i sidebaren, eller ⭐ ud for en eksisterende skabelon.
+      </div>
+    </div>
     <div class="topbar-actions">
       <div class="msg" id="saveMsg" style="display:none;"></div>
       <button id="saveBtn">Gem ændringer</button>
@@ -656,6 +664,42 @@
     loginWrap.style.display = 'flex';
     loginMsg.className = 'msg';
     loginMsg.style.display = 'none';
+  });
+
+  document.getElementById('superadminBadge').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const menu = document.getElementById('superadminMenu');
+    menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+  });
+  document.addEventListener('click', (e) => {
+    const menu = document.getElementById('superadminMenu');
+    if (menu.style.display === 'block' && !menu.contains(e.target)) menu.style.display = 'none';
+  });
+
+  document.getElementById('saveAsStandardBtn').addEventListener('click', async () => {
+    const navn = prompt('Navn på standard-skabelonen:', 'Standard');
+    if (!navn) return;
+
+    commitActiveSide();
+
+    const others = sabloner.filter(s => s.standard);
+    for (const o of others) {
+      await client.from('sabloner').update({ standard: false }).eq('id', o.id);
+      o.standard = false;
+    }
+
+    const { data, error } = await client
+      .from('sabloner')
+      .insert({ butik_id: currentButikId, type: 'side', navn, delt: true, standard: true, data: { elements, background: baggrundsfarve } })
+      .select()
+      .single();
+
+    if (error) { alert('Kunne ikke gemme: ' + error.message); return; }
+
+    sabloner.unshift(data);
+    renderSablonerGrid();
+    document.getElementById('superadminMenu').style.display = 'none';
+    alert('Gemt og sat som standard-skabelon for alle butikker!');
   });
 
   client.auth.getSession().then(({ data: { session } }) => {
