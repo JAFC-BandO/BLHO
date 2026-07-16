@@ -272,7 +272,7 @@
         <button class="add-btn" data-add="billede">+ Billede</button>
         <button class="add-btn" data-add="video">+ Video</button>
         <button class="add-btn" data-add="boks">+ Boks</button>
-        <button class="add-btn superadmin-only" data-add="rotator" style="display:none;">+ Rotator</button>
+        <button class="add-btn" data-add="rotator">+ Rotator</button>
         <button class="add-btn superadmin-only" data-add="miljoeffekt" style="display:none;">+ Miljøeffekt</button>
         <button class="add-btn superadmin-only" data-add="streg" style="display:none;">+ Streg</button>
       </div>
@@ -354,7 +354,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-16-master1';
+  const SCRIPT_VERSION = '2026-07-16-master2';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1240,23 +1240,19 @@
       const label = document.createElement('span');
       label.textContent = (s.id === liveAktivSideId ? '🔴 ' : '') + s.navn;
       tab.appendChild(label);
-      if (erSuperadmin) {
-        const del = document.createElement('span');
-        del.className = 'del';
-        del.textContent = '✕';
-        del.addEventListener('click', (e) => { e.stopPropagation(); deleteSide(s.id); });
-        tab.appendChild(del);
-      }
+      const del = document.createElement('span');
+      del.className = 'del';
+      del.textContent = '✕';
+      del.addEventListener('click', (e) => { e.stopPropagation(); deleteSide(s.id); });
+      tab.appendChild(del);
       tab.addEventListener('click', () => switchToSide(s.id));
       wrap.appendChild(tab);
     });
-    if (erSuperadmin) {
-      const nyBtn = document.createElement('div');
-      nyBtn.className = 'side-tab-new';
-      nyBtn.textContent = '+ Ny side';
-      nyBtn.addEventListener('click', addNewSide);
-      wrap.appendChild(nyBtn);
-    }
+    const nyBtn = document.createElement('div');
+    nyBtn.className = 'side-tab-new';
+    nyBtn.textContent = '+ Ny side';
+    nyBtn.addEventListener('click', addNewSide);
+    wrap.appendChild(nyBtn);
   }
 
   // ---------- Live view (viser hvad der faktisk er gemt/vises paa den rigtige skaerm) ----------
