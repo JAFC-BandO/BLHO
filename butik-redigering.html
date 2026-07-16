@@ -264,6 +264,13 @@
           <label style="margin-top:0;">Interval mellem slides (sek)</label>
           <input type="number" id="propInterval" min="1" max="120" step="1" style="width:80px;">
         </div>
+        <div style="margin-bottom:12px;">
+          <label style="margin-top:0;">Centrer på skærmen</label>
+          <div style="display:flex; gap:8px;">
+            <button id="centerHBtn" style="padding:6px 10px; font-size:12px; flex:1;">Vandret</button>
+            <button id="centerVBtn" style="padding:6px 10px; font-size:12px; flex:1;">Lodret</button>
+          </div>
+        </div>
         <div>
           <label style="margin-top:0;">Lag (ræsækkefølge)</label>
           <div style="display:flex; gap:8px;">
@@ -1585,6 +1592,20 @@
     if (selectedElementId) moveElement(selectedElementId, 1);
   });
 
+  document.getElementById('centerHBtn').addEventListener('click', () => {
+    const el = elements.find(x => x.id === selectedElementId);
+    if (!el) return;
+    el.x = (100 - el.w) / 2;
+    renderCanvas();
+  });
+
+  document.getElementById('centerVBtn').addEventListener('click', () => {
+    const el = elements.find(x => x.id === selectedElementId);
+    if (!el) return;
+    el.y = (100 - el.h) / 2;
+    renderCanvas();
+  });
+
   document.getElementById('propInterval').addEventListener('input', (e) => {
     const el = elements.find(x => x.id === selectedElementId);
     if (!el) return;
@@ -1592,22 +1613,93 @@
     renderCanvas();
   });
 
+  const SNAP_TOLERANCE = 1.2;
+  let vGuide = null, hGuide = null;
+
+  function showVGuide(xPercent) {
+    if (!vGuide) {
+      vGuide = document.createElement('div');
+      vGuide.style.cssText = 'position:absolute; top:0; bottom:0; width:0; border-left:1px dashed #ff3366; z-index:9999; pointer-events:none;';
+      canvas.appendChild(vGuide);
+    }
+    vGuide.style.left = xPercent + '%';
+  }
+  function showHGuide(yPercent) {
+    if (!hGuide) {
+      hGuide = document.createElement('div');
+      hGuide.style.cssText = 'position:absolute; left:0; right:0; height:0; border-top:1px dashed #ff3366; z-index:9999; pointer-events:none;';
+      canvas.appendChild(hGuide);
+    }
+    hGuide.style.top = yPercent + '%';
+  }
+  function clearGuides() {
+    if (vGuide) { vGuide.remove(); vGuide = null; }
+    if (hGuide) { hGuide.remove(); hGuide = null; }
+  }
+
+  function snapTargetsX(excludeId) {
+    const targets = [0, 50, 100];
+    elements.forEach(e => {
+      if (e.id === excludeId) return;
+      targets.push(e.x, e.x + e.w / 2, e.x + e.w);
+    });
+    return targets;
+  }
+  function snapTargetsY(excludeId) {
+    const targets = [0, 50, 100];
+    elements.forEach(e => {
+      if (e.id === excludeId) return;
+      targets.push(e.y, e.y + e.h / 2, e.y + e.h);
+    });
+    return targets;
+  }
+  function findSnap(value, targets) {
+    let best = null;
+    targets.forEach(t => {
+      const d = Math.abs(value - t);
+      if (d <= SNAP_TOLERANCE && (best === null || d < best.d)) best = { t, d };
+    });
+    return best ? best.t : null;
+  }
+
   function startDrag(e, el, node) {
     e.preventDefault();
     e.stopPropagation();
     const rect = canvas.getBoundingClientRect();
     const startX = e.clientX, startY = e.clientY;
     const startLeft = el.x, startTop = el.y;
+    const xTargets = snapTargetsX(el.id);
+    const yTargets = snapTargetsY(el.id);
 
     function onMove(ev) {
       const dx = ((ev.clientX - startX) / rect.width) * 100;
       const dy = ((ev.clientY - startY) / rect.height) * 100;
-      el.x = clamp(startLeft + dx, 0, 100 - el.w);
-      el.y = clamp(startTop + dy, 0, 100 - el.h);
+      let newX = clamp(startLeft + dx, 0, 100 - el.w);
+      let newY = clamp(startTop + dy, 0, 100 - el.h);
+
+      clearGuides();
+
+      const leftSnap = findSnap(newX, xTargets);
+      const centerXSnap = findSnap(newX + el.w / 2, xTargets);
+      const rightSnap = findSnap(newX + el.w, xTargets);
+      if (leftSnap !== null) { newX = leftSnap; showVGuide(leftSnap); }
+      else if (centerXSnap !== null) { newX = centerXSnap - el.w / 2; showVGuide(centerXSnap); }
+      else if (rightSnap !== null) { newX = rightSnap - el.w; showVGuide(rightSnap); }
+
+      const topSnap = findSnap(newY, yTargets);
+      const centerYSnap = findSnap(newY + el.h / 2, yTargets);
+      const bottomSnap = findSnap(newY + el.h, yTargets);
+      if (topSnap !== null) { newY = topSnap; showHGuide(topSnap); }
+      else if (centerYSnap !== null) { newY = centerYSnap - el.h / 2; showHGuide(centerYSnap); }
+      else if (bottomSnap !== null) { newY = bottomSnap - el.h; showHGuide(bottomSnap); }
+
+      el.x = newX;
+      el.y = newY;
       node.style.left = el.x + '%';
       node.style.top = el.y + '%';
     }
     function onUp() {
+      clearGuides();
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp);
     }
