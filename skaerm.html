@@ -36,6 +36,13 @@
   .el[data-type="titel"] .el-text { font-size: 3.2vw; font-weight: 700; }
   .el[data-type="tekst"] .el-text { font-size: 1.8vw; color: #d0d0d0; }
   .el-media { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .miljoeffekt-grid {
+    width: 100%; height: 100%; display: grid; grid-template-columns: 1fr 1fr;
+    gap: 4%; padding: 6%; box-sizing: border-box; align-content: center;
+  }
+  .miljoeffekt-item { text-align: center; }
+  .miljoeffekt-item b { display: block; font-size: 1.6vw; font-weight: 700; color: #4d5bff; }
+  .miljoeffekt-item span { display: block; font-size: 0.8vw; color: #ccc; }
 
   /* Legacy fallback (ingen layout gemt endnu) */
   .legacy-wrap {
@@ -80,6 +87,28 @@
 
   function visFejl(tekst) {
     screen.innerHTML = '<div class="fejl">' + tekst + '</div>';
+  }
+
+  const MILJOEFFEKT_URL = 'https://www.boerneloppen.dk/boerneloppen-theme/world_goals/calculateConsumptionVariables.json';
+  const MILJOEFFEKT_REFRESH_MS = 60000;
+
+  function formatDanskTal(n) {
+    return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
+
+  async function fetchMiljoeffektData() {
+    const res = await fetch(MILJOEFFEKT_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  }
+
+  function miljoeffektGridHtml(data) {
+    return (
+      '<div class="miljoeffekt-item"><b>' + formatDanskTal(data.savedWaterConsumption) + '</b><span>liter vand sparet</span></div>' +
+      '<div class="miljoeffekt-item"><b>' + formatDanskTal(data.savedCo2Emissions) + '</b><span>kg CO2 sparet</span></div>' +
+      '<div class="miljoeffekt-item"><b>' + formatDanskTal(data.savedToiletFlushes) + '</b><span>toiletskyl sparet</span></div>' +
+      '<div class="miljoeffekt-item"><b>' + formatDanskTal(data.savedKmInCar) + '</b><span>km i bil sparet</span></div>'
+    );
   }
 
   function stripInlineFontSize(html) {
@@ -173,6 +202,18 @@
       if (el.slides.length > 1) {
         rotatorIntervals.push(setInterval(showSlide, el.intervalMs || 5000));
       }
+    } else if (el.type === 'miljoeffekt') {
+      const grid = document.createElement('div');
+      grid.className = 'miljoeffekt-grid';
+      node.appendChild(grid);
+
+      const load = () => {
+        fetchMiljoeffektData()
+          .then(data => { grid.innerHTML = miljoeffektGridHtml(data); })
+          .catch(() => { /* behold seneste kendte vaerdier ved fejl */ });
+      };
+      load();
+      rotatorIntervals.push(setInterval(load, MILJOEFFEKT_REFRESH_MS));
     }
     return node;
   }

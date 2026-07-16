@@ -134,6 +134,13 @@
   }
   .emoji-picker button { font-size: 16px; padding: 4px; border: none; background: none; cursor: pointer; border-radius: 4px; }
   .emoji-picker button:hover { background: #eee; }
+  .miljoeffekt-grid {
+    width: 100%; height: 100%; display: grid; grid-template-columns: 1fr 1fr;
+    gap: 4%; padding: 6%; box-sizing: border-box; align-content: center;
+  }
+  .miljoeffekt-item { text-align: center; color: white; }
+  .miljoeffekt-item b { display: block; font-size: 1.6vw; font-weight: 700; color: #4d5bff; }
+  .miljoeffekt-item span { display: block; font-size: 0.8vw; color: #ccc; }
   .el-body { flex: 1; overflow: hidden; position: relative; }
   .el-text {
     width: 100%; height: 100%; color: white; padding: 4px 6px; outline: none;
@@ -221,6 +228,7 @@
         <button class="add-btn" data-add="video">+ Video</button>
         <button class="add-btn" data-add="boks">+ Boks</button>
         <button class="add-btn" data-add="rotator">+ Rotator</button>
+        <button class="add-btn" data-add="miljoeffekt">+ Miljøeffekt</button>
       </div>
 
       <div id="propsPanel" style="display:none; margin-bottom:20px; padding:12px; background:#f7f7fb; border-radius:8px;">
@@ -409,6 +417,27 @@
       if (!node.getAttribute('style').trim()) node.removeAttribute('style');
     });
     return tmp.innerHTML;
+  }
+
+  const MILJOEFFEKT_URL = 'https://www.boerneloppen.dk/boerneloppen-theme/world_goals/calculateConsumptionVariables.json';
+
+  function formatDanskTal(n) {
+    return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
+
+  async function fetchMiljoeffektData() {
+    const res = await fetch(MILJOEFFEKT_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  }
+
+  function miljoeffektGridHtml(data) {
+    return (
+      '<div class="miljoeffekt-item"><b>' + formatDanskTal(data.savedWaterConsumption) + '</b><span>liter vand sparet</span></div>' +
+      '<div class="miljoeffekt-item"><b>' + formatDanskTal(data.savedCo2Emissions) + '</b><span>kg CO2 sparet</span></div>' +
+      '<div class="miljoeffekt-item"><b>' + formatDanskTal(data.savedToiletFlushes) + '</b><span>toiletskyl sparet</span></div>' +
+      '<div class="miljoeffekt-item"><b>' + formatDanskTal(data.savedKmInCar) + '</b><span>km i bil sparet</span></div>'
+    );
   }
 
   function escapeHtml(str) {
@@ -1026,6 +1055,7 @@
         video:   { x: 5,  y: 50, w: 90, h: 40, url: null },
         boks:    { x: 10, y: 10, w: 40, h: 30, boxColor: '#1a1a1a' },
         rotator: { x: 10, y: 10, w: 50, h: 50, slides: [], intervalMs: 5000 },
+        miljoeffekt: { x: 10, y: 10, w: 50, h: 30 },
       }[type];
       elements.push(Object.assign({ id: uid(), type }, defaults));
       renderCanvas();
@@ -1349,6 +1379,19 @@
       }
 
       body.appendChild(manageBar);
+    } else if (el.type === 'miljoeffekt') {
+      const grid = document.createElement('div');
+      grid.className = 'miljoeffekt-grid';
+      grid.innerHTML = '<div class="miljoeffekt-item"><span>Henter live data...</span></div>';
+      body.appendChild(grid);
+
+      fetchMiljoeffektData().then(data => {
+        grid.innerHTML = miljoeffektGridHtml(data);
+        grid.querySelectorAll('b').forEach(b => { b.style.fontSize = canvasFontSizePx(1.6); });
+        grid.querySelectorAll('span').forEach(s => { s.style.fontSize = canvasFontSizePx(0.8); });
+      }).catch(() => {
+        grid.innerHTML = '<div class="miljoeffekt-item"><span>Kunne ikke hente data</span></div>';
+      });
     }
 
     const header = document.createElement('div');
