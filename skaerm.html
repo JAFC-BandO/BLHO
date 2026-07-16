@@ -193,7 +193,18 @@
     }
   }
 
+  const RELOAD_MS = 30 * 60 * 1000; // genindlæs siden hvert 30. minut for altid at hente frisk kode
+  function scheduleAutoReload() {
+    setTimeout(() => {
+      const url = new URL(location.href);
+      url.searchParams.set('_cb', Date.now());
+      location.href = url.toString();
+    }, RELOAD_MS);
+  }
+
   async function start() {
+    scheduleAutoReload();
+
     if (!email || !password) {
       visFejl('Mangler ?email= og &password= i URL\'en.');
       return;
