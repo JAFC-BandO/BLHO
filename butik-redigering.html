@@ -8,8 +8,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="render-shared.css?v=2026-07-16-4">
-<script src="render-shared.js?v=2026-07-16-4"></script>
+<link rel="stylesheet" href="render-shared.css?v=2026-07-16-5">
+<script src="render-shared.js?v=2026-07-16-5"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -324,6 +324,11 @@
           <label style="margin-top:0;">Lås i fælles skabelon</label>
           <button id="propLockBtn" style="padding:6px 10px; font-size:12px; width:100%;">🔓 Lås element</button>
           <div style="font-size:11px; color:#888; margin-top:4px;">Låste elementer vises identisk (uden kasser/kontroller) på ALLE butikkers skærme — almindelige admins kan se dem, men ikke flytte/redigere/slette dem.</div>
+          <div id="propKunPaaSideRow" style="display:none; margin-top:8px;">
+            <label style="margin-top:0;">Vis kun på side (valgfrit)</label>
+            <input type="text" id="propKunPaaSide" placeholder="Blank = alle sider, fx &quot;Side 1&quot;" style="width:100%;">
+            <div style="font-size:11px; color:#888; margin-top:4px;">Skal matche navnet på siden præcis (som det står på sidefanen). Blank = elementet vises på alle butikkers sider.</div>
+          </div>
         </div>
       </div>
 
@@ -358,7 +363,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-16-master6';
+  const SCRIPT_VERSION = '2026-07-16-master7';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -899,7 +904,8 @@
   // som skaerm.html og Live View bruger, se render-shared.js).
   function displayElements() {
     if (masterEditMode) return elements;
-    return mergeMasterElements(elements, masterTemplate ? masterTemplate.elements : []);
+    const aktivSide = sider.find(s => s.id === aktivSideId);
+    return mergeMasterElements(elements, masterTemplate ? masterTemplate.elements : [], aktivSide ? aktivSide.navn : null);
   }
 
   function renderSablonerGrid() {
@@ -1307,12 +1313,14 @@
     // layout.elements/background er altid et spejl af den AKTIVE side (samme felter
     // skaerm.html laeser) -- saa Live View viser garanteret praecis det samme som skaermen.
     // Laaste elementer fra den faelles skabelon flettes ind praecis som paa den rigtige skaerm.
+    const harSider = Array.isArray(data.layout.sider) && data.layout.sider.length;
+    const aktiv = harSider ? (data.layout.sider.find(s => s.id === data.layout.aktivSideId) || data.layout.sider[0]) : null;
+
     box.style.background = data.layout.background || '#0a0a0a';
-    const merged = mergeMasterElements(data.layout.elements, masterTemplate ? masterTemplate.elements : []);
+    const merged = mergeMasterElements(data.layout.elements, masterTemplate ? masterTemplate.elements : [], aktiv ? aktiv.navn : null);
     merged.forEach(el => box.appendChild(buildElNode(el, id => liveViewIntervals.push(id))));
 
-    if (Array.isArray(data.layout.sider) && data.layout.sider.length) {
-      const aktiv = data.layout.sider.find(s => s.id === data.layout.aktivSideId) || data.layout.sider[0];
+    if (harSider) {
       liveAktivSideId = aktiv.id;
       badge.textContent = 'Side: ' + aktiv.navn;
     } else {
@@ -1896,6 +1904,8 @@
 
     document.getElementById('propsLockRow').style.display = masterEditMode ? 'block' : 'none';
     document.getElementById('propLockBtn').textContent = el.locked ? '🔒 Lås op' : '🔓 Lås element';
+    document.getElementById('propKunPaaSideRow').style.display = (masterEditMode && el.locked) ? 'block' : 'none';
+    document.getElementById('propKunPaaSide').value = el.kunPaaSide || '';
 
     const canEditSelected = masterEditMode || !el.locked;
     panel.querySelectorAll('input, button').forEach(ctrl => {
@@ -1951,6 +1961,13 @@
     el.locked = !el.locked;
     renderPropsPanel();
     renderCanvas();
+  });
+
+  document.getElementById('propKunPaaSide').addEventListener('input', (e) => {
+    const el = elements.find(x => x.id === selectedElementId);
+    if (!el) return;
+    const val = e.target.value.trim();
+    if (val) el.kunPaaSide = val; else delete el.kunPaaSide;
   });
 
   document.getElementById('centerHBtn').addEventListener('click', () => {

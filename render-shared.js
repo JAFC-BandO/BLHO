@@ -32,26 +32,43 @@ function formatDanskTal(n) {
   return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
 
-function formatKlokken(d) {
-  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-}
-
 function buildUrNode(registerInterval) {
   const el = document.createElement('div');
   el.className = 'ur-display';
+  const hh = document.createElement('span');
+  const colon = document.createElement('span');
+  colon.textContent = ':';
+  colon.className = 'ur-colon';
+  const mm = document.createElement('span');
+  el.appendChild(hh);
+  el.appendChild(colon);
+  el.appendChild(mm);
+
   // cqw alene passer kun til boksens BREDDE, ikke hoejden -- en streg-tynd eller kvadratisk
   // boks ville faa en tekst der enten er alt for stor (klippes af overflow:hidden) eller alt
-  // for lille. Genberegn i stedet ud fra elementets egen, rent faktiske rect (begge akser)
-  // hvert sekund -- virker uanset kontekst (skaerm, Live View, redigerings-canvas), da den
-  // ikke er afhaengig af container-type/cqw at regne rigtigt.
-  const tick = () => {
-    el.textContent = formatKlokken(new Date());
+  // for lille. Genberegn i stedet ud fra elementets egen, rent faktiske rect (begge akser),
+  // virker uanset kontekst (skaerm, Live View, redigerings-canvas) da den ikke er afhaengig
+  // af container-type/cqw at regne rigtigt.
+  const resize = () => {
     const rect = el.getBoundingClientRect();
     if (rect.width && rect.height) {
       el.style.fontSize = Math.min(rect.height * 0.7, rect.width / 3) + 'px';
     }
   };
+  const tick = () => {
+    const d = new Date();
+    hh.textContent = String(d.getHours()).padStart(2, '0');
+    mm.textContent = String(d.getMinutes()).padStart(2, '0');
+    colon.style.opacity = d.getSeconds() % 2 === 0 ? '1' : '0';
+    resize();
+  };
   tick();
+  // Foerste maaling lige efter oprettelse rammer altid 0x0 (noden er endnu ikke sat ind i
+  // DOM'en af den kaldende funktion) -- CSS'ens 10cqw-fallback slaar saa igennem i et helt
+  // sekund foer foerste tick retter den, hvilket saas som stoerrelsen der "hopper". rAF
+  // koerer lige foer naeste repaint, efter noden er blevet indsat, saa den rigtige
+  // stoerrelse naar at blive sat FOER noget overhovedet naar at blive tegnet paa skaermen.
+  requestAnimationFrame(resize);
   registerInterval(setInterval(tick, 1000));
   return el;
 }
@@ -87,8 +104,11 @@ function miljoeffektCardHtml(data) {
 // en butiks lokale kopi med samme id (fx fra dengang siden blev oprettet ud fra skabelonen),
 // saa en aendring superadmin laver i masteren slaar igennem alle steder automatisk -- ingen
 // butik skal selv goere noget for at faa opdateringen.
-function mergeMasterElements(storeElements, masterElements) {
-  const lockedMaster = (masterElements || []).filter(e => e.locked);
+// sideName: navnet paa den side der reelt vises lige nu. Et laast element vises paa ALLE
+// sider som udgangspunkt (fx et ur/logo) -- MEDMINDRE det har sit eget kunPaaSide sat, i saa
+// fald vises det udelukkende naar sideName matcher praecis det navn.
+function mergeMasterElements(storeElements, masterElements, sideName) {
+  const lockedMaster = (masterElements || []).filter(e => e.locked && (!e.kunPaaSide || e.kunPaaSide === sideName));
   const lockedIds = new Set(lockedMaster.map(e => e.id));
   const ownOnly = (storeElements || []).filter(e => !lockedIds.has(e.id));
   return lockedMaster.concat(ownOnly);
