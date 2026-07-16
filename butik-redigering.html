@@ -1222,28 +1222,63 @@
       manageBar.appendChild(linkBtn);
 
       const sideSkabeloner = sabloner.filter(s => s.type === 'side');
-      if (sideSkabeloner.length) {
+      if (sider.length > 1 || sideSkabeloner.length) {
         const sideSelect = document.createElement('select');
-        sideSelect.style.cssText = 'flex-shrink:0; font-size:10px; padding:4px; border-radius:4px; border:1px solid #444; background:#111; color:#eee; width:90px;';
+        sideSelect.style.cssText = 'flex-shrink:0; font-size:10px; padding:4px; border-radius:4px; border:1px solid #444; background:#111; color:#eee; width:100px;';
         const placeholderOpt = document.createElement('option');
         placeholderOpt.textContent = '+ Side...';
         placeholderOpt.value = '';
         sideSelect.appendChild(placeholderOpt);
-        sideSkabeloner.forEach(s => {
-          const opt = document.createElement('option');
-          opt.value = s.id;
-          opt.textContent = s.navn;
-          sideSelect.appendChild(opt);
-        });
+
+        if (sider.length > 1) {
+          const sideGroup = document.createElement('optgroup');
+          sideGroup.label = 'Sider';
+          sider.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = 'side:' + s.id;
+            opt.textContent = s.navn;
+            sideGroup.appendChild(opt);
+          });
+          sideSelect.appendChild(sideGroup);
+        }
+
+        if (sideSkabeloner.length) {
+          const skabelonGroup = document.createElement('optgroup');
+          skabelonGroup.label = 'Skabeloner';
+          sideSkabeloner.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = 'skabelon:' + s.id;
+            opt.textContent = s.navn;
+            skabelonGroup.appendChild(opt);
+          });
+          sideSelect.appendChild(skabelonGroup);
+        }
+
         sideSelect.addEventListener('change', () => {
-          const chosen = sabloner.find(s => s.id === sideSelect.value);
-          if (chosen) {
-            el.slides.push({
-              type: 'side',
-              elements: JSON.parse(JSON.stringify(chosen.data.elements || [])),
-              background: chosen.data.background || '#0a0a0a',
-            });
-            renderCanvas();
+          const [kind, id] = sideSelect.value.split(':');
+          if (kind === 'side') {
+            // Brug live data hvis det er den side vi lige nu redigerer, ellers den gemte version
+            const side = id === aktivSideId
+              ? { elements, background: baggrundsfarve }
+              : sider.find(s => s.id === id);
+            if (side) {
+              el.slides.push({
+                type: 'side',
+                elements: JSON.parse(JSON.stringify(side.elements || [])),
+                background: side.background || '#0a0a0a',
+              });
+              renderCanvas();
+            }
+          } else if (kind === 'skabelon') {
+            const chosen = sabloner.find(s => s.id === id);
+            if (chosen) {
+              el.slides.push({
+                type: 'side',
+                elements: JSON.parse(JSON.stringify(chosen.data.elements || [])),
+                background: chosen.data.background || '#0a0a0a',
+              });
+              renderCanvas();
+            }
           }
         });
         manageBar.appendChild(sideSelect);
