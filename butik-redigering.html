@@ -134,13 +134,21 @@
   }
   .emoji-picker button { font-size: 16px; padding: 4px; border: none; background: none; cursor: pointer; border-radius: 4px; }
   .emoji-picker button:hover { background: #eee; }
-  .miljoeffekt-grid {
-    width: 100%; height: 100%; display: grid; grid-template-columns: 1fr 1fr;
-    gap: 4%; padding: 6%; box-sizing: border-box; align-content: center;
+  .miljoeffekt-card {
+    width: 100%; height: 100%; background: #fff; color: #000; box-sizing: border-box;
+    border: 5px solid #f23297; border-radius: 16px; overflow-y: auto;
   }
-  .miljoeffekt-item { text-align: center; color: white; }
-  .miljoeffekt-item b { display: block; font-size: 1.6vw; font-weight: 700; color: #4d5bff; }
-  .miljoeffekt-item span { display: block; font-size: 0.8vw; color: #ccc; }
+  .miljoeffekt-box1, .miljoeffekt-box2 { border-bottom: 1px solid #f23297; padding: 6% 8%; text-align: center; }
+  .miljoeffekt-box3 { padding: 6% 8%; text-align: center; }
+  .miljoeffekt-h4 { font-weight: 900; margin: 0 0 3% 0; }
+  .miljoeffekt-desc { line-height: 1.4; margin: 0; }
+  .miljoeffekt-amount { font-weight: 800; margin: 2% 0; }
+  .miljoeffekt-label { margin: 1% 0; }
+  .miljoeffekt-linkbox { text-align: center; padding: 4% 0 6% 0; }
+  .miljoeffekt-btn {
+    display: inline-block; background: #f23297; color: #fff; font-weight: 800;
+    padding: 2% 6%; border-radius: 10px; text-decoration: none;
+  }
   .el-body { flex: 1; overflow: hidden; position: relative; }
   .el-text {
     width: 100%; height: 100%; color: white; padding: 4px 6px; outline: none;
@@ -431,12 +439,24 @@
     return res.json();
   }
 
-  function miljoeffektGridHtml(data) {
+  function miljoeffektCardHtml(data) {
     return (
-      '<div class="miljoeffekt-item"><b>' + formatDanskTal(data.savedWaterConsumption) + '</b><span>liter vand sparet</span></div>' +
-      '<div class="miljoeffekt-item"><b>' + formatDanskTal(data.savedCo2Emissions) + '</b><span>kg CO2 sparet</span></div>' +
-      '<div class="miljoeffekt-item"><b>' + formatDanskTal(data.savedToiletFlushes) + '</b><span>toiletskyl sparet</span></div>' +
-      '<div class="miljoeffekt-item"><b>' + formatDanskTal(data.savedKmInCar) + '</b><span>km i bil sparet</span></div>'
+      '<div class="miljoeffekt-box1">' +
+        '<div class="miljoeffekt-h4">DU HJÆLPER VERDEN</div>' +
+        '<div class="miljoeffekt-desc">Når du køber brugt, gør du en KÆMPE forskel for miljøet.<br>' +
+        'Hos Børneloppen er vi stolte!<br>Sammen har vi sparet verden for:</div>' +
+      '</div>' +
+      '<div class="miljoeffekt-box2">' +
+        '<div class="miljoeffekt-amount">' + formatDanskTal(data.savedWaterConsumption) + ' liter vand</div>' +
+        '<div class="miljoeffekt-label">Det er vand nok til</div>' +
+        '<div class="miljoeffekt-amount">' + formatDanskTal(data.savedToiletFlushes) + ' toiletskyl</div>' +
+      '</div>' +
+      '<div class="miljoeffekt-box3">' +
+        '<div class="miljoeffekt-amount">' + formatDanskTal(data.savedCo2Emissions) + ' kg CO<sub>2</sub></div>' +
+        '<div class="miljoeffekt-label">Det er samme udledning som</div>' +
+        '<div class="miljoeffekt-amount">' + formatDanskTal(data.savedKmInCar) + ' km i bil</div>' +
+      '</div>' +
+      '<div class="miljoeffekt-linkbox"><span class="miljoeffekt-btn">Læs mere om vores Verdensmål</span></div>'
     );
   }
 
@@ -1380,17 +1400,24 @@
 
       body.appendChild(manageBar);
     } else if (el.type === 'miljoeffekt') {
-      const grid = document.createElement('div');
-      grid.className = 'miljoeffekt-grid';
-      grid.innerHTML = '<div class="miljoeffekt-item"><span>Henter live data...</span></div>';
-      body.appendChild(grid);
+      const card = document.createElement('div');
+      card.className = 'miljoeffekt-card';
+      card.textContent = 'Henter live data...';
+      body.appendChild(card);
+
+      function applyFontSizes() {
+        card.querySelectorAll('.miljoeffekt-h4').forEach(n => { n.style.fontSize = canvasFontSizePx(2.2); });
+        card.querySelectorAll('.miljoeffekt-desc').forEach(n => { n.style.fontSize = canvasFontSizePx(1.1); });
+        card.querySelectorAll('.miljoeffekt-amount').forEach(n => { n.style.fontSize = canvasFontSizePx(1.6); });
+        card.querySelectorAll('.miljoeffekt-label').forEach(n => { n.style.fontSize = canvasFontSizePx(1.1); });
+        card.querySelectorAll('.miljoeffekt-btn').forEach(n => { n.style.fontSize = canvasFontSizePx(1.1); });
+      }
 
       fetchMiljoeffektData().then(data => {
-        grid.innerHTML = miljoeffektGridHtml(data);
-        grid.querySelectorAll('b').forEach(b => { b.style.fontSize = canvasFontSizePx(1.6); });
-        grid.querySelectorAll('span').forEach(s => { s.style.fontSize = canvasFontSizePx(0.8); });
+        card.innerHTML = miljoeffektCardHtml(data);
+        applyFontSizes();
       }).catch(() => {
-        grid.innerHTML = '<div class="miljoeffekt-item"><span>Kunne ikke hente data</span></div>';
+        card.textContent = 'Kunne ikke hente data';
       });
     }
 

@@ -12,15 +12,28 @@
     padding: 0;
     width: 100%;
     height: 100%;
-    background: #0a0a0a;
+    background: #000;
     color: white;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
+  /* .screen laases til 16:9 og "letterboxes" (sorte bjaelker) hvis det faktiske vindue/
+     skaerm ikke er praecis 16:9 -- ellers ville designet se forskudt/strakt ud i forhold
+     til redigeringssidens canvas, som altid er 16:9. container-type goer at cqw-enheder
+     herunder er relative til DENNE boks' bredde, ikke hele vinduet, saa alt skalerer
+     korrekt uanset letterboxing. */
   .screen {
     position: relative;
     width: 100vw;
     height: 100vh;
+    max-width: 177.78vh;
+    max-height: 56.25vw;
+    background: #0a0a0a;
+    container-type: inline-size;
+    overflow: hidden;
   }
   .el {
     position: absolute;
@@ -29,32 +42,40 @@
   .el-text {
     width: 100%;
     height: 100%;
-    padding: 1vh 1vw;
+    padding: 1cqw;
     white-space: pre-wrap;
     line-height: 1.3;
   }
-  .el[data-type="titel"] .el-text { font-size: 3.2vw; font-weight: 700; }
-  .el[data-type="tekst"] .el-text { font-size: 1.8vw; color: #d0d0d0; }
+  .el[data-type="titel"] .el-text { font-size: 3.2cqw; font-weight: 700; }
+  .el[data-type="tekst"] .el-text { font-size: 1.8cqw; color: #d0d0d0; }
   .el-media { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .miljoeffekt-grid {
-    width: 100%; height: 100%; display: grid; grid-template-columns: 1fr 1fr;
-    gap: 4%; padding: 6%; box-sizing: border-box; align-content: center;
+  .miljoeffekt-card {
+    width: 100%; height: 100%; background: #fff; color: #000; box-sizing: border-box;
+    border: 5px solid #f23297; border-radius: 16px; overflow-y: auto;
   }
-  .miljoeffekt-item { text-align: center; }
-  .miljoeffekt-item b { display: block; font-size: 1.6vw; font-weight: 700; color: #4d5bff; }
-  .miljoeffekt-item span { display: block; font-size: 0.8vw; color: #ccc; }
+  .miljoeffekt-box1, .miljoeffekt-box2 { border-bottom: 1px solid #f23297; padding: 6% 8%; text-align: center; }
+  .miljoeffekt-box3 { padding: 6% 8%; text-align: center; }
+  .miljoeffekt-h4 { font-weight: 900; margin: 0 0 3% 0; font-size: 2.2cqw; }
+  .miljoeffekt-desc { line-height: 1.4; margin: 0; font-size: 1.1cqw; }
+  .miljoeffekt-amount { font-weight: 800; margin: 2% 0; font-size: 1.6cqw; }
+  .miljoeffekt-label { margin: 1% 0; font-size: 1.1cqw; }
+  .miljoeffekt-linkbox { text-align: center; padding: 4% 0 6% 0; }
+  .miljoeffekt-btn {
+    display: inline-block; background: #f23297; color: #fff; font-weight: 800;
+    padding: 2% 6%; border-radius: 10px; text-decoration: none; font-size: 1.1cqw;
+  }
 
   /* Legacy fallback (ingen layout gemt endnu) */
   .legacy-wrap {
     width: 100%; height: 100%; display: flex; flex-direction: column;
-    justify-content: center; align-items: center; text-align: center; padding: 6vw;
+    justify-content: center; align-items: center; text-align: center; padding: 6cqw;
   }
-  .accent { width: 64px; height: 6px; background: #4d5bff; border-radius: 3px; margin-bottom: 3vh; }
-  .legacy-titel { font-size: 6vw; font-weight: 700; line-height: 1.1; margin: 0 0 3vh 0; }
-  .legacy-tekst { font-size: 2.6vw; line-height: 1.4; color: #d0d0d0; max-width: 70vw; white-space: pre-wrap; }
-  .legacy-billede { max-width: 60vw; max-height: 40vh; border-radius: 12px; margin-bottom: 4vh; object-fit: cover; }
+  .accent { width: 64px; height: 6px; background: #4d5bff; border-radius: 3px; margin-bottom: 3cqw; }
+  .legacy-titel { font-size: 6cqw; font-weight: 700; line-height: 1.1; margin: 0 0 3cqw 0; }
+  .legacy-tekst { font-size: 2.6cqw; line-height: 1.4; color: #d0d0d0; max-width: 70cqw; white-space: pre-wrap; }
+  .legacy-billede { max-width: 60cqw; max-height: 40cqw; border-radius: 12px; margin-bottom: 4cqw; object-fit: cover; }
 
-  .fejl { font-size: 1.6vw; color: #888; text-align: center; padding: 4vw; }
+  .fejl { font-size: 1.6cqw; color: #888; text-align: center; padding: 4cqw; }
 </style>
 </head>
 <body>
@@ -102,12 +123,24 @@
     return res.json();
   }
 
-  function miljoeffektGridHtml(data) {
+  function miljoeffektCardHtml(data) {
     return (
-      '<div class="miljoeffekt-item"><b>' + formatDanskTal(data.savedWaterConsumption) + '</b><span>liter vand sparet</span></div>' +
-      '<div class="miljoeffekt-item"><b>' + formatDanskTal(data.savedCo2Emissions) + '</b><span>kg CO2 sparet</span></div>' +
-      '<div class="miljoeffekt-item"><b>' + formatDanskTal(data.savedToiletFlushes) + '</b><span>toiletskyl sparet</span></div>' +
-      '<div class="miljoeffekt-item"><b>' + formatDanskTal(data.savedKmInCar) + '</b><span>km i bil sparet</span></div>'
+      '<div class="miljoeffekt-box1">' +
+        '<div class="miljoeffekt-h4">DU HJÆLPER VERDEN</div>' +
+        '<div class="miljoeffekt-desc">Når du køber brugt, gør du en KÆMPE forskel for miljøet.<br>' +
+        'Hos Børneloppen er vi stolte!<br>Sammen har vi sparet verden for:</div>' +
+      '</div>' +
+      '<div class="miljoeffekt-box2">' +
+        '<div class="miljoeffekt-amount">' + formatDanskTal(data.savedWaterConsumption) + ' liter vand</div>' +
+        '<div class="miljoeffekt-label">Det er vand nok til</div>' +
+        '<div class="miljoeffekt-amount">' + formatDanskTal(data.savedToiletFlushes) + ' toiletskyl</div>' +
+      '</div>' +
+      '<div class="miljoeffekt-box3">' +
+        '<div class="miljoeffekt-amount">' + formatDanskTal(data.savedCo2Emissions) + ' kg CO<sub>2</sub></div>' +
+        '<div class="miljoeffekt-label">Det er samme udledning som</div>' +
+        '<div class="miljoeffekt-amount">' + formatDanskTal(data.savedKmInCar) + ' km i bil</div>' +
+      '</div>' +
+      '<div class="miljoeffekt-linkbox"><span class="miljoeffekt-btn">Læs mere om vores Verdensmål</span></div>'
     );
   }
 
@@ -175,7 +208,7 @@
       const t = document.createElement('div');
       t.className = 'el-text';
       t.innerHTML = el.html != null ? stripInlineFontSize(el.html) : escapeHtml(el.text || '');
-      if (el.fontSize) t.style.fontSize = el.fontSize + 'vw';
+      if (el.fontSize) t.style.fontSize = el.fontSize + 'cqw';
       if (el.textColor) t.style.color = el.textColor;
       node.appendChild(t);
     } else if (el.type === 'billede' && el.url) {
@@ -189,7 +222,7 @@
         const slide = el.slides[idx];
         if (slide.type === 'side') {
           const inner = document.createElement('div');
-          inner.style.cssText = 'position:relative; width:100%; height:100%; overflow:hidden;';
+          inner.style.cssText = 'position:relative; width:100%; height:100%; overflow:hidden; container-type:inline-size;';
           if (slide.background) inner.style.background = slide.background;
           (slide.elements || []).forEach(subEl => inner.appendChild(buildElNode(subEl)));
           node.appendChild(inner);
@@ -203,13 +236,13 @@
         rotatorIntervals.push(setInterval(showSlide, el.intervalMs || 5000));
       }
     } else if (el.type === 'miljoeffekt') {
-      const grid = document.createElement('div');
-      grid.className = 'miljoeffekt-grid';
-      node.appendChild(grid);
+      const card = document.createElement('div');
+      card.className = 'miljoeffekt-card';
+      node.appendChild(card);
 
       const load = () => {
         fetchMiljoeffektData()
-          .then(data => { grid.innerHTML = miljoeffektGridHtml(data); })
+          .then(data => { card.innerHTML = miljoeffektCardHtml(data); })
           .catch(() => { /* behold seneste kendte vaerdier ved fejl */ });
       };
       load();
