@@ -59,6 +59,18 @@ function miljoeffektCardHtml(data) {
   );
 }
 
+// Fletter laaste elementer fra den faelles "master"-skabelon (sabloner-raekken med
+// standard=true) ind i en butiks egne elementer. Laaste master-elementer vinder altid over
+// en butiks lokale kopi med samme id (fx fra dengang siden blev oprettet ud fra skabelonen),
+// saa en aendring superadmin laver i masteren slaar igennem alle steder automatisk -- ingen
+// butik skal selv goere noget for at faa opdateringen.
+function mergeMasterElements(storeElements, masterElements) {
+  const lockedMaster = (masterElements || []).filter(e => e.locked);
+  const lockedIds = new Set(lockedMaster.map(e => e.id));
+  const ownOnly = (storeElements || []).filter(e => !lockedIds.has(e.id));
+  return lockedMaster.concat(ownOnly);
+}
+
 function buildMediaNode(spec) {
   let media;
   if (spec.type === 'video' && spec.kind === 'youtube') {

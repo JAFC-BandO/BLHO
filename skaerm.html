@@ -51,7 +51,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-16-shared1';
+  const SCRIPT_VERSION = '2026-07-16-master1';
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
@@ -68,6 +68,8 @@
   let butikId = null;
   let sidstOpdateret = null;
   let rotatorIntervals = [];
+  let masterOpdateretAt = null;
+  let masterElements = [];
 
   function debugLog(msg) {
     console.log('[skaerm-debug]', new Date().toLocaleTimeString('da-DK'), msg);
@@ -127,7 +129,24 @@
     return true;
   }
 
+  async function hentMasterSkabelon() {
+    const { data, error } = await client
+      .from('sabloner')
+      .select('data, opdateret_at')
+      .eq('standard', true)
+      .eq('type', 'side')
+      .maybeSingle();
+    if (error) {
+      debugLog('Kunne ikke hente faelles skabelon: ' + error.message);
+      return;
+    }
+    masterOpdateretAt = data ? data.opdateret_at : null;
+    masterElements = (data && data.data && data.data.elements) || [];
+  }
+
   async function hentContent() {
+    await hentMasterSkabelon();
+
     const { data, error } = await client
       .from('content')
       .select('*')
@@ -147,17 +166,19 @@
       return;
     }
 
-    if (data.opdateret_at === sidstOpdateret) {
-      debugLog('Uaendret (opdateret_at=' + data.opdateret_at + ') - springer over');
+    const combinedKey = data.opdateret_at + '|' + (masterOpdateretAt || '');
+    if (combinedKey === sidstOpdateret) {
+      debugLog('Uaendret (opdateret_at=' + combinedKey + ') - springer over');
       return;
     }
-    debugLog('NY data fundet: ' + sidstOpdateret + ' -> ' + data.opdateret_at);
-    sidstOpdateret = data.opdateret_at;
+    debugLog('NY data fundet: ' + sidstOpdateret + ' -> ' + combinedKey);
+    sidstOpdateret = combinedKey;
 
     try {
       if (data.layout && Array.isArray(data.layout.elements) && data.layout.elements.length) {
-        debugLog('Tegner layout med ' + data.layout.elements.length + ' elementer');
-        visLayout(data.layout.elements, data.layout.background);
+        const merged = mergeMasterElements(data.layout.elements, masterElements);
+        debugLog('Tegner layout med ' + merged.length + ' elementer (inkl. faelles skabelon)');
+        visLayout(merged, data.layout.background);
       } else {
         debugLog('Tegner legacy-visning (intet layout gemt)');
         visLegacy(data);

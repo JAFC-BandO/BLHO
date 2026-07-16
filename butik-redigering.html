@@ -237,10 +237,10 @@
         <span id="superadminBadge" style="display:none; background:#ffd700; color:#5a4600; font-weight:700; font-size:12px; padding:4px 10px; border-radius:20px; cursor:pointer; user-select:none;">👑 Superadmin ▾</span>
         <div id="superadminMenu" style="display:none; position:absolute; top:100%; left:0; margin-top:6px; background:white; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.2); padding:14px; width:280px; z-index:1000;">
           <h2 style="margin:0 0 10px 0; font-size:13px; text-transform:uppercase; letter-spacing:.03em; color:#888;">Superadmin</h2>
-          <button id="saveAsStandardBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">⭐ Gem denne side som standard for alle butikker</button>
+          <button id="masterEditBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">🌍 Rediger fælles skabelon</button>
           <div style="font-size:11px; color:#666; line-height:1.5;">
-            <b>Lås et element:</b> vælg det på canvas, brug 🔓-knappen i Egenskaber-panelet.<br>
-            <b>Del/afmærk en skabelon:</b> brug "Gem side" / "Gem valgt element" i sidebaren, eller ⭐ ud for en eksisterende skabelon.
+            <b>Fælles skabelon:</b> ét layout du redigerer ét sted. Elementer du låser der (🔓-knappen i Egenskaber) vises identisk og skrivebeskyttet på ALLE butikkers skærme med det samme.<br>
+            <b>Del/afmærk en almindelig skabelon:</b> brug "Gem side" / "Gem valgt element" i sidebaren, eller ⭐ ud for en eksisterende skabelon.
           </div>
         </div>
       </div>
@@ -250,6 +250,11 @@
       <button id="saveBtn">Gem ændringer</button>
       <div class="logout" id="logoutBtn">Log ud</div>
     </div>
+  </div>
+
+  <div id="masterEditBanner" style="display:none; align-items:center; justify-content:space-between; background:#ffd700; color:#5a4600; font-weight:700; font-size:13px; padding:8px 20px;">
+    <span>🌍 Du redigerer den FÆLLES skabelon — låste elementer synkroniseres live til ALLE butikkers skærme</span>
+    <button id="exitMasterEditBtn" style="padding:6px 14px; font-size:12px;">Afslut</button>
   </div>
 
   <div class="main">
@@ -312,9 +317,9 @@
           </div>
         </div>
         <div id="propsLockRow" style="display:none;">
-          <label style="margin-top:0;">Lås (superadmin)</label>
+          <label style="margin-top:0;">Lås i fælles skabelon</label>
           <button id="propLockBtn" style="padding:6px 10px; font-size:12px; width:100%;">🔓 Lås element</button>
-          <div style="font-size:11px; color:#888; margin-top:4px;">Låste elementer kan almindelige admins se, men ikke flytte/redigere/slette.</div>
+          <div style="font-size:11px; color:#888; margin-top:4px;">Låste elementer vises identisk (uden kasser/kontroller) på ALLE butikkers skærme — almindelige admins kan se dem, men ikke flytte/redigere/slette dem.</div>
         </div>
       </div>
 
@@ -349,7 +354,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-16-lock2';
+  const SCRIPT_VERSION = '2026-07-16-master1';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -374,6 +379,10 @@
   let selectedElementId = null;
   let multiSelected = new Set();
   let rotatorIntervals = [];
+  let masterTemplate = null; // { id, elements, background } | null -- den delte "sabloner" standard-raekke
+  let masterEditMode = false;
+  let storeElementsBackup = null;
+  let storeBackgroundBackup = null;
 
   const loginWrap = document.getElementById('loginWrap');
   const app = document.getElementById('app');
@@ -501,6 +510,7 @@
     document.getElementById('butikNavn').textContent = brugerRow.butikker.navn;
 
     await loadSabloner();
+    await loadMasterTemplate();
 
     const { data: contentRow } = await client
       .from('content')
@@ -639,31 +649,78 @@
     if (menu.style.display === 'block' && !menu.contains(e.target)) menu.style.display = 'none';
   });
 
-  document.getElementById('saveAsStandardBtn').addEventListener('click', async () => {
-    const navn = prompt('Navn på standard-skabelonen:', 'Standard');
-    if (!navn) return;
+  // ---------- Faelles skabelon (live master-side) ----------
 
+  function enterMasterEditMode() {
+    if (masterEditMode) return; // allerede i gang -- undgaa at overskrive backup'en med skabelon-data
     commitActiveSide();
+    storeElementsBackup = elements;
+    storeBackgroundBackup = baggrundsfarve;
+    masterEditMode = true;
+    elements = masterTemplate ? JSON.parse(JSON.stringify(masterTemplate.elements)) : [];
+    baggrundsfarve = masterTemplate ? masterTemplate.background : '#0a0a0a';
+    selectedElementId = null;
+    armedElementId = null;
+    multiSelected.clear();
+    document.getElementById('bgColorInput').value = baggrundsfarve;
+    document.getElementById('bgColorHex').value = baggrundsfarve;
+    canvas.style.background = baggrundsfarve;
+    document.getElementById('masterEditBanner').style.display = 'flex';
+    document.getElementById('siderTabs').style.display = 'none';
+    renderCanvas();
+    renderPropsPanel();
+    loadLiveView();
+  }
 
-    const others = sabloner.filter(s => s.standard);
-    for (const o of others) {
-      await client.from('sabloner').update({ standard: false }).eq('id', o.id);
-      o.standard = false;
-    }
+  function exitMasterEditMode() {
+    if (!masterEditMode) return;
+    masterEditMode = false;
+    elements = storeElementsBackup;
+    baggrundsfarve = storeBackgroundBackup;
+    selectedElementId = null;
+    armedElementId = null;
+    multiSelected.clear();
+    document.getElementById('bgColorInput').value = baggrundsfarve;
+    document.getElementById('bgColorHex').value = baggrundsfarve;
+    canvas.style.background = baggrundsfarve;
+    document.getElementById('masterEditBanner').style.display = 'none';
+    document.getElementById('siderTabs').style.display = 'flex';
+    renderCanvas();
+    renderPropsPanel();
+    renderSiderTabs();
+    loadLiveView();
+  }
 
-    const { data, error } = await client
-      .from('sabloner')
-      .insert({ butik_id: currentButikId, type: 'side', navn, delt: true, standard: true, data: { elements, background: baggrundsfarve } })
-      .select()
-      .single();
-
-    if (error) { alert('Kunne ikke gemme: ' + error.message); return; }
-
-    sabloner.unshift(data);
-    renderSablonerGrid();
+  document.getElementById('masterEditBtn').addEventListener('click', () => {
     document.getElementById('superadminMenu').style.display = 'none';
-    alert('Gemt og sat som standard-skabelon for alle butikker!');
+    enterMasterEditMode();
   });
+  document.getElementById('exitMasterEditBtn').addEventListener('click', exitMasterEditMode);
+
+  async function saveMasterTemplate() {
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true;
+    const payload = { data: { elements, background: baggrundsfarve }, opdateret_at: new Date().toISOString() };
+    let error;
+    if (masterTemplate && masterTemplate.id) {
+      const res = await client.from('sabloner').update(payload).eq('id', masterTemplate.id);
+      error = res.error;
+    } else {
+      const res = await client
+        .from('sabloner')
+        .insert(Object.assign({ butik_id: currentButikId, type: 'side', navn: 'Fælles skabelon', delt: true, standard: true }, payload));
+      error = res.error;
+    }
+    btn.disabled = false;
+    if (error) {
+      showMsg(saveMsg, 'Kunne ikke gemme fælles skabelon: ' + error.message, false);
+      return;
+    }
+    showMsg(saveMsg, 'Fælles skabelon gemt — synkroniseres til alle butikker!', true);
+    await loadMasterTemplate();
+    await loadSabloner();
+    loadLiveView();
+  }
 
   client.auth.getSession().then(({ data: { session } }) => {
     if (session) checkPasswordThenProceed();
@@ -817,6 +874,30 @@
     renderSablonerGrid();
   }
 
+  // Den "faelles skabelon" (sabloner-raekken med standard=true) er den LIVE kilde til
+  // laaste elementer paa tvaers af alle butikker -- hentes friskt (ikke fra det evt. aeldre
+  // `sabloner`-array) saa Live View kan opdage aendringer andre superadmin-sessioner laver.
+  async function loadMasterTemplate() {
+    const { data, error } = await client
+      .from('sabloner')
+      .select('id, data, opdateret_at')
+      .eq('standard', true)
+      .eq('type', 'side')
+      .maybeSingle();
+    if (error) { masterTemplate = null; return; }
+    masterTemplate = data
+      ? { id: data.id, elements: (data.data && data.data.elements) || [], background: (data.data && data.data.background) || '#0a0a0a' }
+      : null;
+  }
+
+  // Elementer der reelt skal tegnes: i master-redigering er det skabelonens egne elementer;
+  // ellers butikkens egne elementer med laaste master-elementer flettet ind (samme funktion
+  // som skaerm.html og Live View bruger, se render-shared.js).
+  function displayElements() {
+    if (masterEditMode) return elements;
+    return mergeMasterElements(elements, masterTemplate ? masterTemplate.elements : []);
+  }
+
   function renderSablonerGrid() {
     const grid = document.getElementById('sablonerGrid');
     grid.innerHTML = '';
@@ -904,10 +985,16 @@
         o.standard = false;
       }
     }
-    const { error } = await client.from('sabloner').update({ standard: newValue }).eq('id', target.id);
+    // En standard-skabelon SKAL ogsaa vaere delt, ellers kan andre butikkers RLS-opslag
+    // (som kun ser delt=true-raekker uden for egen butik) slet ikke finde den.
+    const patch = newValue ? { standard: true, delt: true } : { standard: false };
+    const { error } = await client.from('sabloner').update(patch).eq('id', target.id);
     if (error) { alert('Kunne ikke opdatere: ' + error.message); return; }
-    target.standard = newValue;
+    Object.assign(target, patch);
     renderSablonerGrid();
+    await loadMasterTemplate();
+    renderCanvas();
+    loadLiveView();
   }
 
   document.getElementById('saveSideSkabelonBtn').addEventListener('click', async () => {
@@ -1181,6 +1268,21 @@
     liveViewIntervals.forEach(id => clearInterval(id));
     liveViewIntervals = [];
 
+    const box = document.getElementById('liveViewBox');
+    const badge = document.getElementById('liveViewBadge');
+    box.innerHTML = '';
+
+    if (masterEditMode) {
+      // Ingen "rigtig" skaerm at spejle her -- vis en live-forhaandsvisning af skabelonen
+      // som den ser ud lige nu i canvas'et, inklusive elementer der endnu ikke er gemt.
+      box.style.background = baggrundsfarve || '#0a0a0a';
+      elements.forEach(el => box.appendChild(buildElNode(el, id => liveViewIntervals.push(id))));
+      badge.textContent = 'Forhåndsvisning af fælles skabelon';
+      return;
+    }
+
+    await loadMasterTemplate();
+
     const { data } = await client
       .from('content')
       .select('*')
@@ -1188,10 +1290,6 @@
       .order('opdateret_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-
-    const box = document.getElementById('liveViewBox');
-    const badge = document.getElementById('liveViewBadge');
-    box.innerHTML = '';
 
     if (!data || !data.layout || !Array.isArray(data.layout.elements) || !data.layout.elements.length) {
       badge.textContent = 'Intet gemt endnu';
@@ -1202,8 +1300,10 @@
 
     // layout.elements/background er altid et spejl af den AKTIVE side (samme felter
     // skaerm.html laeser) -- saa Live View viser garanteret praecis det samme som skaermen.
+    // Laaste elementer fra den faelles skabelon flettes ind praecis som paa den rigtige skaerm.
     box.style.background = data.layout.background || '#0a0a0a';
-    data.layout.elements.forEach(el => box.appendChild(buildElNode(el, id => liveViewIntervals.push(id))));
+    const merged = mergeMasterElements(data.layout.elements, masterTemplate ? masterTemplate.elements : []);
+    merged.forEach(el => box.appendChild(buildElNode(el, id => liveViewIntervals.push(id))));
 
     if (Array.isArray(data.layout.sider) && data.layout.sider.length) {
       const aktiv = data.layout.sider.find(s => s.id === data.layout.aktivSideId) || data.layout.sider[0];
@@ -1242,7 +1342,7 @@
     rotatorIntervals.forEach(id => clearInterval(id));
     rotatorIntervals = [];
     canvas.innerHTML = '';
-    elements.forEach(el => canvas.appendChild(buildElementNode(el)));
+    displayElements().forEach(el => canvas.appendChild(buildElementNode(el)));
   }
 
   let resizeTimer = null;
@@ -1258,7 +1358,7 @@
     const isEditable = t.isContentEditable || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT';
     if (isEditable) return;
     const selEl = elements.find(x => x.id === selectedElementId);
-    if (selEl && selEl.locked && !erSuperadmin) return;
+    if (selEl && selEl.locked && !masterEditMode) return;
     e.preventDefault();
     elements = elements.filter(x => x.id !== selectedElementId);
     selectedElementId = null;
@@ -1291,9 +1391,9 @@
     node.style.width = el.w + '%';
     node.style.height = el.h + '%';
     if (el.boxColor) node.style.background = el.boxColor;
-    const canEdit = erSuperadmin || !el.locked;
-    if (el.locked && erSuperadmin) node.classList.add('locked-element');
-    if (el.locked && !erSuperadmin) node.style.pointerEvents = 'none';
+    const canEdit = masterEditMode || !el.locked;
+    if (el.locked && masterEditMode) node.classList.add('locked-element');
+    if (el.locked && !masterEditMode) node.style.pointerEvents = 'none';
     if (canEdit) {
       node.addEventListener('click', (e) => {
         if (e.shiftKey) {
@@ -1772,10 +1872,10 @@
       document.getElementById('propInterval').value = Math.round((el.intervalMs || 5000) / 1000);
     }
 
-    document.getElementById('propsLockRow').style.display = erSuperadmin ? 'block' : 'none';
+    document.getElementById('propsLockRow').style.display = masterEditMode ? 'block' : 'none';
     document.getElementById('propLockBtn').textContent = el.locked ? '🔒 Lås op' : '🔓 Lås element';
 
-    const canEditSelected = erSuperadmin || !el.locked;
+    const canEditSelected = masterEditMode || !el.locked;
     panel.querySelectorAll('input, button').forEach(ctrl => {
       if (ctrl.id === 'propLockBtn') return;
       ctrl.disabled = !canEditSelected;
@@ -1973,6 +2073,11 @@
   // ---------- Save ----------
 
   document.getElementById('saveBtn').addEventListener('click', async () => {
+    if (masterEditMode) { await saveMasterTemplate(); return; }
+    await saveStoreContent();
+  });
+
+  async function saveStoreContent() {
     const btn = document.getElementById('saveBtn');
     btn.disabled = true;
 
@@ -2018,7 +2123,7 @@
       console.log('[redigering-debug] Gemt OK, opdateret_at:', payload.opdateret_at);
       loadLiveView();
     }
-  });
+  }
 </script>
 </body>
 </html>
