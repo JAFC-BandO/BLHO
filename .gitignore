@@ -1,4 +1,5 @@
 supabase/migration_layout_og_media.sql
 supabase/migration_sabloner.sql
+supabase/migration_superadmin.sql
 media/
 SUPABASE.md

@@ -112,6 +112,8 @@
   }
   .el.selectable-target { outline: 2px solid #ffb300; }
   .el.selected { outline: 2px solid #4d5bff; }
+  .streg-del { display: none; }
+  .el.selected .streg-del { display: block; }
   .el.multi-selected { outline: 2px dashed #4d5bff; }
   .el-header {
     display: flex; align-items: center; justify-content: space-between;
@@ -338,6 +340,7 @@
   let liveViewPollHandle = null;
   let mediaLibrary = [];
   let sabloner = [];
+  let erSuperadmin = false;
   let armedElementId = null;
   let selectedElementId = null;
   let multiSelected = new Set();
@@ -1244,6 +1247,19 @@
     resizeTimer = setTimeout(renderCanvas, 150);
   });
 
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+    if (!selectedElementId) return;
+    const t = e.target;
+    const isEditable = t.isContentEditable || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT';
+    if (isEditable) return;
+    e.preventDefault();
+    elements = elements.filter(x => x.id !== selectedElementId);
+    selectedElementId = null;
+    renderPropsPanel();
+    renderCanvas();
+  });
+
   canvas.addEventListener('click', (e) => {
     if (e.target !== canvas) return;
     if (selectedElementId) {
@@ -1574,8 +1590,9 @@
       node.style.cursor = 'move';
 
       const del = document.createElement('span');
+      del.className = 'streg-del';
       del.textContent = '✕';
-      del.style.cssText = 'position:absolute; top:-16px; right:0; background:rgba(0,0,0,.75); color:#f88; font-size:10px; padding:0 4px; cursor:pointer; z-index:10; display:none;';
+      del.style.cssText = 'position:absolute; top:-16px; right:0; background:rgba(0,0,0,.75); color:#f88; font-size:10px; padding:0 4px; cursor:pointer; z-index:10;';
       del.addEventListener('pointerdown', (e) => e.stopPropagation());
       del.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1593,7 +1610,7 @@
       node.appendChild(resizeHandle);
 
       if (el.id === armedElementId) node.classList.add('selectable-target');
-      if (el.id === selectedElementId) { node.classList.add('selected'); del.style.display = 'block'; }
+      if (el.id === selectedElementId) node.classList.add('selected');
       if (multiSelected.has(el.id)) node.classList.add('multi-selected');
 
       return node;
@@ -1892,11 +1909,12 @@
     const startX = e.clientX, startY = e.clientY;
     const startW = el.w, startH = el.h;
 
+    const minSize = el.type === 'streg' ? 0.2 : 5;
     function onMove(ev) {
       const dw = ((ev.clientX - startX) / rect.width) * 100;
       const dh = ((ev.clientY - startY) / rect.height) * 100;
-      el.w = clamp(startW + dw, 5, 100 - el.x);
-      el.h = clamp(startH + dh, 5, 100 - el.y);
+      el.w = clamp(startW + dw, minSize, 100 - el.x);
+      el.h = clamp(startH + dh, minSize, 100 - el.y);
       node.style.width = el.w + '%';
       node.style.height = el.h + '%';
     }
