@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Butik Content - Redigering</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f4f4f2;
+    margin: 0;
+    padding: 0;
+    color: #1a1a1a;
+  }
+  .wrap {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 32px 20px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 32px 24px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+  h1 {
+    font-size: 20px;
+    margin: 0 0 4px 0;
+    color: #040DB1;
+  }
+  .subtitle {
+    color: #666;
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    margin-top: 16px;
+    color: #333;
+  }
+  input, textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 15px;
+    font-family: inherit;
+  }
+  textarea {
+    min-height: 120px;
+    resize: vertical;
+  }
+  button {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    background: #040DB1;
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 20px;
+  }
+  button:hover { background: #0311d4; }
+  button:disabled { background: #aaa; cursor: not-allowed; }
+  .msg {
+    margin-top: 14px;
+    font-size: 14px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    display: none;
+  }
+  .msg.ok { background: #e6f4ea; color: #1e7e34; display: block; }
+  .msg.err { background: #fdecea; color: #b92a15; display: block; }
+  .logout {
+    text-align: center;
+    margin-top: 16px;
+    font-size: 13px;
+    color: #888;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  .butik-badge {
+    display: inline-block;
+    background: #eef0fd;
+    color: #040DB1;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card" id="loginCard">
+    <h1>Log ind</h1>
+    <div class="subtitle">Rediger content til din butiks skærm</div>
+    <label for="email">Email</label>
+    <input type="email" id="email" autocomplete="username">
+    <label for="password">Adgangskode</label>
+    <input type="password" id="password" autocomplete="current-password">
+    <button id="loginBtn">Log ind</button>
+    <div class="msg" id="loginMsg"></div>
+  </div>
+
+  <div class="card" id="editCard" style="display:none;">
+    <div class="butik-badge" id="butikNavn"></div>
+    <h1>Rediger content</h1>
+    <div class="subtitle">Ændringer vises på skærmen kort efter du gemmer</div>
+    <label for="titel">Titel</label>
+    <input type="text" id="titel">
+    <label for="tekst">Tekst</label>
+    <textarea id="tekst"></textarea>
+    <button id="saveBtn">Gem ændringer</button>
+    <div class="msg" id="saveMsg"></div>
+    <div class="logout" id="logoutBtn">Log ud</div>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
+  const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  let currentButikId = null;
+  let currentContentId = null;
+
+  const loginCard = document.getElementById('loginCard');
+  const editCard = document.getElementById('editCard');
+  const loginMsg = document.getElementById('loginMsg');
+  const saveMsg = document.getElementById('saveMsg');
+
+  function showMsg(el, text, ok) {
+    el.textContent = text;
+    el.className = 'msg ' + (ok ? 'ok' : 'err');
+  }
+
+  async function loadContent() {
+    // Find brugerens butik
+    const { data: { user } } = await client.auth.getUser();
+    if (!user) return;
+
+    const { data: brugerRow, error: brugerErr } = await client
+      .from('brugere')
+      .select('butik_id, butikker(navn)')
+      .eq('id', user.id)
+      .single();
+
+    if (brugerErr || !brugerRow) {
+      showMsg(loginMsg, 'Din bruger er ikke koblet til en butik endnu. Kontakt admin.', false);
+      return;
+    }
+
+    currentButikId = brugerRow.butik_id;
+    document.getElementById('butikNavn').textContent = brugerRow.butikker.navn;
+
+    // Hent eksisterende content (seneste række for denne butik)
+    const { data: contentRow } = await client
+      .from('content')
+      .select('*')
+      .eq('butik_id', currentButikId)
+      .order('opdateret_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (contentRow) {
+      currentContentId = contentRow.id;
+      document.getElementById('titel').value = contentRow.titel || '';
+      document.getElementById('tekst').value = contentRow.tekst || '';
+    }
+
+    loginCard.style.display = 'none';
+    editCard.style.display = 'block';
+  }
+
+  document.getElementById('loginBtn').addEventListener('click', async () => {
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    if (!email || !password) {
+      showMsg(loginMsg, 'Udfyld både email og adgangskode.', false);
+      return;
+    }
+    const { error } = await client.auth.signInWithPassword({ email, password });
+    if (error) {
+      showMsg(loginMsg, 'Forkert email eller adgangskode.', false);
+      return;
+    }
+    await loadContent();
+  });
+
+  document.getElementById('saveBtn').addEventListener('click', async () => {
+    const titel = document.getElementById('titel').value;
+    const tekst = document.getElementById('tekst').value;
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true;
+
+    let error;
+    if (currentContentId) {
+      ({ error } = await client
+        .from('content')
+        .update({ titel, tekst, opdateret_at: new Date().toISOString() })
+        .eq('id', currentContentId));
+    } else {
+      const { data, error: insertErr } = await client
+        .from('content')
+        .insert({ butik_id: currentButikId, titel, tekst })
+        .select()
+        .single();
+      error = insertErr;
+      if (data) currentContentId = data.id;
+    }
+
+    btn.disabled = false;
+    if (error) {
+      showMsg(saveMsg, 'Kunne ikke gemme: ' + error.message, false);
+    } else {
+      showMsg(saveMsg, 'Gemt!', true);
+    }
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await client.auth.signOut();
+    editCard.style.display = 'none';
+    loginCard.style.display = 'block';
+    loginMsg.className = 'msg';
+  });
+
+  // Tjek om bruger allerede er logget ind (session i browseren)
+  client.auth.getSession().then(({ data: { session } }) => {
+    if (session) loadContent();
+  });
+</script>
+</body>
+</html>
