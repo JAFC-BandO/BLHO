@@ -115,10 +115,11 @@
   .el-header {
     display: flex; align-items: center; justify-content: space-between;
     background: rgba(0,0,0,.55); padding: 2px 4px; cursor: move; flex-shrink: 0;
+    flex-wrap: wrap; row-gap: 2px;
   }
   .el-header .tag { color: #aaa; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; }
   .el-header .del { color: #ff8080; cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 4px; }
-  .fmt-group { display: none; align-items: center; }
+  .fmt-group { display: none; align-items: center; flex-wrap: wrap; row-gap: 2px; }
   .el.selected .fmt-group { display: flex; }
   .el-header .fmt-btn {
     background: rgba(255,255,255,.15); color: white; border: none; border-radius: 4px;
@@ -196,6 +197,7 @@
         <button class="add-btn" data-add="tekst">+ Tekst</button>
         <button class="add-btn" data-add="billede">+ Billede</button>
         <button class="add-btn" data-add="video">+ Video</button>
+        <button class="add-btn" data-add="boks">+ Boks</button>
       </div>
 
       <div id="propsPanel" style="display:none; margin-bottom:20px; padding:12px; background:#f7f7fb; border-radius:8px;">
@@ -301,6 +303,12 @@
       onClick();
     });
     return btn;
+  }
+
+  function buildFormatDivider() {
+    const div = document.createElement('span');
+    div.style.cssText = 'display:inline-block; width:1px; height:12px; background:rgba(255,255,255,.25); margin:0 2px;';
+    return div;
   }
 
   function buildEmojiButton(textDiv, el) {
@@ -573,6 +581,7 @@
         tekst:   { x: 5,  y: 28, w: 50, h: 20, text: 'Ny tekst' },
         billede: { x: 55, y: 5,  w: 40, h: 45, url: null },
         video:   { x: 5,  y: 50, w: 90, h: 40, url: null },
+        boks:    { x: 10, y: 10, w: 40, h: 30, boxColor: '#1a1a1a' },
       }[type];
       elements.push(Object.assign({ id: uid(), type }, defaults));
       renderCanvas();
@@ -620,8 +629,7 @@
       if (el.textColor) textDiv.style.color = el.textColor;
       textDiv.addEventListener('input', () => { el.html = textDiv.innerHTML; });
       body.appendChild(textDiv);
-    } else {
-      // billede eller video
+    } else if (el.type === 'billede' || el.type === 'video') {
       if (el.url) {
         let media;
         if (el.type === 'video' && el.kind === 'youtube') {
@@ -631,6 +639,7 @@
           media.setAttribute('allow', 'autoplay; encrypted-media');
         } else if (el.type === 'billede') {
           media = Object.assign(document.createElement('img'), { src: el.url });
+          media.style.objectFit = 'contain';
         } else {
           media = Object.assign(document.createElement('video'), { src: el.url, muted: true, loop: true, autoplay: true, playsInline: true });
         }
@@ -701,14 +710,22 @@
     if (textDiv) {
       const fmtGroup = document.createElement('span');
       fmtGroup.className = 'fmt-group';
-      fmtGroup.appendChild(buildFormatButton('B', 'font-weight:700;', () => {
-        document.execCommand('bold');
-        el.html = textDiv.innerHTML;
-      }, textDiv));
-      fmtGroup.appendChild(buildFormatButton('•', '', () => {
-        document.execCommand('insertUnorderedList');
-        el.html = textDiv.innerHTML;
-      }, textDiv));
+      function cmdBtn(label, cmd, extraStyle) {
+        return buildFormatButton(label, extraStyle || '', () => {
+          document.execCommand(cmd);
+          el.html = textDiv.innerHTML;
+        }, textDiv);
+      }
+      fmtGroup.appendChild(cmdBtn('B', 'bold', 'font-weight:700;'));
+      fmtGroup.appendChild(cmdBtn('I', 'italic', 'font-style:italic;'));
+      fmtGroup.appendChild(cmdBtn('U', 'underline', 'text-decoration:underline;'));
+      fmtGroup.appendChild(buildFormatDivider());
+      fmtGroup.appendChild(cmdBtn('⯇', 'justifyLeft'));
+      fmtGroup.appendChild(cmdBtn('▤', 'justifyCenter'));
+      fmtGroup.appendChild(cmdBtn('⯈', 'justifyRight'));
+      fmtGroup.appendChild(buildFormatDivider());
+      fmtGroup.appendChild(cmdBtn('•', 'insertUnorderedList'));
+      fmtGroup.appendChild(cmdBtn('1.', 'insertOrderedList'));
       fmtGroup.appendChild(buildEmojiButton(textDiv, el));
       header.appendChild(fmtGroup);
     }

@@ -118,6 +118,7 @@
       } else if (el.type === 'billede' && el.url) {
         const img = document.createElement('img');
         img.className = 'el-media';
+        img.style.objectFit = 'contain';
         img.src = el.url;
         node.appendChild(img);
       } else if (el.type === 'video' && el.url && el.kind === 'youtube') {
