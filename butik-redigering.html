@@ -245,12 +245,6 @@
         Upload nyt billede/video
         <input type="file" id="uploadInput" accept="image/*,video/*">
       </label>
-
-      <h2 style="margin-top:24px;">Inviter kollega</h2>
-      <input type="email" id="inviteEmail" placeholder="email@eksempel.dk"
-        style="width:100%; padding:8px 10px; border:1px solid #ddd; border-radius:6px; font-size:13px; margin-bottom:8px;">
-      <button id="inviteBtn" style="width:100%; padding:8px;">Send invitation</button>
-      <div class="msg" id="inviteMsg" style="display:none;"></div>
     </div>
 
     <div class="canvas-outer">
@@ -587,27 +581,6 @@
     const file = e.target.files[0];
     if (file) await uploadFile(file, armedElementId);
     e.target.value = '';
-  });
-
-  document.getElementById('inviteBtn').addEventListener('click', async () => {
-    const emailInput = document.getElementById('inviteEmail');
-    const inviteMsg = document.getElementById('inviteMsg');
-    const email = emailInput.value.trim();
-    if (!email) return;
-
-    const btn = document.getElementById('inviteBtn');
-    btn.disabled = true;
-
-    const { data, error } = await client.functions.invoke('invite-user', { body: { email } });
-
-    btn.disabled = false;
-
-    if (error || (data && data.error)) {
-      showMsg(inviteMsg, 'Fejl: ' + (data && data.error ? data.error : error.message), false);
-    } else {
-      showMsg(inviteMsg, 'Invitation sendt til ' + email, true);
-      emailInput.value = '';
-    }
   });
 
   // ---------- Canvas / elements ----------
