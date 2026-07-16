@@ -80,8 +80,9 @@
     return 'https://www.youtube.com/embed/' + id + '?autoplay=1&mute=1&loop=1&controls=0&playlist=' + id;
   }
 
-  function visLayout(elements) {
+  function visLayout(elements, background) {
     screen.innerHTML = '';
+    screen.style.background = background || '#0a0a0a';
     elements.forEach(el => {
       const node = document.createElement('div');
       node.className = 'el';
@@ -179,7 +180,7 @@
     sidstOpdateret = data.opdateret_at;
 
     if (data.layout && Array.isArray(data.layout.elements) && data.layout.elements.length) {
-      visLayout(data.layout.elements);
+      visLayout(data.layout.elements, data.layout.background);
     } else {
       visLegacy(data);
     }
