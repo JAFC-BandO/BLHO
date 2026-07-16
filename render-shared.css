@@ -32,8 +32,3 @@
 .miljoeffekt-desc { line-height: 1.4; margin: 0; font-size: 4.5cqw; }
 .miljoeffekt-amount { font-weight: 800; margin: 2% 0; font-size: 6.5cqw; }
 .miljoeffekt-label { margin: 1% 0; font-size: 4.5cqw; }
-.miljoeffekt-linkbox { text-align: center; padding: 4% 0 6% 0; }
-.miljoeffekt-btn {
-  display: inline-block; background: #f23297; color: #fff; font-weight: 800;
-  padding: 2% 6%; border-radius: 10px; text-decoration: none; font-size: 4.5cqw;
-}

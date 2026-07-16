@@ -5,8 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Butik Content - Redigering</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="render-shared.css">
-<script src="render-shared.js"></script>
+<!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
+     filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
+     10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
+<link rel="stylesheet" href="render-shared.css?v=2026-07-16-2">
+<script src="render-shared.js?v=2026-07-16-2"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -354,7 +357,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-16-master3';
+  const SCRIPT_VERSION = '2026-07-16-master4';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1708,6 +1711,10 @@
     if (el.type === 'streg') {
       // Minimal haandtering uden header-bjaelke -- en tynd streg skal ikke se ud som en
       // kasse med kontroller ovenpaa. Traek direkte i stregen for at flytte den.
+      // Den generelle .el-klasse laegger en kant + lys baggrund paa ALLE elementer (saa man
+      // kan se rammen af fx en tom tekstboks) -- det skal en streg ALDRIG have, kant eller
+      // ej laast, ellers ligner den en kasse i stedet for en ren linje.
+      node.style.border = 'none';
       node.style.cursor = canEdit ? 'move' : 'default';
 
       if (canEdit) {

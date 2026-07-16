@@ -5,8 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Butik Skærm</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="render-shared.css">
-<script src="render-shared.js"></script>
+<!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
+     filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
+     10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
+<link rel="stylesheet" href="render-shared.css?v=2026-07-16-2">
+<script src="render-shared.js?v=2026-07-16-2"></script>
 <style>
   * { box-sizing: border-box; }
   html, body {
@@ -51,7 +54,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-16-master1';
+  const SCRIPT_VERSION = '2026-07-16-master2';
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';

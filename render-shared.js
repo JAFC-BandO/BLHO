@@ -54,8 +54,7 @@ function miljoeffektCardHtml(data) {
       '<div class="miljoeffekt-amount">' + formatDanskTal(data.savedCo2Emissions) + ' kg CO<sub>2</sub></div>' +
       '<div class="miljoeffekt-label">Det er samme udledning som</div>' +
       '<div class="miljoeffekt-amount">' + formatDanskTal(data.savedKmInCar) + ' km i bil</div>' +
-    '</div>' +
-    '<div class="miljoeffekt-linkbox"><span class="miljoeffekt-btn">Læs mere om vores Verdensmål</span></div>'
+    '</div>'
   );
 }
 
