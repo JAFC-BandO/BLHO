@@ -73,6 +73,13 @@
     screen.innerHTML = '<div class="fejl">' + tekst + '</div>';
   }
 
+  function youtubeEmbedUrl(url) {
+    const m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+    if (!m) return url;
+    const id = m[1];
+    return 'https://www.youtube.com/embed/' + id + '?autoplay=1&mute=1&loop=1&controls=0&playlist=' + id;
+  }
+
   function visLayout(elements) {
     screen.innerHTML = '';
     elements.forEach(el => {
@@ -94,6 +101,13 @@
         img.className = 'el-media';
         img.src = el.url;
         node.appendChild(img);
+      } else if (el.type === 'video' && el.url && el.kind === 'youtube') {
+        const iframe = document.createElement('iframe');
+        iframe.className = 'el-media';
+        iframe.src = youtubeEmbedUrl(el.url);
+        iframe.setAttribute('frameborder', '0');
+        iframe.setAttribute('allow', 'autoplay; encrypted-media');
+        node.appendChild(iframe);
       } else if (el.type === 'video' && el.url) {
         const vid = document.createElement('video');
         vid.className = 'el-media';

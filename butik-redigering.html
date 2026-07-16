@@ -225,6 +225,17 @@
     return (crypto.randomUUID ? crypto.randomUUID() : 'el-' + Math.random().toString(36).slice(2));
   }
 
+  function isYoutubeUrl(url) {
+    return /youtube\.com|youtu\.be/.test(url);
+  }
+
+  function youtubeEmbedUrl(url) {
+    const m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+    if (!m) return url;
+    const id = m[1];
+    return 'https://www.youtube.com/embed/' + id + '?autoplay=1&mute=1&loop=1&controls=0&playlist=' + id;
+  }
+
   // ---------- Login / bootstrap ----------
 
   async function loadEverything() {
@@ -447,16 +458,28 @@
     } else {
       // billede eller video
       if (el.url) {
-        const media = el.type === 'billede'
-          ? Object.assign(document.createElement('img'), { src: el.url })
-          : Object.assign(document.createElement('video'), { src: el.url, muted: true, loop: true, autoplay: true, playsInline: true });
+        let media;
+        if (el.type === 'video' && el.kind === 'youtube') {
+          media = document.createElement('iframe');
+          media.src = youtubeEmbedUrl(el.url);
+          media.setAttribute('frameborder', '0');
+          media.setAttribute('allow', 'autoplay; encrypted-media');
+        } else if (el.type === 'billede') {
+          media = Object.assign(document.createElement('img'), { src: el.url });
+        } else {
+          media = Object.assign(document.createElement('video'), { src: el.url, muted: true, loop: true, autoplay: true, playsInline: true });
+        }
         media.className = 'el-media-fill';
         body.appendChild(media);
 
         const change = document.createElement('div');
         change.className = 'el-change-btn';
         change.textContent = 'Skift';
-        change.addEventListener('click', () => armForSelection(el));
+        change.addEventListener('click', () => {
+          el.url = null;
+          delete el.kind;
+          renderCanvas();
+        });
         body.appendChild(change);
       } else {
         const placeholder = document.createElement('div');
@@ -478,6 +501,26 @@
         });
         uploadLabel.appendChild(fileInput);
         placeholder.appendChild(uploadLabel);
+
+        const linkWrap = document.createElement('div');
+        linkWrap.style.cssText = 'display:flex; gap:4px; margin-top:6px;';
+        const linkInput = document.createElement('input');
+        linkInput.type = 'text';
+        linkInput.placeholder = el.type === 'video' ? 'Link (YouTube/mp4)' : 'Link til billede';
+        linkInput.style.cssText = 'font-size:10px; padding:4px 6px; border-radius:5px; border:1px solid #444; background:#111; color:#eee; width:110px;';
+        const linkBtn = document.createElement('button');
+        linkBtn.textContent = 'OK';
+        linkBtn.style.padding = '4px 8px';
+        linkBtn.addEventListener('click', () => {
+          const val = linkInput.value.trim();
+          if (!val) return;
+          el.url = val;
+          if (el.type === 'video') el.kind = isYoutubeUrl(val) ? 'youtube' : 'direct';
+          renderCanvas();
+        });
+        linkWrap.appendChild(linkInput);
+        linkWrap.appendChild(linkBtn);
+        placeholder.appendChild(linkWrap);
 
         body.appendChild(placeholder);
       }
