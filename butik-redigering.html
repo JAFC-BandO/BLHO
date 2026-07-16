@@ -118,6 +118,18 @@
   }
   .el-header .tag { color: #aaa; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; }
   .el-header .del { color: #ff8080; cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 4px; }
+  .el-header .fmt-btn {
+    background: rgba(255,255,255,.15); color: white; border: none; border-radius: 4px;
+    font-size: 10px; padding: 1px 6px; cursor: pointer; line-height: 1.5; margin: 0 2px;
+  }
+  .el-header .fmt-btn:hover { background: rgba(255,255,255,.3); }
+  .emoji-picker {
+    position: absolute; z-index: 1000; background: white; border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.25); padding: 6px; display: grid;
+    grid-template-columns: repeat(6, 1fr); gap: 2px; max-width: 220px;
+  }
+  .emoji-picker button { font-size: 16px; padding: 4px; border: none; background: none; cursor: pointer; border-radius: 4px; }
+  .emoji-picker button:hover { background: #eee; }
   .el-body { flex: 1; overflow: hidden; position: relative; }
   .el-text {
     width: 100%; height: 100%; color: white; padding: 4px 6px; outline: none;
@@ -186,22 +198,22 @@
 
       <div id="propsPanel" style="display:none; margin-bottom:20px; padding:12px; background:#f7f7fb; border-radius:8px;">
         <h2 style="margin-top:0;">Egenskaber</h2>
-        <div id="propsFormatRow" style="display:flex; gap:8px; margin-bottom:12px;">
-          <button id="propBoldBtn" style="padding:6px 12px; font-weight:700;">F</button>
-          <button id="propBulletBtn" style="padding:6px 12px;">• Liste</button>
-        </div>
         <div id="propsFontSizeRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Skriftstørrelse</label>
           <input type="range" id="propFontSize" min="0.8" max="8" step="0.1" style="width:100%;">
         </div>
         <div id="propsTextColorRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Tekstfarve</label>
-          <input type="color" id="propTextColor" style="width:40px; height:32px; border:none; border-radius:6px; cursor:pointer; padding:0;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input type="color" id="propTextColor" style="width:40px; height:32px; border:none; border-radius:6px; cursor:pointer; padding:0;">
+            <input type="text" id="propTextColorHex" placeholder="#rrggbb" style="width:90px; padding:6px 8px; font-size:12px; border:1px solid #ddd; border-radius:6px;">
+          </div>
         </div>
         <div style="margin-bottom:12px;">
           <label style="margin-top:0;">Boksens baggrundsfarve</label>
           <div style="display:flex; align-items:center; gap:8px;">
             <input type="color" id="propBoxColor" style="width:40px; height:32px; border:none; border-radius:6px; cursor:pointer; padding:0;">
+            <input type="text" id="propBoxColorHex" placeholder="#rrggbb" style="width:90px; padding:6px 8px; font-size:12px; border:1px solid #ddd; border-radius:6px;">
             <button id="propBoxColorClear" style="padding:6px 10px; font-size:12px;">Ryd</button>
           </div>
         </div>
@@ -215,9 +227,9 @@
       </div>
 
       <h2>Baggrund</h2>
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:20px;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:20px;">
         <input type="color" id="bgColorInput" value="#0a0a0a" style="width:40px; height:32px; border:none; border-radius:6px; cursor:pointer; padding:0;">
-        <span style="font-size:12px; color:#666;">Skærmens baggrundsfarve</span>
+        <input type="text" id="bgColorHex" placeholder="#rrggbb" style="width:90px; padding:6px 8px; font-size:12px; border:1px solid #ddd; border-radius:6px;">
       </div>
 
       <h2>Medie-bibliotek</h2>
@@ -247,8 +259,6 @@
   let mediaLibrary = [];
   let armedElementId = null;
   let selectedElementId = null;
-  let activeTextDiv = null;
-  let activeTextEl = null;
 
   const loginWrap = document.getElementById('loginWrap');
   const app = document.getElementById('app');
@@ -266,6 +276,73 @@
 
   function uid() {
     return (crypto.randomUUID ? crypto.randomUUID() : 'el-' + Math.random().toString(36).slice(2));
+  }
+
+  const EMOJI_LIST = ['😀','😍','🔥','🎉','⭐','✨','❤️','👍','🛍️','🏷️','💰','🎁','📢','⏰','✅','❌','🆕','💯','🥳','😎','🍀','🌟','🎈','👑'];
+  let openEmojiPicker = null;
+
+  function buildFormatButton(label, extraStyle, onClick, textDiv) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = label;
+    btn.className = 'fmt-btn';
+    btn.style.cssText = extraStyle;
+    btn.addEventListener('mousedown', (e) => e.preventDefault());
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      textDiv.focus();
+      onClick();
+    });
+    return btn;
+  }
+
+  function buildEmojiButton(textDiv, el) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = '🙂';
+    btn.className = 'fmt-btn';
+    btn.addEventListener('mousedown', (e) => e.preventDefault());
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleEmojiPicker(btn, textDiv, el);
+    });
+    return btn;
+  }
+
+  function toggleEmojiPicker(anchorBtn, textDiv, el) {
+    if (openEmojiPicker) { openEmojiPicker.remove(); openEmojiPicker = null; return; }
+    const picker = document.createElement('div');
+    picker.className = 'emoji-picker';
+    EMOJI_LIST.forEach(em => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = em;
+      b.addEventListener('mousedown', (e) => e.preventDefault());
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        textDiv.focus();
+        document.execCommand('insertText', false, em);
+        el.html = textDiv.innerHTML;
+        picker.remove();
+        openEmojiPicker = null;
+      });
+      picker.appendChild(b);
+    });
+    document.body.appendChild(picker);
+    const rect = anchorBtn.getBoundingClientRect();
+    picker.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+    picker.style.left = (rect.left + window.scrollX) + 'px';
+    openEmojiPicker = picker;
+
+    setTimeout(() => {
+      document.addEventListener('click', function closeOnce(ev) {
+        if (!picker.contains(ev.target)) {
+          picker.remove();
+          if (openEmojiPicker === picker) openEmojiPicker = null;
+          document.removeEventListener('click', closeOnce);
+        }
+      });
+    }, 0);
   }
 
   function escapeHtml(str) {
@@ -328,6 +405,7 @@
     }
 
     document.getElementById('bgColorInput').value = baggrundsfarve;
+    document.getElementById('bgColorHex').value = baggrundsfarve;
     canvas.style.background = baggrundsfarve;
     await loadMedia();
     renderCanvas();
@@ -336,10 +414,34 @@
     app.style.display = 'block';
   }
 
-  document.getElementById('bgColorInput').addEventListener('input', (e) => {
-    baggrundsfarve = e.target.value;
-    canvas.style.background = baggrundsfarve;
-  });
+  function normalizeHex(v) {
+    v = v.trim();
+    if (!v.startsWith('#')) v = '#' + v;
+    if (/^#([0-9a-fA-F]{3})$/.test(v)) {
+      v = '#' + v.slice(1).split('').map(c => c + c).join('');
+    }
+    return /^#[0-9a-fA-F]{6}$/.test(v) ? v.toLowerCase() : null;
+  }
+
+  function wireColorHex(colorInput, hexInput, onChange) {
+    hexInput.value = colorInput.value;
+    colorInput.addEventListener('input', () => {
+      hexInput.value = colorInput.value;
+      onChange(colorInput.value);
+    });
+    hexInput.addEventListener('input', () => {
+      const normalized = normalizeHex(hexInput.value);
+      if (!normalized) return;
+      colorInput.value = normalized;
+      onChange(normalized);
+    });
+  }
+
+  function updateBgColor(val) {
+    baggrundsfarve = val;
+    canvas.style.background = val;
+  }
+  wireColorHex(document.getElementById('bgColorInput'), document.getElementById('bgColorHex'), updateBgColor);
 
   document.getElementById('loginBtn').addEventListener('click', async () => {
     const email = document.getElementById('email').value.trim();
@@ -493,38 +595,18 @@
     if (el.boxColor) node.style.background = el.boxColor;
     node.addEventListener('click', () => selectElement(el.id));
 
-    const header = document.createElement('div');
-    header.className = 'el-header';
-    const tag = document.createElement('span');
-    tag.className = 'tag';
-    tag.textContent = el.type;
-    const del = document.createElement('span');
-    del.className = 'del';
-    del.textContent = '✕';
-    del.addEventListener('click', (e) => {
-      e.stopPropagation();
-      elements = elements.filter(x => x.id !== el.id);
-      if (armedElementId === el.id) { armedElementId = null; mediaBanner.classList.remove('active'); renderMediaGrid(); }
-      if (selectedElementId === el.id) { selectedElementId = null; renderPropsPanel(); }
-      renderCanvas();
-    });
-    header.appendChild(tag);
-    header.appendChild(del);
-    header.addEventListener('pointerdown', (e) => startDrag(e, el, node));
-    node.appendChild(header);
-
     const body = document.createElement('div');
     body.className = 'el-body';
+    let textDiv = null;
 
     if (el.type === 'titel' || el.type === 'tekst') {
-      const textDiv = document.createElement('div');
+      textDiv = document.createElement('div');
       textDiv.className = 'el-text';
       textDiv.contentEditable = 'true';
       textDiv.innerHTML = el.html != null ? el.html : escapeHtml(el.text || '');
       if (el.fontSize) textDiv.style.fontSize = el.fontSize + 'vw';
       if (el.textColor) textDiv.style.color = el.textColor;
       textDiv.addEventListener('input', () => { el.html = textDiv.innerHTML; });
-      textDiv.addEventListener('focus', () => { activeTextDiv = textDiv; activeTextEl = el; });
       body.appendChild(textDiv);
     } else {
       // billede eller video
@@ -596,6 +678,44 @@
         body.appendChild(placeholder);
       }
     }
+
+    const header = document.createElement('div');
+    header.className = 'el-header';
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.textContent = el.type;
+    header.appendChild(tag);
+
+    if (textDiv) {
+      const fmtGroup = document.createElement('span');
+      fmtGroup.style.cssText = 'display:flex; align-items:center;';
+      fmtGroup.appendChild(buildFormatButton('B', 'font-weight:700;', () => {
+        document.execCommand('bold');
+        el.html = textDiv.innerHTML;
+      }, textDiv));
+      fmtGroup.appendChild(buildFormatButton('•', '', () => {
+        document.execCommand('insertUnorderedList');
+        el.html = textDiv.innerHTML;
+      }, textDiv));
+      fmtGroup.appendChild(buildEmojiButton(textDiv, el));
+      header.appendChild(fmtGroup);
+    }
+
+    const del = document.createElement('span');
+    del.className = 'del';
+    del.textContent = '✕';
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      elements = elements.filter(x => x.id !== el.id);
+      if (armedElementId === el.id) { armedElementId = null; mediaBanner.classList.remove('active'); renderMediaGrid(); }
+      if (selectedElementId === el.id) { selectedElementId = null; renderPropsPanel(); }
+      renderCanvas();
+    });
+    header.appendChild(del);
+    header.addEventListener('pointerdown', (e) => {
+      if (e.target === header || e.target === tag) startDrag(e, el, node);
+    });
+    node.appendChild(header);
     node.appendChild(body);
 
     const resizeHandle = document.createElement('div');
@@ -638,23 +758,16 @@
     }
     panel.style.display = 'block';
     const isText = el.type === 'titel' || el.type === 'tekst';
-    document.getElementById('propsFormatRow').style.display = isText ? 'flex' : 'none';
     document.getElementById('propsFontSizeRow').style.display = isText ? 'block' : 'none';
     document.getElementById('propsTextColorRow').style.display = isText ? 'block' : 'none';
     document.getElementById('propFontSize').value = el.fontSize || defaultFontSize(el.type);
-    document.getElementById('propTextColor').value = el.textColor || defaultTextColor(el.type);
-    document.getElementById('propBoxColor').value = el.boxColor || '#000000';
+    const textColorVal = el.textColor || defaultTextColor(el.type);
+    document.getElementById('propTextColor').value = textColorVal;
+    document.getElementById('propTextColorHex').value = textColorVal;
+    const boxColorVal = el.boxColor || '#000000';
+    document.getElementById('propBoxColor').value = boxColorVal;
+    document.getElementById('propBoxColorHex').value = boxColorVal;
   }
-
-  function applyFormat(cmd) {
-    if (!activeTextDiv) return;
-    document.execCommand(cmd);
-    activeTextEl.html = activeTextDiv.innerHTML;
-  }
-  document.getElementById('propBoldBtn').addEventListener('mousedown', (e) => e.preventDefault());
-  document.getElementById('propBoldBtn').addEventListener('click', () => applyFormat('bold'));
-  document.getElementById('propBulletBtn').addEventListener('mousedown', (e) => e.preventDefault());
-  document.getElementById('propBulletBtn').addEventListener('click', () => applyFormat('insertUnorderedList'));
 
   document.getElementById('propFontSize').addEventListener('input', (e) => {
     const el = elements.find(x => x.id === selectedElementId);
