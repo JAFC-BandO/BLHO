@@ -354,7 +354,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-16-master2';
+  const SCRIPT_VERSION = '2026-07-16-master3';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1389,7 +1389,14 @@
     if (el.boxColor) node.style.background = el.boxColor;
     const canEdit = masterEditMode || !el.locked;
     if (el.locked && masterEditMode) node.classList.add('locked-element');
-    if (el.locked && !masterEditMode) node.style.pointerEvents = 'none';
+    if (el.locked && !masterEditMode) {
+      // Skal se 100% ud som paa den rigtige skaerm -- ogsaa den translucente editor-kant/
+      // -baggrund fra .el-klassen skal vaek, ikke kun header/laase-ikon. En evt. egen
+      // boxColor (rigtigt indhold, fx en farvet streg/boks) skal selvfoelgelig blive vist.
+      node.style.pointerEvents = 'none';
+      node.style.border = 'none';
+      if (!el.boxColor) node.style.background = 'none';
+    }
     if (canEdit) {
       node.addEventListener('click', (e) => {
         if (e.shiftKey) {
