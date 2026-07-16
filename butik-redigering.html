@@ -8,8 +8,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="render-shared.css?v=2026-07-16-2">
-<script src="render-shared.js?v=2026-07-16-2"></script>
+<link rel="stylesheet" href="render-shared.css?v=2026-07-16-3">
+<script src="render-shared.js?v=2026-07-16-3"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -278,6 +278,7 @@
         <button class="add-btn" data-add="rotator">+ Rotator</button>
         <button class="add-btn superadmin-only" data-add="miljoeffekt" style="display:none;">+ Miljøeffekt</button>
         <button class="add-btn superadmin-only" data-add="streg" style="display:none;">+ Streg</button>
+        <button class="add-btn superadmin-only" data-add="ur" style="display:none;">+ Ur</button>
       </div>
 
       <div id="propsPanel" style="display:none; margin-bottom:20px; padding:12px; background:#f7f7fb; border-radius:8px;">
@@ -357,7 +358,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-16-master4';
+  const SCRIPT_VERSION = '2026-07-16-master5';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1180,7 +1181,13 @@
   function standardSideData() {
     const std = sabloner.find(s => s.type === 'side' && s.standard);
     if (!std) return null;
-    const cloned = JSON.parse(JSON.stringify(std.data.elements || []));
+    // Laaste elementer maa ALDRIG bages ind i en ny sides egne data -- de kommer udelukkende
+    // fra den live fletning (mergeMasterElements) baseret paa masterens egne id'er. Hvis vi
+    // klonede dem her (med nye id'er), ville kloningen aldrig mere matche masteren: den ville
+    // vises dobbelt (master-versionen OG den fastfrosne lokale kopi) og den lokale kopi ville
+    // aldrig opdatere sig igen, selv naar masteren aendres.
+    const unlockedOnly = (std.data.elements || []).filter(e => !e.locked);
+    const cloned = JSON.parse(JSON.stringify(unlockedOnly));
     cloned.forEach(cl => { cl.id = uid(); });
     return { elements: cloned, background: std.data.background || '#0a0a0a' };
   }
@@ -1329,6 +1336,7 @@
         rotator: { x: 10, y: 10, w: 50, h: 50, slides: [], intervalMs: 5000 },
         miljoeffekt: { x: 10, y: 10, w: 50, h: 30 },
         streg: { x: 10, y: 50, w: 80, h: 1, boxColor: '#ffffff' },
+        ur: { x: 10, y: 10, w: 25, h: 15 },
       }[type];
       elements.push(Object.assign({ id: uid(), type }, defaults));
       renderCanvas();
@@ -1706,6 +1714,14 @@
       }).catch(() => {
         card.textContent = 'Kunne ikke hente data';
       });
+    } else if (el.type === 'ur') {
+      const clock = buildUrNode(id => rotatorIntervals.push(id));
+      body.appendChild(clock);
+      // .ur-display's font-size (10cqw) er beregnet til skaerm.html/Live View, som har
+      // container-type:inline-size -- det har redigerings-canvas'et ikke, saa cqw ville
+      // regne forkert her. Samme pixel-baseret rettelse som miljoeffekt-kortet ovenfor,
+      // udskudt til naeste tick saa clock allerede er i DOM'en (getBoundingClientRect virker).
+      setTimeout(() => { clock.style.fontSize = elementFontSizePx(clock, 10); }, 0);
     }
 
     if (el.type === 'streg') {

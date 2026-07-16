@@ -32,6 +32,19 @@ function formatDanskTal(n) {
   return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
 
+function formatKlokken(d) {
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+function buildUrNode(registerInterval) {
+  const el = document.createElement('div');
+  el.className = 'ur-display';
+  const tick = () => { el.textContent = formatKlokken(new Date()); };
+  tick();
+  registerInterval(setInterval(tick, 1000));
+  return el;
+}
+
 async function fetchMiljoeffektData() {
   const res = await fetch(MILJOEFFEKT_URL);
   if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -147,6 +160,8 @@ function buildElNode(el, registerInterval) {
     };
     load();
     registerInterval(setInterval(load, 60000));
+  } else if (el.type === 'ur') {
+    node.appendChild(buildUrNode(registerInterval));
   }
   return node;
 }

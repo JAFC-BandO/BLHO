@@ -32,3 +32,8 @@
 .miljoeffekt-desc { line-height: 1.4; margin: 0; font-size: 4.5cqw; }
 .miljoeffekt-amount { font-weight: 800; margin: 2% 0; font-size: 6.5cqw; }
 .miljoeffekt-label { margin: 1% 0; font-size: 4.5cqw; }
+
+.ur-display {
+  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 10cqw; color: #ffffff; font-variant-numeric: tabular-nums;
+}
