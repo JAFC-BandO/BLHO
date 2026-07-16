@@ -74,7 +74,8 @@
   const POLL_MS = 15000;
   const screen = document.getElementById('screen');
   const params = new URLSearchParams(location.search);
-  const slug = params.get('butik');
+  const email = params.get('email');
+  const password = params.get('password');
 
   let butikId = null;
   let sidstOpdateret = null;
@@ -93,18 +94,28 @@
     screen.innerHTML = html;
   }
 
+  async function login() {
+    const { error } = await client.auth.signInWithPassword({ email, password });
+    if (error) {
+      visFejl('Login fejlede: ' + error.message);
+      return false;
+    }
+    return true;
+  }
+
   async function findButik() {
+    const { data: { user } } = await client.auth.getUser();
     const { data, error } = await client
-      .from('butikker')
-      .select('id, navn')
-      .eq('slug', slug)
+      .from('brugere')
+      .select('butik_id')
+      .eq('id', user.id)
       .single();
 
     if (error || !data) {
-      visFejl('Ukendt butik "' + slug + '". Tjek ?butik= i URL\'en.');
+      visFejl('Denne konto er ikke koblet til en butik.');
       return false;
     }
-    butikId = data.id;
+    butikId = data.butik_id;
     return true;
   }
 
@@ -131,10 +142,13 @@
   }
 
   async function start() {
-    if (!slug) {
-      visFejl('Mangler ?butik=slug i URL\'en.');
+    if (!email || !password) {
+      visFejl('Mangler ?email= og &password= i URL\'en.');
       return;
     }
+    const loggedIn = await login();
+    if (!loggedIn) return;
+
     const ok = await findButik();
     if (!ok) return;
 
