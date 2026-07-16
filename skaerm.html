@@ -96,7 +96,7 @@
       if (el.type === 'titel' || el.type === 'tekst') {
         const t = document.createElement('div');
         t.className = 'el-text';
-        t.textContent = el.text || '';
+        t.innerHTML = el.html != null ? el.html : escapeHtml(el.text || '');
         if (el.fontSize) t.style.fontSize = el.fontSize + 'vw';
         if (el.textColor) t.style.color = el.textColor;
         node.appendChild(t);

@@ -124,6 +124,8 @@
     font-size: 1.4vw; line-height: 1.3; overflow: auto; background: transparent;
   }
   .el[data-type="titel"] .el-text { font-size: 2.6vw; font-weight: 700; }
+  .el-text ul, .el-text ol { margin: 0; padding-left: 1.2em; }
+  .el-text li { margin: 2px 0; }
   .el-media-fill { width: 100%; height: 100%; object-fit: cover; display: block; }
   .el-placeholder {
     width: 100%; height: 100%; display: flex; flex-direction: column; gap: 6px;
@@ -184,6 +186,10 @@
 
       <div id="propsPanel" style="display:none; margin-bottom:20px; padding:12px; background:#f7f7fb; border-radius:8px;">
         <h2 style="margin-top:0;">Egenskaber</h2>
+        <div id="propsFormatRow" style="display:flex; gap:8px; margin-bottom:12px;">
+          <button id="propBoldBtn" style="padding:6px 12px; font-weight:700;">F</button>
+          <button id="propBulletBtn" style="padding:6px 12px;">• Liste</button>
+        </div>
         <div id="propsFontSizeRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Skriftstørrelse</label>
           <input type="range" id="propFontSize" min="0.8" max="8" step="0.1" style="width:100%;">
@@ -192,11 +198,18 @@
           <label style="margin-top:0;">Tekstfarve</label>
           <input type="color" id="propTextColor" style="width:40px; height:32px; border:none; border-radius:6px; cursor:pointer; padding:0;">
         </div>
-        <div>
+        <div style="margin-bottom:12px;">
           <label style="margin-top:0;">Boksens baggrundsfarve</label>
           <div style="display:flex; align-items:center; gap:8px;">
             <input type="color" id="propBoxColor" style="width:40px; height:32px; border:none; border-radius:6px; cursor:pointer; padding:0;">
             <button id="propBoxColorClear" style="padding:6px 10px; font-size:12px;">Ryd</button>
+          </div>
+        </div>
+        <div>
+          <label style="margin-top:0;">Lag (ræsækkefølge)</label>
+          <div style="display:flex; gap:8px;">
+            <button id="propMoveBack" style="padding:6px 10px; font-size:12px; flex:1;">◀ Send bagud</button>
+            <button id="propMoveFront" style="padding:6px 10px; font-size:12px; flex:1;">Send forrest ▶</button>
           </div>
         </div>
       </div>
@@ -234,6 +247,8 @@
   let mediaLibrary = [];
   let armedElementId = null;
   let selectedElementId = null;
+  let activeTextDiv = null;
+  let activeTextEl = null;
 
   const loginWrap = document.getElementById('loginWrap');
   const app = document.getElementById('app');
@@ -251,6 +266,12 @@
 
   function uid() {
     return (crypto.randomUUID ? crypto.randomUUID() : 'el-' + Math.random().toString(36).slice(2));
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
   }
 
   function isYoutubeUrl(url) {
@@ -499,10 +520,11 @@
       const textDiv = document.createElement('div');
       textDiv.className = 'el-text';
       textDiv.contentEditable = 'true';
-      textDiv.textContent = el.text || '';
+      textDiv.innerHTML = el.html != null ? el.html : escapeHtml(el.text || '');
       if (el.fontSize) textDiv.style.fontSize = el.fontSize + 'vw';
       if (el.textColor) textDiv.style.color = el.textColor;
-      textDiv.addEventListener('input', () => { el.text = textDiv.textContent; });
+      textDiv.addEventListener('input', () => { el.html = textDiv.innerHTML; });
+      textDiv.addEventListener('focus', () => { activeTextDiv = textDiv; activeTextEl = el; });
       body.appendChild(textDiv);
     } else {
       // billede eller video
@@ -616,12 +638,23 @@
     }
     panel.style.display = 'block';
     const isText = el.type === 'titel' || el.type === 'tekst';
+    document.getElementById('propsFormatRow').style.display = isText ? 'flex' : 'none';
     document.getElementById('propsFontSizeRow').style.display = isText ? 'block' : 'none';
     document.getElementById('propsTextColorRow').style.display = isText ? 'block' : 'none';
     document.getElementById('propFontSize').value = el.fontSize || defaultFontSize(el.type);
     document.getElementById('propTextColor').value = el.textColor || defaultTextColor(el.type);
     document.getElementById('propBoxColor').value = el.boxColor || '#000000';
   }
+
+  function applyFormat(cmd) {
+    if (!activeTextDiv) return;
+    document.execCommand(cmd);
+    activeTextEl.html = activeTextDiv.innerHTML;
+  }
+  document.getElementById('propBoldBtn').addEventListener('mousedown', (e) => e.preventDefault());
+  document.getElementById('propBoldBtn').addEventListener('click', () => applyFormat('bold'));
+  document.getElementById('propBulletBtn').addEventListener('mousedown', (e) => e.preventDefault());
+  document.getElementById('propBulletBtn').addEventListener('click', () => applyFormat('insertUnorderedList'));
 
   document.getElementById('propFontSize').addEventListener('input', (e) => {
     const el = elements.find(x => x.id === selectedElementId);
@@ -646,6 +679,22 @@
     if (!el) return;
     delete el.boxColor;
     renderCanvas();
+  });
+
+  function moveElement(id, direction) {
+    const idx = elements.findIndex(e => e.id === id);
+    if (idx === -1) return;
+    const newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= elements.length) return;
+    const [item] = elements.splice(idx, 1);
+    elements.splice(newIdx, 0, item);
+    renderCanvas();
+  }
+  document.getElementById('propMoveBack').addEventListener('click', () => {
+    if (selectedElementId) moveElement(selectedElementId, -1);
+  });
+  document.getElementById('propMoveFront').addEventListener('click', () => {
+    if (selectedElementId) moveElement(selectedElementId, 1);
   });
 
   function startDrag(e, el, node) {
