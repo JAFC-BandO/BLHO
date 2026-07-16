@@ -182,6 +182,7 @@
   <div class="topbar">
     <div class="butik-badge" id="butikNavn"></div>
     <div class="topbar-actions">
+      <span id="debugInfo" style="font-size:10px; color:#aaa; font-family:monospace;"></span>
       <div class="msg" id="saveMsg" style="display:none;"></div>
       <button id="saveBtn">Gem ændringer</button>
       <div class="logout" id="logoutBtn">Log ud</div>
@@ -250,6 +251,9 @@
 </div>
 
 <script>
+  const SCRIPT_VERSION = '2026-07-16-debug1';
+  console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
+
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
   const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -391,6 +395,10 @@
       .order('opdateret_at', { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    console.log('[redigering-debug] Hentet content-raekke:', contentRow && contentRow.id, 'opdateret_at:', contentRow && contentRow.opdateret_at);
+    document.getElementById('debugInfo').textContent =
+      'v' + SCRIPT_VERSION + ' | raekke: ' + (contentRow ? contentRow.opdateret_at : 'ingen');
 
     if (contentRow) {
       currentContentId = contentRow.id;
@@ -872,10 +880,14 @@
     btn.disabled = true;
 
     const payload = { layout: { elements, background: baggrundsfarve }, opdateret_at: new Date().toISOString() };
-    let error;
+    console.log('[redigering-debug] Gemmer, currentContentId=', currentContentId, 'payload=', payload);
+    let error, updatedRows;
 
     if (currentContentId) {
-      ({ error } = await client.from('content').update(payload).eq('id', currentContentId));
+      const res = await client.from('content').update(payload).eq('id', currentContentId).select();
+      error = res.error;
+      updatedRows = res.data;
+      console.log('[redigering-debug] Update-resultat, raekker ramt:', updatedRows ? updatedRows.length : 0, updatedRows);
     } else {
       const { data, error: insertErr } = await client
         .from('content')
@@ -884,13 +896,18 @@
         .single();
       error = insertErr;
       if (data) currentContentId = data.id;
+      console.log('[redigering-debug] Insert-resultat:', data);
     }
 
     btn.disabled = false;
     if (error) {
       showMsg(saveMsg, 'Kunne ikke gemme: ' + error.message, false);
+    } else if (currentContentId && (!updatedRows || updatedRows.length === 0)) {
+      showMsg(saveMsg, 'ADVARSEL: Gem-kaldet ramte 0 rækker (formentlig en RLS/id-uoverensstemmelse) - intet blev reelt gemt!', false);
     } else {
       showMsg(saveMsg, 'Gemt!', true);
+      document.getElementById('debugInfo').textContent =
+        'v' + SCRIPT_VERSION + ' | sidst gemt: ' + payload.opdateret_at;
     }
   });
 </script>
