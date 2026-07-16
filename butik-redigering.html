@@ -462,10 +462,15 @@
     canvas.style.background = baggrundsfarve;
     await loadMedia();
     await loadSabloner();
-    renderCanvas();
 
+    // #app (og dermed canvas) er stadig display:none her, saa canvas.getBoundingClientRect()
+    // ville give bredde 0 -- vis appen FOeR vi tegner, ellers bliver skriftstoerrelsen 0px
+    // (usynlig tekst, men til stede i DOM'en -- derfor "dukker den op" hvis man aabner
+    // DevTools, som udloeser en resize og dermed et gen-render).
     loginWrap.style.display = 'none';
     app.style.display = 'block';
+
+    renderCanvas();
   }
 
   function normalizeHex(v) {
