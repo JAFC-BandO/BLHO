@@ -505,7 +505,7 @@
 
     const { data: brugerRow, error: brugerErr } = await client
       .from('brugere')
-      .select('butik_id, butikker(navn)')
+      .select('butik_id, er_superadmin, butikker(navn)')
       .eq('id', user.id)
       .single();
 
@@ -514,6 +514,7 @@
       return;
     }
 
+    erSuperadmin = !!brugerRow.er_superadmin;
     currentButikId = brugerRow.butik_id;
     document.getElementById('butikNavn').textContent = brugerRow.butikker.navn;
 
@@ -785,7 +786,7 @@
     const { data, error } = await client
       .from('sabloner')
       .select('*')
-      .eq('butik_id', currentButikId)
+      .or('butik_id.eq.' + currentButikId + ',delt.eq.true')
       .order('oprettet_at', { ascending: false });
     if (!error && data) sabloner = data;
     renderSablonerGrid();
@@ -863,9 +864,10 @@
   document.getElementById('saveSideSkabelonBtn').addEventListener('click', async () => {
     const navn = prompt('Navn på skabelonen:');
     if (!navn) return;
+    const delt = erSuperadmin && confirm('Del denne skabelon med ALLE butikker?\n\nOK = del med alle butikker\nAnnuller = kun til denne butik (' + document.getElementById('butikNavn').textContent + ')');
     const { data, error } = await client
       .from('sabloner')
-      .insert({ butik_id: currentButikId, type: 'side', navn, data: { elements, background: baggrundsfarve } })
+      .insert({ butik_id: currentButikId, type: 'side', navn, delt, data: { elements, background: baggrundsfarve } })
       .select()
       .single();
     if (error) { alert('Kunne ikke gemme skabelon: ' + error.message); return; }
@@ -898,9 +900,10 @@
 
     const navn = prompt('Navn på skabelonen:');
     if (!navn) return;
+    const delt = erSuperadmin && confirm('Del denne skabelon med ALLE butikker?\n\nOK = del med alle butikker\nAnnuller = kun til denne butik (' + document.getElementById('butikNavn').textContent + ')');
     const { data: row, error } = await client
       .from('sabloner')
-      .insert({ butik_id: currentButikId, type, navn, data })
+      .insert({ butik_id: currentButikId, type, navn, delt, data })
       .select()
       .single();
     if (error) { alert('Kunne ikke gemme skabelon: ' + error.message); return; }
