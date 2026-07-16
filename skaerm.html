@@ -18,47 +18,36 @@
     overflow: hidden;
   }
   .screen {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+  }
+  .el {
+    position: absolute;
+    overflow: hidden;
+  }
+  .el-text {
     width: 100%;
     height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-    padding: 6vw;
-  }
-  .accent {
-    width: 64px;
-    height: 6px;
-    background: #4d5bff;
-    border-radius: 3px;
-    margin-bottom: 3vh;
-  }
-  .titel {
-    font-size: 6vw;
-    font-weight: 700;
-    line-height: 1.1;
-    margin: 0 0 3vh 0;
-  }
-  .tekst {
-    font-size: 2.6vw;
-    font-weight: 400;
-    line-height: 1.4;
-    color: #d0d0d0;
-    max-width: 70vw;
+    padding: 1vh 1vw;
     white-space: pre-wrap;
+    line-height: 1.3;
   }
-  .billede {
-    max-width: 60vw;
-    max-height: 40vh;
-    border-radius: 12px;
-    margin-bottom: 4vh;
-    object-fit: cover;
+  .el[data-type="titel"] .el-text { font-size: 3.2vw; font-weight: 700; }
+  .el[data-type="tekst"] .el-text { font-size: 1.8vw; color: #d0d0d0; }
+  .el-media { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  /* Legacy fallback (ingen layout gemt endnu) */
+  .legacy-wrap {
+    width: 100%; height: 100%; display: flex; flex-direction: column;
+    justify-content: center; align-items: center; text-align: center; padding: 6vw;
   }
-  .fejl {
-    font-size: 1.6vw;
-    color: #888;
-  }
+  .accent { width: 64px; height: 6px; background: #4d5bff; border-radius: 3px; margin-bottom: 3vh; }
+  .legacy-titel { font-size: 6vw; font-weight: 700; line-height: 1.1; margin: 0 0 3vh 0; }
+  .legacy-tekst { font-size: 2.6vw; line-height: 1.4; color: #d0d0d0; max-width: 70vw; white-space: pre-wrap; }
+  .legacy-billede { max-width: 60vw; max-height: 40vh; border-radius: 12px; margin-bottom: 4vh; object-fit: cover; }
+
+  .fejl { font-size: 1.6vw; color: #888; text-align: center; padding: 4vw; }
 </style>
 </head>
 <body>
@@ -71,7 +60,7 @@
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
   const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  const POLL_MS = 15000;
+  const POLL_MS = 10000;
   const screen = document.getElementById('screen');
   const params = new URLSearchParams(location.search);
   const email = params.get('email');
@@ -84,13 +73,50 @@
     screen.innerHTML = '<div class="fejl">' + tekst + '</div>';
   }
 
-  function visIndhold(content) {
-    let html = '<div class="accent"></div>';
+  function visLayout(elements) {
+    screen.innerHTML = '';
+    elements.forEach(el => {
+      const node = document.createElement('div');
+      node.className = 'el';
+      node.dataset.type = el.type;
+      node.style.left = el.x + '%';
+      node.style.top = el.y + '%';
+      node.style.width = el.w + '%';
+      node.style.height = el.h + '%';
+
+      if (el.type === 'titel' || el.type === 'tekst') {
+        const t = document.createElement('div');
+        t.className = 'el-text';
+        t.textContent = el.text || '';
+        node.appendChild(t);
+      } else if (el.type === 'billede' && el.url) {
+        const img = document.createElement('img');
+        img.className = 'el-media';
+        img.src = el.url;
+        node.appendChild(img);
+      } else if (el.type === 'video' && el.url) {
+        const vid = document.createElement('video');
+        vid.className = 'el-media';
+        vid.src = el.url;
+        vid.muted = true;
+        vid.loop = true;
+        vid.autoplay = true;
+        vid.playsInline = true;
+        node.appendChild(vid);
+      } else {
+        return;
+      }
+      screen.appendChild(node);
+    });
+  }
+
+  function visLegacy(content) {
+    let html = '<div class="legacy-wrap"><div class="accent"></div>';
     if (content.billede_url) {
-      html += '<img class="billede" src="' + content.billede_url + '">';
+      html += '<img class="legacy-billede" src="' + content.billede_url + '">';
     }
-    html += '<div class="titel">' + (content.titel || '') + '</div>';
-    html += '<div class="tekst">' + (content.tekst || '') + '</div>';
+    html += '<div class="legacy-titel">' + (content.titel || '') + '</div>';
+    html += '<div class="legacy-tekst">' + (content.tekst || '') + '</div></div>';
     screen.innerHTML = html;
   }
 
@@ -135,9 +161,13 @@
       return;
     }
 
-    if (data.opdateret_at !== sidstOpdateret) {
-      sidstOpdateret = data.opdateret_at;
-      visIndhold(data);
+    if (data.opdateret_at === sidstOpdateret) return;
+    sidstOpdateret = data.opdateret_at;
+
+    if (data.layout && Array.isArray(data.layout.elements) && data.layout.elements.length) {
+      visLayout(data.layout.elements);
+    } else {
+      visLegacy(data);
     }
   }
 

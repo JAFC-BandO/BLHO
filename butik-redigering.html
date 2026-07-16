@@ -14,8 +14,10 @@
     padding: 0;
     color: #1a1a1a;
   }
-  .wrap {
-    max-width: 480px;
+
+  /* --- Login --- */
+  .login-wrap {
+    max-width: 420px;
     margin: 0 auto;
     padding: 32px 20px;
     min-height: 100vh;
@@ -29,81 +31,124 @@
     padding: 32px 24px;
     box-shadow: 0 2px 12px rgba(0,0,0,0.06);
   }
-  h1 {
-    font-size: 20px;
-    margin: 0 0 4px 0;
-    color: #040DB1;
+  h1 { font-size: 20px; margin: 0 0 4px 0; color: #040DB1; }
+  .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; margin-top: 16px; color: #333; }
+  input[type=email], input[type=password], input[type=text] {
+    width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; font-family: inherit;
   }
-  .subtitle {
-    color: #666;
-    font-size: 14px;
-    margin-bottom: 24px;
-  }
-  label {
-    display: block;
-    font-size: 13px;
-    font-weight: 600;
-    margin-bottom: 6px;
-    margin-top: 16px;
-    color: #333;
-  }
-  input, textarea {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    font-size: 15px;
-    font-family: inherit;
-  }
-  textarea {
-    min-height: 120px;
-    resize: vertical;
-  }
-  button {
-    width: 100%;
-    padding: 12px;
-    border: none;
-    border-radius: 8px;
-    background: #040DB1;
-    color: white;
-    font-size: 15px;
-    font-weight: 600;
-    cursor: pointer;
-    margin-top: 20px;
-  }
+  button { border: none; border-radius: 8px; background: #040DB1; color: white; font-size: 14px; font-weight: 600; cursor: pointer; }
   button:hover { background: #0311d4; }
   button:disabled { background: #aaa; cursor: not-allowed; }
-  .msg {
-    margin-top: 14px;
-    font-size: 14px;
-    padding: 10px 12px;
-    border-radius: 8px;
-    display: none;
-  }
+  .primary-btn { width: 100%; padding: 12px; font-size: 15px; margin-top: 20px; }
+  .msg { margin-top: 14px; font-size: 14px; padding: 10px 12px; border-radius: 8px; display: none; }
   .msg.ok { background: #e6f4ea; color: #1e7e34; display: block; }
   .msg.err { background: #fdecea; color: #b92a15; display: block; }
-  .logout {
-    text-align: center;
-    margin-top: 16px;
-    font-size: 13px;
-    color: #888;
-    cursor: pointer;
-    text-decoration: underline;
+
+  /* --- App shell --- */
+  #app { display: none; }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 20px; background: white; border-bottom: 1px solid #e2e2e2;
   }
   .butik-badge {
-    display: inline-block;
-    background: #eef0fd;
-    color: #040DB1;
-    padding: 4px 10px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 600;
-    margin-bottom: 16px;
+    display: inline-block; background: #eef0fd; color: #040DB1;
+    padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600;
   }
+  .topbar-actions { display: flex; align-items: center; gap: 10px; }
+  .logout { font-size: 13px; color: #888; cursor: pointer; text-decoration: underline; }
+  #saveBtn { padding: 8px 18px; }
+
+  .main {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 16px;
+    padding: 16px;
+    align-items: start;
+  }
+
+  /* --- Sidebar --- */
+  .sidebar { background: white; border-radius: 10px; padding: 14px; }
+  .sidebar h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .03em; color: #888; margin: 0 0 10px 0; }
+  .add-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; }
+  .add-btn { padding: 10px 6px; font-size: 13px; background: #eef0fd; color: #040DB1; }
+  .add-btn:hover { background: #dde1fb; }
+
+  .media-banner { display: none; background: #fff4e5; color: #8a5a00; font-size: 12px; padding: 8px 10px; border-radius: 8px; margin-bottom: 10px; }
+  .media-banner.active { display: block; }
+  .media-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .media-item {
+    position: relative; border: 2px solid transparent; border-radius: 8px; overflow: hidden;
+    cursor: pointer; background: #f0f0f0; aspect-ratio: 1 / 1;
+  }
+  .media-item.selectable { border-color: #4d5bff; }
+  .media-item img, .media-item video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .media-item .fname { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,.55); color: white; font-size: 9px; padding: 2px 4px; }
+  .upload-label {
+    display: block; text-align: center; padding: 10px; margin-top: 10px; border: 1px dashed #bbb;
+    border-radius: 8px; font-size: 13px; color: #555; cursor: pointer;
+  }
+  .upload-label:hover { border-color: #040DB1; color: #040DB1; }
+  .upload-label input { display: none; }
+
+  /* --- Canvas --- */
+  .canvas-outer { background: white; border-radius: 10px; padding: 14px; }
+  .canvas {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #0a0a0a;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .el {
+    position: absolute;
+    border: 1px solid rgba(255,255,255,.25);
+    background: rgba(255,255,255,.03);
+    display: flex;
+    flex-direction: column;
+    min-width: 40px;
+    min-height: 30px;
+  }
+  .el.selectable-target { outline: 2px solid #ffb300; }
+  .el-header {
+    display: flex; align-items: center; justify-content: space-between;
+    background: rgba(0,0,0,.55); padding: 2px 4px; cursor: move; flex-shrink: 0;
+  }
+  .el-header .tag { color: #aaa; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; }
+  .el-header .del { color: #ff8080; cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 4px; }
+  .el-body { flex: 1; overflow: hidden; position: relative; }
+  .el-text {
+    width: 100%; height: 100%; color: white; padding: 4px 6px; outline: none;
+    font-size: 1.4vw; line-height: 1.3; overflow: auto; background: transparent;
+  }
+  .el[data-type="titel"] .el-text { font-size: 2.6vw; font-weight: 700; }
+  .el-media-fill { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .el-placeholder {
+    width: 100%; height: 100%; display: flex; flex-direction: column; gap: 6px;
+    align-items: center; justify-content: center; color: #888; font-size: 11px; padding: 6px;
+  }
+  .el-placeholder button, .el-placeholder label {
+    font-size: 10px; padding: 4px 8px; background: #2a2a2a; color: #ddd; border-radius: 6px; cursor: pointer;
+  }
+  .el-placeholder input { display: none; }
+  .el-change-btn {
+    position: absolute; top: 2px; right: 2px; font-size: 9px; padding: 2px 6px;
+    background: rgba(0,0,0,.6); color: white; border-radius: 4px; cursor: pointer;
+  }
+  .resize-handle {
+    position: absolute; right: 0; bottom: 0; width: 14px; height: 14px;
+    cursor: nwse-resize; background: rgba(255,255,255,.35);
+    border-top-left-radius: 4px;
+  }
+
+  .save-row { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+  #saveMsg.msg { margin-top: 0; }
 </style>
 </head>
 <body>
-<div class="wrap">
+
+<div class="login-wrap" id="loginWrap">
   <div class="card" id="loginCard">
     <h1>Log ind</h1>
     <div class="subtitle">Rediger content til din butiks skærm</div>
@@ -111,21 +156,43 @@
     <input type="email" id="email" autocomplete="username">
     <label for="password">Adgangskode</label>
     <input type="password" id="password" autocomplete="current-password">
-    <button id="loginBtn">Log ind</button>
+    <button class="primary-btn" id="loginBtn">Log ind</button>
     <div class="msg" id="loginMsg"></div>
   </div>
+</div>
 
-  <div class="card" id="editCard" style="display:none;">
+<div id="app">
+  <div class="topbar">
     <div class="butik-badge" id="butikNavn"></div>
-    <h1>Rediger content</h1>
-    <div class="subtitle">Ændringer vises på skærmen kort efter du gemmer</div>
-    <label for="titel">Titel</label>
-    <input type="text" id="titel">
-    <label for="tekst">Tekst</label>
-    <textarea id="tekst"></textarea>
-    <button id="saveBtn">Gem ændringer</button>
-    <div class="msg" id="saveMsg"></div>
-    <div class="logout" id="logoutBtn">Log ud</div>
+    <div class="topbar-actions">
+      <div class="msg" id="saveMsg" style="display:none;"></div>
+      <button id="saveBtn">Gem ændringer</button>
+      <div class="logout" id="logoutBtn">Log ud</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="sidebar">
+      <h2>Tilføj element</h2>
+      <div class="add-row">
+        <button class="add-btn" data-add="titel">+ Titel</button>
+        <button class="add-btn" data-add="tekst">+ Tekst</button>
+        <button class="add-btn" data-add="billede">+ Billede</button>
+        <button class="add-btn" data-add="video">+ Video</button>
+      </div>
+
+      <h2>Medie-bibliotek</h2>
+      <div class="media-banner" id="mediaBanner">Vælg et medie til elementet nedenfor (eller klik her for at annullere)</div>
+      <div class="media-grid" id="mediaGrid"></div>
+      <label class="upload-label">
+        Upload nyt billede/video
+        <input type="file" id="uploadInput" accept="image/*,video/*">
+      </label>
+    </div>
+
+    <div class="canvas-outer">
+      <div class="canvas" id="canvas"></div>
+    </div>
   </div>
 </div>
 
@@ -136,19 +203,31 @@
 
   let currentButikId = null;
   let currentContentId = null;
+  let elements = [];
+  let mediaLibrary = [];
+  let armedElementId = null;
 
-  const loginCard = document.getElementById('loginCard');
-  const editCard = document.getElementById('editCard');
+  const loginWrap = document.getElementById('loginWrap');
+  const app = document.getElementById('app');
   const loginMsg = document.getElementById('loginMsg');
   const saveMsg = document.getElementById('saveMsg');
+  const canvas = document.getElementById('canvas');
+  const mediaGrid = document.getElementById('mediaGrid');
+  const mediaBanner = document.getElementById('mediaBanner');
 
   function showMsg(el, text, ok) {
     el.textContent = text;
+    el.style.display = 'block';
     el.className = 'msg ' + (ok ? 'ok' : 'err');
   }
 
-  async function loadContent() {
-    // Find brugerens butik
+  function uid() {
+    return (crypto.randomUUID ? crypto.randomUUID() : 'el-' + Math.random().toString(36).slice(2));
+  }
+
+  // ---------- Login / bootstrap ----------
+
+  async function loadEverything() {
     const { data: { user } } = await client.auth.getUser();
     if (!user) return;
 
@@ -166,7 +245,6 @@
     currentButikId = brugerRow.butik_id;
     document.getElementById('butikNavn').textContent = brugerRow.butikker.navn;
 
-    // Hent eksisterende content (seneste række for denne butik)
     const { data: contentRow } = await client
       .from('content')
       .select('*')
@@ -177,12 +255,22 @@
 
     if (contentRow) {
       currentContentId = contentRow.id;
-      document.getElementById('titel').value = contentRow.titel || '';
-      document.getElementById('tekst').value = contentRow.tekst || '';
+      if (contentRow.layout && Array.isArray(contentRow.layout.elements) && contentRow.layout.elements.length) {
+        elements = contentRow.layout.elements;
+      } else {
+        // Migrer gammelt simpelt indhold ind som startpunkt i canvas
+        elements = [];
+        if (contentRow.titel) elements.push({ id: uid(), type: 'titel', text: contentRow.titel, x: 5, y: 8, w: 55, h: 20 });
+        if (contentRow.tekst) elements.push({ id: uid(), type: 'tekst', text: contentRow.tekst, x: 5, y: 32, w: 50, h: 20 });
+        if (contentRow.billede_url) elements.push({ id: uid(), type: 'billede', url: contentRow.billede_url, x: 60, y: 8, w: 35, h: 50 });
+      }
     }
 
-    loginCard.style.display = 'none';
-    editCard.style.display = 'block';
+    await loadMedia();
+    renderCanvas();
+
+    loginWrap.style.display = 'none';
+    app.style.display = 'block';
   }
 
   document.getElementById('loginBtn').addEventListener('click', async () => {
@@ -197,25 +285,283 @@
       showMsg(loginMsg, 'Forkert email eller adgangskode.', false);
       return;
     }
-    await loadContent();
+    await loadEverything();
   });
 
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await client.auth.signOut();
+    app.style.display = 'none';
+    loginWrap.style.display = 'flex';
+    loginMsg.className = 'msg';
+    loginMsg.style.display = 'none';
+  });
+
+  client.auth.getSession().then(({ data: { session } }) => {
+    if (session) loadEverything();
+  });
+
+  // ---------- Media library ----------
+
+  async function loadMedia() {
+    const { data, error } = await client
+      .from('media')
+      .select('*')
+      .eq('butik_id', currentButikId)
+      .order('oprettet_at', { ascending: false });
+    if (!error && data) mediaLibrary = data;
+    renderMediaGrid();
+  }
+
+  function renderMediaGrid() {
+    mediaGrid.innerHTML = '';
+    const armedEl = elements.find(e => e.id === armedElementId);
+    const filtered = armedEl ? mediaLibrary.filter(m => m.type === armedEl.type) : mediaLibrary;
+
+    filtered.forEach(m => {
+      const item = document.createElement('div');
+      item.className = 'media-item' + (armedEl ? ' selectable' : '');
+      item.innerHTML = m.type === 'billede'
+        ? '<img src="' + m.url + '">'
+        : '<video src="' + m.url + '" muted></video>';
+      const fname = document.createElement('div');
+      fname.className = 'fname';
+      fname.textContent = m.filnavn || '';
+      item.appendChild(fname);
+      item.addEventListener('click', () => {
+        if (!armedEl) return;
+        armedEl.url = m.url;
+        armedElementId = null;
+        mediaBanner.classList.remove('active');
+        renderCanvas();
+        renderMediaGrid();
+      });
+      mediaGrid.appendChild(item);
+    });
+  }
+
+  mediaBanner.addEventListener('click', () => {
+    armedElementId = null;
+    mediaBanner.classList.remove('active');
+    renderCanvas();
+    renderMediaGrid();
+  });
+
+  async function uploadFile(file, targetElementId) {
+    const type = file.type.startsWith('video') ? 'video' : 'billede';
+    const path = currentButikId + '/' + uid() + '-' + file.name;
+
+    const { error: uploadErr } = await client.storage.from('media').upload(path, file);
+    if (uploadErr) {
+      alert('Upload fejlede: ' + uploadErr.message);
+      return;
+    }
+    const { data: pub } = client.storage.from('media').getPublicUrl(path);
+
+    const { data: mediaRow, error: insertErr } = await client
+      .from('media')
+      .insert({ butik_id: currentButikId, type, url: pub.publicUrl, filnavn: file.name })
+      .select()
+      .single();
+
+    if (insertErr) {
+      alert('Kunne ikke gemme media i biblioteket: ' + insertErr.message);
+      return;
+    }
+
+    mediaLibrary.unshift(mediaRow);
+
+    if (targetElementId) {
+      const el = elements.find(e => e.id === targetElementId);
+      if (el) el.url = mediaRow.url;
+      renderCanvas();
+    }
+    renderMediaGrid();
+  }
+
+  document.getElementById('uploadInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (file) await uploadFile(file, armedElementId);
+    e.target.value = '';
+  });
+
+  // ---------- Canvas / elements ----------
+
+  document.querySelectorAll('[data-add]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const type = btn.getAttribute('data-add');
+      const defaults = {
+        titel:   { x: 5,  y: 5,  w: 55, h: 20, text: 'Ny titel' },
+        tekst:   { x: 5,  y: 28, w: 50, h: 20, text: 'Ny tekst' },
+        billede: { x: 55, y: 5,  w: 40, h: 45, url: null },
+        video:   { x: 5,  y: 50, w: 90, h: 40, url: null },
+      }[type];
+      elements.push(Object.assign({ id: uid(), type }, defaults));
+      renderCanvas();
+    });
+  });
+
+  function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+  function renderCanvas() {
+    canvas.innerHTML = '';
+    elements.forEach(el => canvas.appendChild(buildElementNode(el)));
+  }
+
+  function buildElementNode(el) {
+    const node = document.createElement('div');
+    node.className = 'el';
+    node.dataset.type = el.type;
+    node.style.left = el.x + '%';
+    node.style.top = el.y + '%';
+    node.style.width = el.w + '%';
+    node.style.height = el.h + '%';
+
+    const header = document.createElement('div');
+    header.className = 'el-header';
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.textContent = el.type;
+    const del = document.createElement('span');
+    del.className = 'del';
+    del.textContent = '✕';
+    del.addEventListener('click', () => {
+      elements = elements.filter(e => e.id !== el.id);
+      if (armedElementId === el.id) { armedElementId = null; mediaBanner.classList.remove('active'); renderMediaGrid(); }
+      renderCanvas();
+    });
+    header.appendChild(tag);
+    header.appendChild(del);
+    header.addEventListener('pointerdown', (e) => startDrag(e, el, node));
+    node.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'el-body';
+
+    if (el.type === 'titel' || el.type === 'tekst') {
+      const textDiv = document.createElement('div');
+      textDiv.className = 'el-text';
+      textDiv.contentEditable = 'true';
+      textDiv.textContent = el.text || '';
+      textDiv.addEventListener('input', () => { el.text = textDiv.textContent; });
+      body.appendChild(textDiv);
+    } else {
+      // billede eller video
+      if (el.url) {
+        const media = el.type === 'billede'
+          ? Object.assign(document.createElement('img'), { src: el.url })
+          : Object.assign(document.createElement('video'), { src: el.url, muted: true, loop: true, autoplay: true, playsInline: true });
+        media.className = 'el-media-fill';
+        body.appendChild(media);
+
+        const change = document.createElement('div');
+        change.className = 'el-change-btn';
+        change.textContent = 'Skift';
+        change.addEventListener('click', () => armForSelection(el));
+        body.appendChild(change);
+      } else {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'el-placeholder';
+
+        const libBtn = document.createElement('button');
+        libBtn.textContent = 'Vælg fra bibliotek';
+        libBtn.addEventListener('click', () => armForSelection(el));
+        placeholder.appendChild(libBtn);
+
+        const uploadLabel = document.createElement('label');
+        uploadLabel.textContent = 'Upload nyt';
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = el.type === 'video' ? 'video/*' : 'image/*';
+        fileInput.addEventListener('change', async (e) => {
+          const file = e.target.files[0];
+          if (file) await uploadFile(file, el.id);
+        });
+        uploadLabel.appendChild(fileInput);
+        placeholder.appendChild(uploadLabel);
+
+        body.appendChild(placeholder);
+      }
+    }
+    node.appendChild(body);
+
+    const resizeHandle = document.createElement('div');
+    resizeHandle.className = 'resize-handle';
+    resizeHandle.addEventListener('pointerdown', (e) => startResize(e, el, node));
+    node.appendChild(resizeHandle);
+
+    if (el.id === armedElementId) node.classList.add('selectable-target');
+
+    return node;
+  }
+
+  function armForSelection(el) {
+    armedElementId = el.id;
+    mediaBanner.classList.add('active');
+    renderCanvas();
+    renderMediaGrid();
+  }
+
+  function startDrag(e, el, node) {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = canvas.getBoundingClientRect();
+    const startX = e.clientX, startY = e.clientY;
+    const startLeft = el.x, startTop = el.y;
+
+    function onMove(ev) {
+      const dx = ((ev.clientX - startX) / rect.width) * 100;
+      const dy = ((ev.clientY - startY) / rect.height) * 100;
+      el.x = clamp(startLeft + dx, 0, 100 - el.w);
+      el.y = clamp(startTop + dy, 0, 100 - el.h);
+      node.style.left = el.x + '%';
+      node.style.top = el.y + '%';
+    }
+    function onUp() {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+    }
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  }
+
+  function startResize(e, el, node) {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = canvas.getBoundingClientRect();
+    const startX = e.clientX, startY = e.clientY;
+    const startW = el.w, startH = el.h;
+
+    function onMove(ev) {
+      const dw = ((ev.clientX - startX) / rect.width) * 100;
+      const dh = ((ev.clientY - startY) / rect.height) * 100;
+      el.w = clamp(startW + dw, 5, 100 - el.x);
+      el.h = clamp(startH + dh, 5, 100 - el.y);
+      node.style.width = el.w + '%';
+      node.style.height = el.h + '%';
+    }
+    function onUp() {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+    }
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  }
+
+  // ---------- Save ----------
+
   document.getElementById('saveBtn').addEventListener('click', async () => {
-    const titel = document.getElementById('titel').value;
-    const tekst = document.getElementById('tekst').value;
     const btn = document.getElementById('saveBtn');
     btn.disabled = true;
 
+    const payload = { layout: { elements }, opdateret_at: new Date().toISOString() };
     let error;
+
     if (currentContentId) {
-      ({ error } = await client
-        .from('content')
-        .update({ titel, tekst, opdateret_at: new Date().toISOString() })
-        .eq('id', currentContentId));
+      ({ error } = await client.from('content').update(payload).eq('id', currentContentId));
     } else {
       const { data, error: insertErr } = await client
         .from('content')
-        .insert({ butik_id: currentButikId, titel, tekst })
+        .insert(Object.assign({ butik_id: currentButikId }, payload))
         .select()
         .single();
       error = insertErr;
@@ -228,18 +574,6 @@
     } else {
       showMsg(saveMsg, 'Gemt!', true);
     }
-  });
-
-  document.getElementById('logoutBtn').addEventListener('click', async () => {
-    await client.auth.signOut();
-    editCard.style.display = 'none';
-    loginCard.style.display = 'block';
-    loginMsg.className = 'msg';
-  });
-
-  // Tjek om bruger allerede er logget ind (session i browseren)
-  client.auth.getSession().then(({ data: { session } }) => {
-    if (session) loadContent();
   });
 </script>
 </body>
