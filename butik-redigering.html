@@ -1104,6 +1104,7 @@
       media.autoplay = true;
       media.loop = true;
       media.playsInline = true;
+      media.style.objectFit = 'cover';
     }
     media.style.cssText += 'width:100%; height:100%; display:block;';
     return media;
@@ -1565,6 +1566,37 @@
       }).catch(() => {
         card.textContent = 'Kunne ikke hente data';
       });
+    }
+
+    if (el.type === 'streg') {
+      // Minimal haandtering uden header-bjaelke -- en tynd streg skal ikke se ud som en
+      // kasse med kontroller ovenpaa. Traek direkte i stregen for at flytte den.
+      node.style.cursor = 'move';
+
+      const del = document.createElement('span');
+      del.textContent = '✕';
+      del.style.cssText = 'position:absolute; top:-16px; right:0; background:rgba(0,0,0,.75); color:#f88; font-size:10px; padding:0 4px; cursor:pointer; z-index:10; display:none;';
+      del.addEventListener('pointerdown', (e) => e.stopPropagation());
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        elements = elements.filter(x => x.id !== el.id);
+        if (selectedElementId === el.id) { selectedElementId = null; renderPropsPanel(); }
+        renderCanvas();
+      });
+      node.appendChild(del);
+
+      node.addEventListener('pointerdown', (e) => startDrag(e, el, node));
+
+      const resizeHandle = document.createElement('div');
+      resizeHandle.className = 'resize-handle';
+      resizeHandle.addEventListener('pointerdown', (e) => startResize(e, el, node));
+      node.appendChild(resizeHandle);
+
+      if (el.id === armedElementId) node.classList.add('selectable-target');
+      if (el.id === selectedElementId) { node.classList.add('selected'); del.style.display = 'block'; }
+      if (multiSelected.has(el.id)) node.classList.add('multi-selected');
+
+      return node;
     }
 
     const header = document.createElement('div');
