@@ -107,84 +107,82 @@
 
   let rotatorIntervals = [];
 
+  function buildMediaNode(spec) {
+    let media;
+    if (spec.type === 'video' && spec.kind === 'youtube') {
+      media = document.createElement('iframe');
+      media.src = youtubeEmbedUrl(spec.url);
+      media.setAttribute('frameborder', '0');
+      media.setAttribute('allow', 'autoplay; encrypted-media');
+    } else if (spec.type === 'billede') {
+      media = document.createElement('img');
+      media.src = spec.url;
+      media.style.objectFit = 'contain';
+    } else {
+      media = document.createElement('video');
+      media.src = spec.url;
+      media.muted = true;
+      media.autoplay = true;
+      media.loop = true;
+      media.playsInline = true;
+    }
+    media.className = 'el-media';
+    return media;
+  }
+
+  // Bygger DOM-noden for ét element. Bruges baade paa topniveau og nestet inde i en
+  // rotator's "side"-slides (hele gemte skabeloner som roterer sammen med billeder/videoer).
+  function buildElNode(el) {
+    const node = document.createElement('div');
+    node.className = 'el';
+    node.dataset.type = el.type;
+    node.style.left = el.x + '%';
+    node.style.top = el.y + '%';
+    node.style.width = el.w + '%';
+    node.style.height = el.h + '%';
+    if (el.boxColor) node.style.background = el.boxColor;
+
+    if (el.type === 'titel' || el.type === 'tekst') {
+      const t = document.createElement('div');
+      t.className = 'el-text';
+      t.innerHTML = el.html != null ? stripInlineFontSize(el.html) : escapeHtml(el.text || '');
+      if (el.fontSize) t.style.fontSize = el.fontSize + 'vw';
+      if (el.textColor) t.style.color = el.textColor;
+      node.appendChild(t);
+    } else if (el.type === 'billede' && el.url) {
+      node.appendChild(buildMediaNode({ type: 'billede', url: el.url }));
+    } else if (el.type === 'video' && el.url) {
+      node.appendChild(buildMediaNode({ type: 'video', url: el.url, kind: el.kind }));
+    } else if (el.type === 'rotator' && Array.isArray(el.slides) && el.slides.length) {
+      let idx = 0;
+      const showSlide = () => {
+        node.innerHTML = '';
+        const slide = el.slides[idx];
+        if (slide.type === 'side') {
+          const inner = document.createElement('div');
+          inner.style.cssText = 'position:relative; width:100%; height:100%; overflow:hidden;';
+          if (slide.background) inner.style.background = slide.background;
+          (slide.elements || []).forEach(subEl => inner.appendChild(buildElNode(subEl)));
+          node.appendChild(inner);
+        } else {
+          node.appendChild(buildMediaNode(slide));
+        }
+        idx = (idx + 1) % el.slides.length;
+      };
+      showSlide();
+      if (el.slides.length > 1) {
+        rotatorIntervals.push(setInterval(showSlide, el.intervalMs || 5000));
+      }
+    }
+    return node;
+  }
+
   function visLayout(elements, background) {
     rotatorIntervals.forEach(id => clearInterval(id));
     rotatorIntervals = [];
     screen.innerHTML = '';
     screen.style.background = background || '#0a0a0a';
-    elements.forEach(el => {
-      const node = document.createElement('div');
-      node.className = 'el';
-      node.dataset.type = el.type;
-      node.style.left = el.x + '%';
-      node.style.top = el.y + '%';
-      node.style.width = el.w + '%';
-      node.style.height = el.h + '%';
-      if (el.boxColor) node.style.background = el.boxColor;
-
-      if (el.type === 'titel' || el.type === 'tekst') {
-        const t = document.createElement('div');
-        t.className = 'el-text';
-        t.innerHTML = el.html != null ? stripInlineFontSize(el.html) : escapeHtml(el.text || '');
-        if (el.fontSize) t.style.fontSize = el.fontSize + 'vw';
-        if (el.textColor) t.style.color = el.textColor;
-        node.appendChild(t);
-      } else if (el.type === 'billede' && el.url) {
-        const img = document.createElement('img');
-        img.className = 'el-media';
-        img.style.objectFit = 'contain';
-        img.src = el.url;
-        node.appendChild(img);
-      } else if (el.type === 'video' && el.url && el.kind === 'youtube') {
-        const iframe = document.createElement('iframe');
-        iframe.className = 'el-media';
-        iframe.src = youtubeEmbedUrl(el.url);
-        iframe.setAttribute('frameborder', '0');
-        iframe.setAttribute('allow', 'autoplay; encrypted-media');
-        node.appendChild(iframe);
-      } else if (el.type === 'video' && el.url) {
-        const vid = document.createElement('video');
-        vid.className = 'el-media';
-        vid.src = el.url;
-        vid.muted = true;
-        vid.loop = true;
-        vid.autoplay = true;
-        vid.playsInline = true;
-        node.appendChild(vid);
-      } else if (el.type === 'rotator' && Array.isArray(el.slides) && el.slides.length) {
-        let idx = 0;
-        const showSlide = () => {
-          node.innerHTML = '';
-          const slide = el.slides[idx];
-          let media;
-          if (slide.type === 'video' && slide.kind === 'youtube') {
-            media = document.createElement('iframe');
-            media.src = youtubeEmbedUrl(slide.url);
-            media.setAttribute('frameborder', '0');
-            media.setAttribute('allow', 'autoplay; encrypted-media');
-          } else if (slide.type === 'billede') {
-            media = document.createElement('img');
-            media.src = slide.url;
-            media.style.objectFit = 'contain';
-          } else {
-            media = document.createElement('video');
-            media.src = slide.url;
-            media.muted = true;
-            media.autoplay = true;
-            media.loop = true;
-            media.playsInline = true;
-          }
-          media.className = 'el-media';
-          node.appendChild(media);
-          idx = (idx + 1) % el.slides.length;
-        };
-        showSlide();
-        if (el.slides.length > 1) {
-          rotatorIntervals.push(setInterval(showSlide, el.intervalMs || 5000));
-        }
-      }
-      screen.appendChild(node);
-    });
+    elements.forEach(el => screen.appendChild(buildElNode(el)));
   }
 
   function visLegacy(content) {

@@ -112,6 +112,7 @@
   }
   .el.selectable-target { outline: 2px solid #ffb300; }
   .el.selected { outline: 2px solid #4d5bff; }
+  .el.multi-selected { outline: 2px dashed #4d5bff; }
   .el-header {
     display: flex; align-items: center; justify-content: space-between;
     background: rgba(0,0,0,.55); padding: 2px 4px; cursor: move; flex-shrink: 0;
@@ -161,6 +162,15 @@
     cursor: nwse-resize; background: rgba(255,255,255,.35);
     border-top-left-radius: 4px;
   }
+
+  .side-tab {
+    display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 6px;
+    background: #eef0fd; color: #040DB1; font-size: 13px; cursor: pointer; user-select: none;
+  }
+  .side-tab.active { background: #040DB1; color: white; }
+  .side-tab .del { font-size: 12px; opacity: .6; cursor: pointer; }
+  .side-tab .del:hover { opacity: 1; }
+  .side-tab-new { padding: 6px 10px; border-radius: 6px; background: #f4f4f2; color: #666; font-size: 13px; cursor: pointer; }
 
   .save-row { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
   #saveMsg.msg { margin-top: 0; }
@@ -262,6 +272,7 @@
       </label>
 
       <h2 style="margin-top:24px;">Skabeloner</h2>
+      <div style="font-size:11px; color:#888; margin-bottom:8px;">Tip: Shift+klik for at vælge flere elementer ad gangen</div>
       <div style="display:flex; gap:8px; margin-bottom:10px;">
         <button id="saveSideSkabelonBtn" style="flex:1; padding:8px 4px; font-size:12px; background:#eef0fd; color:#040DB1;">Gem side</button>
         <button id="saveElementSkabelonBtn" style="flex:1; padding:8px 4px; font-size:12px; background:#eef0fd; color:#040DB1;">Gem valgt element</button>
@@ -270,6 +281,7 @@
     </div>
 
     <div class="canvas-outer">
+      <div id="siderTabs" style="display:flex; align-items:center; gap:6px; margin-bottom:10px; flex-wrap:wrap;"></div>
       <div class="canvas" id="canvas"></div>
     </div>
   </div>
@@ -289,10 +301,13 @@
   let currentContentId = null;
   let elements = [];
   let baggrundsfarve = '#0a0a0a';
+  let sider = [];
+  let aktivSideId = null;
   let mediaLibrary = [];
   let sabloner = [];
   let armedElementId = null;
   let selectedElementId = null;
+  let multiSelected = new Set();
   let rotatorIntervals = [];
 
   const loginWrap = document.getElementById('loginWrap');
@@ -445,23 +460,43 @@
 
     if (contentRow) {
       currentContentId = contentRow.id;
-      if (contentRow.layout && Array.isArray(contentRow.layout.elements) && contentRow.layout.elements.length) {
-        elements = contentRow.layout.elements;
-        baggrundsfarve = contentRow.layout.background || '#0a0a0a';
+      if (contentRow.layout && Array.isArray(contentRow.layout.sider) && contentRow.layout.sider.length) {
+        // Nyt multi-side-format
+        sider = contentRow.layout.sider;
+        aktivSideId = contentRow.layout.aktivSideId && sider.some(s => s.id === contentRow.layout.aktivSideId)
+          ? contentRow.layout.aktivSideId
+          : sider[0].id;
+      } else if (contentRow.layout && Array.isArray(contentRow.layout.elements) && contentRow.layout.elements.length) {
+        // Gammelt enkelt-side-format -- pak ind som "Side 1"
+        const side = { id: uid(), navn: 'Side 1', background: contentRow.layout.background || '#0a0a0a', elements: contentRow.layout.elements };
+        sider = [side];
+        aktivSideId = side.id;
       } else {
-        // Migrer gammelt simpelt indhold ind som startpunkt i canvas
-        elements = [];
-        if (contentRow.titel) elements.push({ id: uid(), type: 'titel', text: contentRow.titel, x: 5, y: 8, w: 55, h: 20 });
-        if (contentRow.tekst) elements.push({ id: uid(), type: 'tekst', text: contentRow.tekst, x: 5, y: 32, w: 50, h: 20 });
-        if (contentRow.billede_url) elements.push({ id: uid(), type: 'billede', url: contentRow.billede_url, x: 60, y: 8, w: 35, h: 50 });
+        // Migrer helt gammelt simpelt indhold (titel/tekst/billede_url) ind som startpunkt
+        const migrerede = [];
+        if (contentRow.titel) migrerede.push({ id: uid(), type: 'titel', text: contentRow.titel, x: 5, y: 8, w: 55, h: 20 });
+        if (contentRow.tekst) migrerede.push({ id: uid(), type: 'tekst', text: contentRow.tekst, x: 5, y: 32, w: 50, h: 20 });
+        if (contentRow.billede_url) migrerede.push({ id: uid(), type: 'billede', url: contentRow.billede_url, x: 60, y: 8, w: 35, h: 50 });
+        const side = { id: uid(), navn: 'Side 1', background: '#0a0a0a', elements: migrerede };
+        sider = [side];
+        aktivSideId = side.id;
       }
+    } else {
+      const side = { id: uid(), navn: 'Side 1', background: '#0a0a0a', elements: [] };
+      sider = [side];
+      aktivSideId = side.id;
     }
+
+    const aktivSide = sider.find(s => s.id === aktivSideId);
+    elements = aktivSide.elements;
+    baggrundsfarve = aktivSide.background;
 
     document.getElementById('bgColorInput').value = baggrundsfarve;
     document.getElementById('bgColorHex').value = baggrundsfarve;
     canvas.style.background = baggrundsfarve;
     await loadMedia();
     await loadSabloner();
+    renderSiderTabs();
 
     // #app (og dermed canvas) er stadig display:none her, saa canvas.getBoundingClientRect()
     // ville give bredde 0 -- vis appen FOeR vi tegner, ellers bliver skriftstoerrelsen 0px
@@ -648,7 +683,8 @@
       row.style.cssText = 'display:flex; align-items:center; gap:6px; background:#f7f7fb; padding:6px 8px; border-radius:6px; font-size:12px;';
 
       const label = document.createElement('span');
-      label.textContent = (s.type === 'side' ? '📄 ' : '🧩 ') + s.navn;
+      const icon = s.type === 'side' ? '📄 ' : s.type === 'gruppe' ? '📦 ' : '🧩 ';
+      label.textContent = icon + s.navn;
       label.style.cssText = 'flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
       row.appendChild(label);
 
@@ -681,6 +717,11 @@
       armedElementId = null;
       renderCanvas();
       renderPropsPanel();
+    } else if (s.type === 'gruppe') {
+      const clones = JSON.parse(JSON.stringify(s.data.elements || []));
+      clones.forEach(c => { c.id = uid(); });
+      elements.push(...clones);
+      renderCanvas();
     } else {
       const clone = JSON.parse(JSON.stringify(s.data));
       clone.id = uid();
@@ -713,18 +754,38 @@
     renderSablonerGrid();
   });
 
+  function updateSaveSelectionButtonLabel() {
+    const btn = document.getElementById('saveElementSkabelonBtn');
+    if (multiSelected.size > 1) {
+      btn.textContent = 'Gem ' + multiSelected.size + ' valgte som skabelon';
+    } else {
+      btn.textContent = 'Gem valgt element';
+    }
+  }
+
   document.getElementById('saveElementSkabelonBtn').addEventListener('click', async () => {
-    const el = elements.find(e => e.id === selectedElementId);
-    if (!el) { alert('Vælg først et element på canvas.'); return; }
-    const navn = prompt('Navn på element-skabelonen:');
+    let type, data;
+
+    if (multiSelected.size > 1) {
+      type = 'gruppe';
+      data = { elements: elements.filter(e => multiSelected.has(e.id)).map(e => JSON.parse(JSON.stringify(e))) };
+    } else {
+      const singleId = multiSelected.size === 1 ? [...multiSelected][0] : selectedElementId;
+      const el = elements.find(e => e.id === singleId);
+      if (!el) { alert('Vælg først et element (eller flere med Shift+klik) på canvas.'); return; }
+      type = 'element';
+      data = el;
+    }
+
+    const navn = prompt('Navn på skabelonen:');
     if (!navn) return;
-    const { data, error } = await client
+    const { data: row, error } = await client
       .from('sabloner')
-      .insert({ butik_id: currentButikId, type: 'element', navn, data: el })
+      .insert({ butik_id: currentButikId, type, navn, data })
       .select()
       .single();
     if (error) { alert('Kunne ikke gemme skabelon: ' + error.message); return; }
-    sabloner.unshift(data);
+    sabloner.unshift(row);
     renderSablonerGrid();
   });
 
@@ -794,6 +855,101 @@
     e.target.value = '';
   });
 
+  // ---------- Sider (flere redigerbare sider pr. butik) ----------
+
+  function commitActiveSide() {
+    const side = sider.find(s => s.id === aktivSideId);
+    if (side) {
+      side.elements = elements;
+      side.background = baggrundsfarve;
+    }
+  }
+
+  function switchToSide(id) {
+    if (id === aktivSideId) return;
+    commitActiveSide();
+    aktivSideId = id;
+    const side = sider.find(s => s.id === id);
+    elements = side.elements;
+    baggrundsfarve = side.background;
+    document.getElementById('bgColorInput').value = baggrundsfarve;
+    document.getElementById('bgColorHex').value = baggrundsfarve;
+    canvas.style.background = baggrundsfarve;
+    selectedElementId = null;
+    armedElementId = null;
+    multiSelected.clear();
+    renderCanvas();
+    renderPropsPanel();
+    renderSiderTabs();
+  }
+
+  function addNewSide() {
+    commitActiveSide();
+    const nyt = { id: uid(), navn: 'Side ' + (sider.length + 1), background: '#0a0a0a', elements: [] };
+    sider.push(nyt);
+    aktivSideId = nyt.id;
+    elements = nyt.elements;
+    baggrundsfarve = nyt.background;
+    document.getElementById('bgColorInput').value = baggrundsfarve;
+    document.getElementById('bgColorHex').value = baggrundsfarve;
+    canvas.style.background = baggrundsfarve;
+    selectedElementId = null;
+    armedElementId = null;
+    multiSelected.clear();
+    renderCanvas();
+    renderPropsPanel();
+    renderSiderTabs();
+  }
+
+  function deleteSide(id) {
+    if (sider.length <= 1) {
+      alert('Du kan ikke slette den sidste side.');
+      return;
+    }
+    if (!confirm('Slet denne side? Det kan ikke fortrydes.')) return;
+    const wasActive = id === aktivSideId;
+    sider = sider.filter(s => s.id !== id);
+    if (wasActive) {
+      const next = sider[0];
+      aktivSideId = next.id;
+      elements = next.elements;
+      baggrundsfarve = next.background;
+      document.getElementById('bgColorInput').value = baggrundsfarve;
+      document.getElementById('bgColorHex').value = baggrundsfarve;
+      canvas.style.background = baggrundsfarve;
+      selectedElementId = null;
+      armedElementId = null;
+      multiSelected.clear();
+      renderCanvas();
+      renderPropsPanel();
+    }
+    renderSiderTabs();
+  }
+
+  function renderSiderTabs() {
+    const wrap = document.getElementById('siderTabs');
+    wrap.innerHTML = '';
+    sider.forEach(s => {
+      const tab = document.createElement('div');
+      tab.className = 'side-tab' + (s.id === aktivSideId ? ' active' : '');
+      const label = document.createElement('span');
+      label.textContent = s.navn;
+      tab.appendChild(label);
+      const del = document.createElement('span');
+      del.className = 'del';
+      del.textContent = '✕';
+      del.addEventListener('click', (e) => { e.stopPropagation(); deleteSide(s.id); });
+      tab.appendChild(del);
+      tab.addEventListener('click', () => switchToSide(s.id));
+      wrap.appendChild(tab);
+    });
+    const nyBtn = document.createElement('div');
+    nyBtn.className = 'side-tab-new';
+    nyBtn.textContent = '+ Ny side';
+    nyBtn.addEventListener('click', addNewSide);
+    wrap.appendChild(nyBtn);
+  }
+
   // ---------- Canvas / elements ----------
 
   document.querySelectorAll('[data-add]').forEach(btn => {
@@ -828,11 +984,17 @@
   });
 
   canvas.addEventListener('click', (e) => {
-    if (e.target === canvas && selectedElementId) {
+    if (e.target !== canvas) return;
+    if (selectedElementId) {
       const prev = canvas.querySelector('.el.selected');
       if (prev) prev.classList.remove('selected');
       selectedElementId = null;
       renderPropsPanel();
+    }
+    if (multiSelected.size) {
+      multiSelected.clear();
+      canvas.querySelectorAll('.multi-selected').forEach(n => n.classList.remove('multi-selected'));
+      updateSaveSelectionButtonLabel();
     }
   });
 
@@ -846,7 +1008,16 @@
     node.style.width = el.w + '%';
     node.style.height = el.h + '%';
     if (el.boxColor) node.style.background = el.boxColor;
-    node.addEventListener('click', () => selectElement(el.id));
+    node.addEventListener('click', (e) => {
+      if (e.shiftKey) {
+        e.stopPropagation();
+        if (multiSelected.has(el.id)) multiSelected.delete(el.id); else multiSelected.add(el.id);
+        node.classList.toggle('multi-selected', multiSelected.has(el.id));
+        updateSaveSelectionButtonLabel();
+      } else {
+        selectElement(el.id);
+      }
+    });
 
     const body = document.createElement('div');
     body.className = 'el-body';
@@ -945,6 +1116,14 @@
         const showSlide = () => {
           preview.innerHTML = '';
           const slide = el.slides[idx];
+          if (slide.type === 'side') {
+            const badge = document.createElement('div');
+            badge.style.cssText = 'width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#aaa; font-size:11px; text-align:center; padding:6px; background:' + (slide.background || '#0a0a0a') + ';';
+            badge.textContent = '📄 Side (' + (slide.elements || []).length + ' elementer)';
+            preview.appendChild(badge);
+            idx = (idx + 1) % el.slides.length;
+            return;
+          }
           let media;
           if (slide.type === 'video' && slide.kind === 'youtube') {
             media = document.createElement('iframe');
@@ -985,6 +1164,11 @@
           img.src = slide.url;
           img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
           thumb.appendChild(img);
+        } else if (slide.type === 'side') {
+          const ico = document.createElement('div');
+          ico.textContent = '📄';
+          ico.style.cssText = 'width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:13px;';
+          thumb.appendChild(ico);
         } else {
           const ico = document.createElement('div');
           ico.textContent = '▶';
@@ -1036,6 +1220,34 @@
       });
       manageBar.appendChild(linkInput);
       manageBar.appendChild(linkBtn);
+
+      const sideSkabeloner = sabloner.filter(s => s.type === 'side');
+      if (sideSkabeloner.length) {
+        const sideSelect = document.createElement('select');
+        sideSelect.style.cssText = 'flex-shrink:0; font-size:10px; padding:4px; border-radius:4px; border:1px solid #444; background:#111; color:#eee; width:90px;';
+        const placeholderOpt = document.createElement('option');
+        placeholderOpt.textContent = '+ Side...';
+        placeholderOpt.value = '';
+        sideSelect.appendChild(placeholderOpt);
+        sideSkabeloner.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = s.navn;
+          sideSelect.appendChild(opt);
+        });
+        sideSelect.addEventListener('change', () => {
+          const chosen = sabloner.find(s => s.id === sideSelect.value);
+          if (chosen) {
+            el.slides.push({
+              type: 'side',
+              elements: JSON.parse(JSON.stringify(chosen.data.elements || [])),
+              background: chosen.data.background || '#0a0a0a',
+            });
+            renderCanvas();
+          }
+        });
+        manageBar.appendChild(sideSelect);
+      }
 
       body.appendChild(manageBar);
     }
@@ -1094,6 +1306,7 @@
 
     if (el.id === armedElementId) node.classList.add('selectable-target');
     if (el.id === selectedElementId) node.classList.add('selected');
+    if (multiSelected.has(el.id)) node.classList.add('multi-selected');
 
     return node;
   }
@@ -1106,6 +1319,11 @@
   }
 
   function selectElement(id) {
+    if (multiSelected.size) {
+      multiSelected.clear();
+      canvas.querySelectorAll('.multi-selected').forEach(n => n.classList.remove('multi-selected'));
+      updateSaveSelectionButtonLabel();
+    }
     if (selectedElementId === id) return;
     const prev = canvas.querySelector('.el.selected');
     if (prev) prev.classList.remove('selected');
@@ -1257,7 +1475,11 @@
     const btn = document.getElementById('saveBtn');
     btn.disabled = true;
 
-    const payload = { layout: { elements, background: baggrundsfarve }, opdateret_at: new Date().toISOString() };
+    commitActiveSide();
+    const payload = {
+      layout: { elements, background: baggrundsfarve, sider, aktivSideId },
+      opdateret_at: new Date().toISOString(),
+    };
     console.log('[redigering-debug] Gemmer, currentContentId=', currentContentId, 'payload=', payload);
 
     const { data: sessionCheck } = await client.auth.getSession();
