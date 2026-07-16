@@ -579,6 +579,8 @@
 
   canvas.addEventListener('click', (e) => {
     if (e.target === canvas && selectedElementId) {
+      const prev = canvas.querySelector('.el.selected');
+      if (prev) prev.classList.remove('selected');
       selectedElementId = null;
       renderPropsPanel();
     }
@@ -588,6 +590,7 @@
     const node = document.createElement('div');
     node.className = 'el';
     node.dataset.type = el.type;
+    node.dataset.elId = el.id;
     node.style.left = el.x + '%';
     node.style.top = el.y + '%';
     node.style.width = el.w + '%';
@@ -737,9 +740,13 @@
   }
 
   function selectElement(id) {
+    if (selectedElementId === id) return;
+    const prev = canvas.querySelector('.el.selected');
+    if (prev) prev.classList.remove('selected');
     selectedElementId = id;
+    const next = canvas.querySelector('[data-el-id="' + id + '"]');
+    if (next) next.classList.add('selected');
     renderPropsPanel();
-    renderCanvas();
   }
 
   function defaultFontSize(type) {

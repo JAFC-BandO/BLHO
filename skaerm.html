@@ -73,6 +73,12 @@
     screen.innerHTML = '<div class="fejl">' + tekst + '</div>';
   }
 
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
   function youtubeEmbedUrl(url) {
     const m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
     if (!m) return url;
