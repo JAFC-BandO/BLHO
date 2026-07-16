@@ -179,6 +179,16 @@
     <button class="primary-btn" id="loginBtn">Log ind</button>
     <div class="msg" id="loginMsg"></div>
   </div>
+  <div class="card" id="setPasswordCard" style="display:none; margin-top:16px;">
+    <h1>Vælg dit password</h1>
+    <div class="subtitle">Det er første gang du logger ind — vælg et permanent password</div>
+    <label for="newPassword1">Nyt password</label>
+    <input type="password" id="newPassword1" autocomplete="new-password">
+    <label for="newPassword2">Gentag password</label>
+    <input type="password" id="newPassword2" autocomplete="new-password">
+    <button class="primary-btn" id="setPasswordBtn">Gem password</button>
+    <div class="msg" id="setPasswordMsg"></div>
+  </div>
 </div>
 
 <div id="app">
@@ -200,6 +210,7 @@
         <button class="add-btn" data-add="billede">+ Billede</button>
         <button class="add-btn" data-add="video">+ Video</button>
         <button class="add-btn" data-add="boks">+ Boks</button>
+        <button class="add-btn" data-add="rotator">+ Rotator</button>
       </div>
 
       <div id="propsPanel" style="display:none; margin-bottom:20px; padding:12px; background:#f7f7fb; border-radius:8px;">
@@ -223,6 +234,10 @@
             <button id="propBoxColorClear" style="padding:6px 10px; font-size:12px;">Ryd</button>
           </div>
         </div>
+        <div id="propsIntervalRow" style="margin-bottom:12px;">
+          <label style="margin-top:0;">Interval mellem slides (sek)</label>
+          <input type="number" id="propInterval" min="1" max="120" step="1" style="width:80px;">
+        </div>
         <div>
           <label style="margin-top:0;">Lag (ræsækkefølge)</label>
           <div style="display:flex; gap:8px;">
@@ -245,6 +260,13 @@
         Upload nyt billede/video
         <input type="file" id="uploadInput" accept="image/*,video/*">
       </label>
+
+      <h2 style="margin-top:24px;">Skabeloner</h2>
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <button id="saveSideSkabelonBtn" style="flex:1; padding:8px 4px; font-size:12px; background:#eef0fd; color:#040DB1;">Gem side</button>
+        <button id="saveElementSkabelonBtn" style="flex:1; padding:8px 4px; font-size:12px; background:#eef0fd; color:#040DB1;">Gem valgt element</button>
+      </div>
+      <div id="sablonerGrid" style="display:flex; flex-direction:column; gap:6px;"></div>
     </div>
 
     <div class="canvas-outer">
@@ -268,8 +290,10 @@
   let elements = [];
   let baggrundsfarve = '#0a0a0a';
   let mediaLibrary = [];
+  let sabloner = [];
   let armedElementId = null;
   let selectedElementId = null;
+  let rotatorIntervals = [];
 
   const loginWrap = document.getElementById('loginWrap');
   const app = document.getElementById('app');
@@ -437,6 +461,7 @@
     document.getElementById('bgColorHex').value = baggrundsfarve;
     canvas.style.background = baggrundsfarve;
     await loadMedia();
+    await loadSabloner();
     renderCanvas();
 
     loginWrap.style.display = 'none';
@@ -484,7 +509,7 @@
       showMsg(loginMsg, 'Forkert email eller adgangskode.', false);
       return;
     }
-    await loadEverything();
+    await checkPasswordThenProceed();
   });
 
   document.getElementById('logoutBtn').addEventListener('click', async () => {
@@ -496,7 +521,60 @@
   });
 
   client.auth.getSession().then(({ data: { session } }) => {
-    if (session) loadEverything();
+    if (session) checkPasswordThenProceed();
+  });
+
+  async function checkPasswordThenProceed() {
+    const { data: { user } } = await client.auth.getUser();
+    if (!user) return;
+
+    const { data: bruger } = await client
+      .from('brugere')
+      .select('skal_saette_password')
+      .eq('id', user.id)
+      .single();
+
+    if (bruger && bruger.skal_saette_password) {
+      document.getElementById('loginCard').style.display = 'none';
+      document.getElementById('setPasswordCard').style.display = 'block';
+    } else {
+      await loadEverything();
+    }
+  }
+
+  document.getElementById('setPasswordBtn').addEventListener('click', async () => {
+    const p1 = document.getElementById('newPassword1').value;
+    const p2 = document.getElementById('newPassword2').value;
+    const msgEl = document.getElementById('setPasswordMsg');
+
+    if (p1.length < 8) {
+      showMsg(msgEl, 'Password skal være mindst 8 tegn.', false);
+      return;
+    }
+    if (p1 !== p2) {
+      showMsg(msgEl, 'Passwordene er ikke ens.', false);
+      return;
+    }
+
+    const btn = document.getElementById('setPasswordBtn');
+    btn.disabled = true;
+
+    const { error: updateErr } = await client.auth.updateUser({ password: p1 });
+    if (updateErr) {
+      showMsg(msgEl, 'Kunne ikke gemme password: ' + updateErr.message, false);
+      btn.disabled = false;
+      return;
+    }
+
+    const { error: rpcErr } = await client.rpc('mark_password_set');
+    btn.disabled = false;
+    if (rpcErr) {
+      showMsg(msgEl, 'Password gemt, men kunne ikke opdatere status: ' + rpcErr.message, false);
+      return;
+    }
+
+    document.getElementById('setPasswordCard').style.display = 'none';
+    await loadEverything();
   });
 
   // ---------- Media library ----------
@@ -545,6 +623,106 @@
     renderMediaGrid();
   });
 
+  // ---------- Skabeloner ----------
+
+  async function loadSabloner() {
+    const { data, error } = await client
+      .from('sabloner')
+      .select('*')
+      .eq('butik_id', currentButikId)
+      .order('oprettet_at', { ascending: false });
+    if (!error && data) sabloner = data;
+    renderSablonerGrid();
+  }
+
+  function renderSablonerGrid() {
+    const grid = document.getElementById('sablonerGrid');
+    grid.innerHTML = '';
+    sabloner.forEach(s => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; align-items:center; gap:6px; background:#f7f7fb; padding:6px 8px; border-radius:6px; font-size:12px;';
+
+      const label = document.createElement('span');
+      label.textContent = (s.type === 'side' ? '📄 ' : '🧩 ') + s.navn;
+      label.style.cssText = 'flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+      row.appendChild(label);
+
+      const useBtn = document.createElement('button');
+      useBtn.textContent = 'Brug';
+      useBtn.style.cssText = 'padding:4px 8px; font-size:11px;';
+      useBtn.addEventListener('click', () => applySkabelon(s));
+      row.appendChild(useBtn);
+
+      const delBtn = document.createElement('span');
+      delBtn.textContent = '✕';
+      delBtn.style.cssText = 'color:#b92a15; cursor:pointer; padding:0 4px;';
+      delBtn.addEventListener('click', () => deleteSkabelon(s.id));
+      row.appendChild(delBtn);
+
+      grid.appendChild(row);
+    });
+  }
+
+  function applySkabelon(s) {
+    if (s.type === 'side') {
+      if (!confirm('Dette erstatter hele den nuværende side med skabelonen "' + s.navn + '". Fortsæt?')) return;
+      elements = JSON.parse(JSON.stringify(s.data.elements || []));
+      elements.forEach(el => { el.id = uid(); });
+      baggrundsfarve = s.data.background || '#0a0a0a';
+      document.getElementById('bgColorInput').value = baggrundsfarve;
+      document.getElementById('bgColorHex').value = baggrundsfarve;
+      canvas.style.background = baggrundsfarve;
+      selectedElementId = null;
+      armedElementId = null;
+      renderCanvas();
+      renderPropsPanel();
+    } else {
+      const clone = JSON.parse(JSON.stringify(s.data));
+      clone.id = uid();
+      clone.x = 10;
+      clone.y = 10;
+      elements.push(clone);
+      renderCanvas();
+    }
+  }
+
+  async function deleteSkabelon(id) {
+    if (!confirm('Slet denne skabelon?')) return;
+    const { error } = await client.from('sabloner').delete().eq('id', id);
+    if (!error) {
+      sabloner = sabloner.filter(s => s.id !== id);
+      renderSablonerGrid();
+    }
+  }
+
+  document.getElementById('saveSideSkabelonBtn').addEventListener('click', async () => {
+    const navn = prompt('Navn på skabelonen:');
+    if (!navn) return;
+    const { data, error } = await client
+      .from('sabloner')
+      .insert({ butik_id: currentButikId, type: 'side', navn, data: { elements, background: baggrundsfarve } })
+      .select()
+      .single();
+    if (error) { alert('Kunne ikke gemme skabelon: ' + error.message); return; }
+    sabloner.unshift(data);
+    renderSablonerGrid();
+  });
+
+  document.getElementById('saveElementSkabelonBtn').addEventListener('click', async () => {
+    const el = elements.find(e => e.id === selectedElementId);
+    if (!el) { alert('Vælg først et element på canvas.'); return; }
+    const navn = prompt('Navn på element-skabelonen:');
+    if (!navn) return;
+    const { data, error } = await client
+      .from('sabloner')
+      .insert({ butik_id: currentButikId, type: 'element', navn, data: el })
+      .select()
+      .single();
+    if (error) { alert('Kunne ikke gemme skabelon: ' + error.message); return; }
+    sabloner.unshift(data);
+    renderSablonerGrid();
+  });
+
   async function uploadFile(file, targetElementId) {
     const type = file.type.startsWith('video') ? 'video' : 'billede';
     const path = currentButikId + '/' + uid() + '-' + file.name;
@@ -577,6 +755,34 @@
     renderMediaGrid();
   }
 
+  async function uploadFileToRotator(file, rotatorEl) {
+    const type = file.type.startsWith('video') ? 'video' : 'billede';
+    const path = currentButikId + '/' + uid() + '-' + file.name;
+
+    const { error: uploadErr } = await client.storage.from('media').upload(path, file);
+    if (uploadErr) {
+      alert('Upload fejlede: ' + uploadErr.message);
+      return;
+    }
+    const { data: pub } = client.storage.from('media').getPublicUrl(path);
+
+    const { data: mediaRow, error: insertErr } = await client
+      .from('media')
+      .insert({ butik_id: currentButikId, type, url: pub.publicUrl, filnavn: file.name })
+      .select()
+      .single();
+
+    if (insertErr) {
+      alert('Kunne ikke gemme media i biblioteket: ' + insertErr.message);
+      return;
+    }
+
+    mediaLibrary.unshift(mediaRow);
+    rotatorEl.slides.push({ type, url: mediaRow.url });
+    renderCanvas();
+    renderMediaGrid();
+  }
+
   document.getElementById('uploadInput').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (file) await uploadFile(file, armedElementId);
@@ -594,6 +800,7 @@
         billede: { x: 55, y: 5,  w: 40, h: 45, url: null },
         video:   { x: 5,  y: 50, w: 90, h: 40, url: null },
         boks:    { x: 10, y: 10, w: 40, h: 30, boxColor: '#1a1a1a' },
+        rotator: { x: 10, y: 10, w: 50, h: 50, slides: [], intervalMs: 5000 },
       }[type];
       elements.push(Object.assign({ id: uid(), type }, defaults));
       renderCanvas();
@@ -603,6 +810,8 @@
   function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
   function renderCanvas() {
+    rotatorIntervals.forEach(id => clearInterval(id));
+    rotatorIntervals = [];
     canvas.innerHTML = '';
     elements.forEach(el => canvas.appendChild(buildElementNode(el)));
   }
@@ -716,6 +925,114 @@
 
         body.appendChild(placeholder);
       }
+    } else if (el.type === 'rotator') {
+      const preview = document.createElement('div');
+      preview.style.cssText = 'position:relative; width:100%; height:70%; background:#000; overflow:hidden;';
+      body.appendChild(preview);
+
+      if (!el.slides.length) {
+        const ph = document.createElement('div');
+        ph.style.cssText = 'width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#666; font-size:11px; text-align:center; padding:6px;';
+        ph.textContent = 'Ingen slides endnu — tilføj billeder/videoer nedenfor';
+        preview.appendChild(ph);
+      } else {
+        let idx = 0;
+        const showSlide = () => {
+          preview.innerHTML = '';
+          const slide = el.slides[idx];
+          let media;
+          if (slide.type === 'video' && slide.kind === 'youtube') {
+            media = document.createElement('iframe');
+            media.src = youtubeEmbedUrl(slide.url);
+            media.setAttribute('frameborder', '0');
+            media.setAttribute('allow', 'autoplay; encrypted-media');
+          } else if (slide.type === 'billede') {
+            media = document.createElement('img');
+            media.src = slide.url;
+            media.style.objectFit = 'contain';
+          } else {
+            media = document.createElement('video');
+            media.src = slide.url;
+            media.muted = true;
+            media.autoplay = true;
+            media.playsInline = true;
+          }
+          media.style.width = '100%';
+          media.style.height = '100%';
+          media.style.display = 'block';
+          preview.appendChild(media);
+          idx = (idx + 1) % el.slides.length;
+        };
+        showSlide();
+        if (el.slides.length > 1) {
+          rotatorIntervals.push(setInterval(showSlide, el.intervalMs || 5000));
+        }
+      }
+
+      const manageBar = document.createElement('div');
+      manageBar.style.cssText = 'height:30%; overflow-x:auto; overflow-y:hidden; display:flex; gap:4px; align-items:center; padding:4px; background:#111;';
+
+      el.slides.forEach((slide, i) => {
+        const thumb = document.createElement('div');
+        thumb.style.cssText = 'position:relative; width:34px; height:34px; flex-shrink:0; background:#333; border-radius:4px; overflow:hidden;';
+        if (slide.type === 'billede') {
+          const img = document.createElement('img');
+          img.src = slide.url;
+          img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+          thumb.appendChild(img);
+        } else {
+          const ico = document.createElement('div');
+          ico.textContent = '▶';
+          ico.style.cssText = 'width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#aaa; font-size:13px;';
+          thumb.appendChild(ico);
+        }
+        const rm = document.createElement('span');
+        rm.textContent = '✕';
+        rm.style.cssText = 'position:absolute; top:0; right:0; background:rgba(0,0,0,.7); color:#f88; font-size:9px; padding:0 3px; cursor:pointer;';
+        rm.addEventListener('click', (e) => {
+          e.stopPropagation();
+          el.slides.splice(i, 1);
+          renderCanvas();
+        });
+        thumb.appendChild(rm);
+        manageBar.appendChild(thumb);
+      });
+
+      const addLabel = document.createElement('label');
+      addLabel.textContent = '+';
+      addLabel.style.cssText = 'flex-shrink:0; width:34px; height:34px; display:flex; align-items:center; justify-content:center; background:#2a2a2a; color:#ddd; border-radius:4px; cursor:pointer; font-size:16px;';
+      const addInput = document.createElement('input');
+      addInput.type = 'file';
+      addInput.accept = 'image/*,video/*';
+      addInput.style.display = 'none';
+      addInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (file) await uploadFileToRotator(file, el);
+        e.target.value = '';
+      });
+      addLabel.appendChild(addInput);
+      manageBar.appendChild(addLabel);
+
+      const linkInput = document.createElement('input');
+      linkInput.type = 'text';
+      linkInput.placeholder = 'Link (billede/video/YouTube)';
+      linkInput.style.cssText = 'flex-shrink:0; font-size:10px; padding:4px 6px; border-radius:4px; border:1px solid #444; background:#111; color:#eee; width:110px;';
+      const linkBtn = document.createElement('button');
+      linkBtn.textContent = 'OK';
+      linkBtn.style.cssText = 'flex-shrink:0; padding:4px 8px; font-size:11px;';
+      linkBtn.addEventListener('click', () => {
+        const val = linkInput.value.trim();
+        if (!val) return;
+        const isVideo = isYoutubeUrl(val) || /\.(mp4|webm|ogg)(\?|$)/i.test(val);
+        el.slides.push(isVideo
+          ? { type: 'video', url: val, kind: isYoutubeUrl(val) ? 'youtube' : 'direct' }
+          : { type: 'billede', url: val });
+        renderCanvas();
+      });
+      manageBar.appendChild(linkInput);
+      manageBar.appendChild(linkBtn);
+
+      body.appendChild(manageBar);
     }
 
     const header = document.createElement('div');
@@ -827,6 +1144,12 @@
     const boxColorVal = el.boxColor || '#000000';
     document.getElementById('propBoxColor').value = boxColorVal;
     document.getElementById('propBoxColorHex').value = boxColorVal;
+
+    const isRotator = el.type === 'rotator';
+    document.getElementById('propsIntervalRow').style.display = isRotator ? 'block' : 'none';
+    if (isRotator) {
+      document.getElementById('propInterval').value = Math.round((el.intervalMs || 5000) / 1000);
+    }
   }
 
   document.getElementById('propFontSize').addEventListener('input', (e) => {
@@ -868,6 +1191,13 @@
   });
   document.getElementById('propMoveFront').addEventListener('click', () => {
     if (selectedElementId) moveElement(selectedElementId, 1);
+  });
+
+  document.getElementById('propInterval').addEventListener('input', (e) => {
+    const el = elements.find(x => x.id === selectedElementId);
+    if (!el) return;
+    el.intervalMs = Math.max(1, parseInt(e.target.value, 10) || 5) * 1000;
+    renderCanvas();
   });
 
   function startDrag(e, el, node) {

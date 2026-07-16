@@ -105,7 +105,11 @@
     return 'https://www.youtube.com/embed/' + id + '?autoplay=1&mute=1&loop=1&controls=0&playlist=' + id;
   }
 
+  let rotatorIntervals = [];
+
   function visLayout(elements, background) {
+    rotatorIntervals.forEach(id => clearInterval(id));
+    rotatorIntervals = [];
     screen.innerHTML = '';
     screen.style.background = background || '#0a0a0a';
     elements.forEach(el => {
@@ -147,6 +151,37 @@
         vid.autoplay = true;
         vid.playsInline = true;
         node.appendChild(vid);
+      } else if (el.type === 'rotator' && Array.isArray(el.slides) && el.slides.length) {
+        let idx = 0;
+        const showSlide = () => {
+          node.innerHTML = '';
+          const slide = el.slides[idx];
+          let media;
+          if (slide.type === 'video' && slide.kind === 'youtube') {
+            media = document.createElement('iframe');
+            media.src = youtubeEmbedUrl(slide.url);
+            media.setAttribute('frameborder', '0');
+            media.setAttribute('allow', 'autoplay; encrypted-media');
+          } else if (slide.type === 'billede') {
+            media = document.createElement('img');
+            media.src = slide.url;
+            media.style.objectFit = 'contain';
+          } else {
+            media = document.createElement('video');
+            media.src = slide.url;
+            media.muted = true;
+            media.autoplay = true;
+            media.loop = true;
+            media.playsInline = true;
+          }
+          media.className = 'el-media';
+          node.appendChild(media);
+          idx = (idx + 1) % el.slides.length;
+        };
+        showSlide();
+        if (el.slides.length > 1) {
+          rotatorIntervals.push(setInterval(showSlide, el.intervalMs || 5000));
+        }
       }
       screen.appendChild(node);
     });
