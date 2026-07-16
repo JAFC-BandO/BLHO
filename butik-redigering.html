@@ -237,6 +237,7 @@
         <button class="add-btn" data-add="boks">+ Boks</button>
         <button class="add-btn" data-add="rotator">+ Rotator</button>
         <button class="add-btn" data-add="miljoeffekt">+ Miljøeffekt</button>
+        <button class="add-btn" data-add="streg">+ Streg</button>
       </div>
 
       <div id="propsPanel" style="display:none; margin-bottom:20px; padding:12px; background:#f7f7fb; border-radius:8px;">
@@ -1083,6 +1084,7 @@
         boks:    { x: 10, y: 10, w: 40, h: 30, boxColor: '#1a1a1a' },
         rotator: { x: 10, y: 10, w: 50, h: 50, slides: [], intervalMs: 5000 },
         miljoeffekt: { x: 10, y: 10, w: 50, h: 30 },
+        streg: { x: 10, y: 50, w: 80, h: 1, boxColor: '#ffffff' },
       }[type];
       elements.push(Object.assign({ id: uid(), type }, defaults));
       renderCanvas();
