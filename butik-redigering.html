@@ -222,6 +222,7 @@
 <div id="app">
   <div class="topbar">
     <div class="butik-badge" id="butikNavn"></div>
+    <span id="superadminBadge" style="display:none; background:#ffd700; color:#5a4600; font-weight:700; font-size:12px; padding:4px 10px; border-radius:20px; margin-left:8px;">👑 Superadmin</span>
     <div class="topbar-actions">
       <div class="msg" id="saveMsg" style="display:none;"></div>
       <button id="saveBtn">Gem ændringer</button>
@@ -521,6 +522,7 @@
     }
 
     erSuperadmin = !!brugerRow.er_superadmin;
+    document.getElementById('superadminBadge').style.display = erSuperadmin ? 'inline-block' : 'none';
     currentButikId = brugerRow.butik_id;
     document.getElementById('butikNavn').textContent = brugerRow.butikker.navn;
 
