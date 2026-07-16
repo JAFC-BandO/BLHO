@@ -193,7 +193,7 @@
     }
   }
 
-  const RELOAD_MS = 30 * 60 * 1000; // genindlæs siden hvert 30. minut for altid at hente frisk kode
+  const RELOAD_MS = 10 * 60 * 1000; // genindlæs siden hvert 10. minut for altid at hente frisk kode
   function scheduleAutoReload() {
     setTimeout(() => {
       const url = new URL(location.href);
