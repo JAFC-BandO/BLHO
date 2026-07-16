@@ -203,8 +203,8 @@
       <div id="propsPanel" style="display:none; margin-bottom:20px; padding:12px; background:#f7f7fb; border-radius:8px;">
         <h2 style="margin-top:0;">Egenskaber</h2>
         <div id="propsFontSizeRow" style="margin-bottom:12px;">
-          <label style="margin-top:0;">Skriftstørrelse</label>
-          <input type="range" id="propFontSize" min="0.8" max="8" step="0.1" style="width:100%;">
+          <label style="margin-top:0;">Skriftstørrelse (vw)</label>
+          <input type="number" id="propFontSize" min="0.5" max="20" step="0.1" style="width:80px;">
         </div>
         <div id="propsTextColorRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Tekstfarve</label>
@@ -337,7 +337,7 @@
         e.stopPropagation();
         textDiv.focus();
         document.execCommand('insertText', false, em);
-        el.html = textDiv.innerHTML;
+        el.html = stripInlineFontSize(textDiv.innerHTML);
         picker.remove();
         openEmojiPicker = null;
       });
@@ -358,6 +358,16 @@
         }
       });
     }, 0);
+  }
+
+  function stripInlineFontSize(html) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    tmp.querySelectorAll('[style]').forEach(node => {
+      node.style.fontSize = '';
+      if (!node.getAttribute('style').trim()) node.removeAttribute('style');
+    });
+    return tmp.innerHTML;
   }
 
   function escapeHtml(str) {
@@ -624,10 +634,10 @@
       textDiv = document.createElement('div');
       textDiv.className = 'el-text';
       textDiv.contentEditable = 'true';
-      textDiv.innerHTML = el.html != null ? el.html : escapeHtml(el.text || '');
+      textDiv.innerHTML = el.html != null ? stripInlineFontSize(el.html) : escapeHtml(el.text || '');
       if (el.fontSize) textDiv.style.fontSize = el.fontSize + 'vw';
       if (el.textColor) textDiv.style.color = el.textColor;
-      textDiv.addEventListener('input', () => { el.html = textDiv.innerHTML; });
+      textDiv.addEventListener('input', () => { el.html = stripInlineFontSize(textDiv.innerHTML); });
       body.appendChild(textDiv);
     } else if (el.type === 'billede' || el.type === 'video') {
       if (el.url) {
@@ -713,7 +723,7 @@
       function cmdBtn(label, cmd, extraStyle) {
         return buildFormatButton(label, extraStyle || '', () => {
           document.execCommand(cmd);
-          el.html = textDiv.innerHTML;
+          el.html = stripInlineFontSize(textDiv.innerHTML);
         }, textDiv);
       }
       fmtGroup.appendChild(cmdBtn('B', 'bold', 'font-weight:700;'));

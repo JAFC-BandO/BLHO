@@ -82,6 +82,16 @@
     screen.innerHTML = '<div class="fejl">' + tekst + '</div>';
   }
 
+  function stripInlineFontSize(html) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    tmp.querySelectorAll('[style]').forEach(node => {
+      node.style.fontSize = '';
+      if (!node.getAttribute('style').trim()) node.removeAttribute('style');
+    });
+    return tmp.innerHTML;
+  }
+
   function escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
@@ -111,7 +121,7 @@
       if (el.type === 'titel' || el.type === 'tekst') {
         const t = document.createElement('div');
         t.className = 'el-text';
-        t.innerHTML = el.html != null ? el.html : escapeHtml(el.text || '');
+        t.innerHTML = el.html != null ? stripInlineFontSize(el.html) : escapeHtml(el.text || '');
         if (el.fontSize) t.style.fontSize = el.fontSize + 'vw';
         if (el.textColor) t.style.color = el.textColor;
         node.appendChild(t);
