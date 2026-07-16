@@ -60,7 +60,9 @@
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
-  const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { storageKey: 'sb-skaerm-auth' }
+  });
 
   const POLL_MS = 10000;
   const screen = document.getElementById('screen');

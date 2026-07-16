@@ -255,7 +255,9 @@
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
-  const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { storageKey: 'sb-butik-redigering-auth' }
+  });
 
   let currentButikId = null;
   let currentContentId = null;
