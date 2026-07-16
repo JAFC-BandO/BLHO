@@ -136,9 +136,11 @@
   .el-body { flex: 1; overflow: hidden; position: relative; }
   .el-text {
     width: 100%; height: 100%; color: white; padding: 4px 6px; outline: none;
-    font-size: 1.4vw; line-height: 1.3; overflow: auto; background: transparent;
+    line-height: 1.3; overflow: auto; background: transparent;
   }
-  .el[data-type="titel"] .el-text { font-size: 2.6vw; font-weight: 700; }
+  /* Faktisk skriftstørrelse sættes altid inline af JS (canvasFontSizePx), da vw her ville
+     være relativt til hele vinduet, ikke canvas'et -- se canvasFontSizePx(). */
+  .el[data-type="titel"] .el-text { font-weight: 700; }
   .el-text ul, .el-text ol { margin: 0; padding-left: 1.2em; }
   .el-text li { margin: 2px 0; }
   .el-media-fill { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -605,6 +607,12 @@
     elements.forEach(el => canvas.appendChild(buildElementNode(el)));
   }
 
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(renderCanvas, 150);
+  });
+
   canvas.addEventListener('click', (e) => {
     if (e.target === canvas && selectedElementId) {
       const prev = canvas.querySelector('.el.selected');
@@ -635,7 +643,7 @@
       textDiv.className = 'el-text';
       textDiv.contentEditable = 'true';
       textDiv.innerHTML = el.html != null ? stripInlineFontSize(el.html) : escapeHtml(el.text || '');
-      if (el.fontSize) textDiv.style.fontSize = el.fontSize + 'vw';
+      textDiv.style.fontSize = canvasFontSizePx(el.fontSize || defaultFontSize(el.type));
       if (el.textColor) textDiv.style.color = el.textColor;
       textDiv.addEventListener('input', () => { el.html = stripInlineFontSize(textDiv.innerHTML); });
       body.appendChild(textDiv);
@@ -787,6 +795,15 @@
 
   function defaultFontSize(type) {
     return type === 'titel' ? 2.6 : 1.4;
+  }
+
+  // Skriftstørrelse er gemt som "vw-lignende" procent af skærmens bredde (samme betydning
+  // som på selve Pi-skærmen, hvor canvas = hele viewporten). Her i editoren fylder canvas'et
+  // IKKE hele vinduet (der er en sidebar), så vw ville betyde noget andet -- vi regner derfor
+  // om til faktiske pixels ud fra canvas'ets egen bredde, så det ser ens ud begge steder.
+  function canvasFontSizePx(percentOfWidth) {
+    const rect = canvas.getBoundingClientRect();
+    return (percentOfWidth / 100 * rect.width) + 'px';
   }
   function defaultTextColor(type) {
     return type === 'titel' ? '#ffffff' : '#d0d0d0';
