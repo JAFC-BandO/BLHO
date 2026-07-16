@@ -644,6 +644,18 @@
       fname.className = 'fname';
       fname.textContent = m.filnavn || '';
       item.appendChild(fname);
+
+      if (!armedEl) {
+        const delBtn = document.createElement('span');
+        delBtn.textContent = '✕';
+        delBtn.style.cssText = 'position:absolute; top:2px; right:2px; background:rgba(0,0,0,.7); color:#f88; font-size:11px; padding:1px 5px; border-radius:3px; cursor:pointer; z-index:2;';
+        delBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteMedia(m);
+        });
+        item.appendChild(delBtn);
+      }
+
       item.addEventListener('click', () => {
         if (!armedEl) return;
         armedEl.url = m.url;
@@ -654,6 +666,25 @@
       });
       mediaGrid.appendChild(item);
     });
+  }
+
+  async function deleteMedia(m) {
+    if (!confirm('Slet "' + (m.filnavn || 'denne fil') + '" fra medie-biblioteket?\n\nBemærk: det fjerner den ikke fra steder hvor den allerede er sat ind på en side.')) return;
+
+    const marker = '/object/public/media/';
+    const idx = m.url.indexOf(marker);
+    if (idx !== -1) {
+      const path = m.url.slice(idx + marker.length);
+      await client.storage.from('media').remove([path]);
+    }
+
+    const { error } = await client.from('media').delete().eq('id', m.id);
+    if (error) {
+      alert('Kunne ikke slette: ' + error.message);
+      return;
+    }
+    mediaLibrary = mediaLibrary.filter(x => x.id !== m.id);
+    renderMediaGrid();
   }
 
   mediaBanner.addEventListener('click', () => {
@@ -789,7 +820,27 @@
     renderSablonerGrid();
   });
 
+  function findExistingMedia(filename) {
+    return mediaLibrary.find(m => m.filnavn === filename);
+  }
+
   async function uploadFile(file, targetElementId) {
+    const existing = findExistingMedia(file.name);
+    if (existing) {
+      const brugEksisterende = confirm(
+        '"' + file.name + '" findes allerede i medie-biblioteket.\n\n' +
+        'Tryk OK for at bruge den eksisterende fil, eller Annuller for at uploade en ny kopi alligevel.'
+      );
+      if (brugEksisterende) {
+        if (targetElementId) {
+          const el = elements.find(e => e.id === targetElementId);
+          if (el) el.url = existing.url;
+          renderCanvas();
+        }
+        return;
+      }
+    }
+
     const type = file.type.startsWith('video') ? 'video' : 'billede';
     const path = currentButikId + '/' + uid() + '-' + file.name;
 
@@ -822,6 +873,19 @@
   }
 
   async function uploadFileToRotator(file, rotatorEl) {
+    const existing = findExistingMedia(file.name);
+    if (existing) {
+      const brugEksisterende = confirm(
+        '"' + file.name + '" findes allerede i medie-biblioteket.\n\n' +
+        'Tryk OK for at bruge den eksisterende fil, eller Annuller for at uploade en ny kopi alligevel.'
+      );
+      if (brugEksisterende) {
+        rotatorEl.slides.push({ type: existing.type, url: existing.url });
+        renderCanvas();
+        return;
+      }
+    }
+
     const type = file.type.startsWith('video') ? 'video' : 'billede';
     const path = currentButikId + '/' + uid() + '-' + file.name;
 
