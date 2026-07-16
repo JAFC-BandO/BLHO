@@ -231,15 +231,17 @@
 
 <div id="app">
   <div class="topbar">
-    <div class="butik-badge" id="butikNavn"></div>
-    <div style="position:relative; display:inline-block; margin-left:8px;">
-      <span id="superadminBadge" style="display:none; background:#ffd700; color:#5a4600; font-weight:700; font-size:12px; padding:4px 10px; border-radius:20px; cursor:pointer; user-select:none;">👑 Superadmin ▾</span>
-      <div id="superadminMenu" style="display:none; position:absolute; top:100%; left:0; margin-top:6px; background:white; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.2); padding:14px; width:280px; z-index:1000;">
-        <h2 style="margin:0 0 10px 0; font-size:13px; text-transform:uppercase; letter-spacing:.03em; color:#888;">Superadmin</h2>
-        <button id="saveAsStandardBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">⭐ Gem denne side som standard for alle butikker</button>
-        <div style="font-size:11px; color:#666; line-height:1.5;">
-          <b>Lås et element:</b> vælg det på canvas, brug 🔓-knappen i Egenskaber-panelet.<br>
-          <b>Del/afmærk en skabelon:</b> brug "Gem side" / "Gem valgt element" i sidebaren, eller ⭐ ud for en eksisterende skabelon.
+    <div style="display:flex; align-items:center;">
+      <div class="butik-badge" id="butikNavn"></div>
+      <div style="position:relative; display:inline-block; margin-left:8px;">
+        <span id="superadminBadge" style="display:none; background:#ffd700; color:#5a4600; font-weight:700; font-size:12px; padding:4px 10px; border-radius:20px; cursor:pointer; user-select:none;">👑 Superadmin ▾</span>
+        <div id="superadminMenu" style="display:none; position:absolute; top:100%; left:0; margin-top:6px; background:white; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.2); padding:14px; width:280px; z-index:1000;">
+          <h2 style="margin:0 0 10px 0; font-size:13px; text-transform:uppercase; letter-spacing:.03em; color:#888;">Superadmin</h2>
+          <button id="saveAsStandardBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">⭐ Gem denne side som standard for alle butikker</button>
+          <div style="font-size:11px; color:#666; line-height:1.5;">
+            <b>Lås et element:</b> vælg det på canvas, brug 🔓-knappen i Egenskaber-panelet.<br>
+            <b>Del/afmærk en skabelon:</b> brug "Gem side" / "Gem valgt element" i sidebaren, eller ⭐ ud for en eksisterende skabelon.
+          </div>
         </div>
       </div>
     </div>
@@ -347,7 +349,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-16-debug1';
+  const SCRIPT_VERSION = '2026-07-16-lock2';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -490,6 +492,7 @@
     }
 
     erSuperadmin = !!brugerRow.er_superadmin;
+    console.log('[redigering-debug] Logget ind som', user.email, '| er_superadmin=', erSuperadmin, '| butik_id=', brugerRow.butik_id);
     document.getElementById('superadminBadge').style.display = erSuperadmin ? 'inline-block' : 'none';
     document.querySelectorAll('.superadmin-only').forEach(elNode => {
       elNode.style.display = erSuperadmin ? '' : 'none';
@@ -2013,6 +2016,7 @@
     } else {
       showMsg(saveMsg, 'Gemt!', true);
       console.log('[redigering-debug] Gemt OK, opdateret_at:', payload.opdateret_at);
+      loadLiveView();
     }
   });
 </script>
