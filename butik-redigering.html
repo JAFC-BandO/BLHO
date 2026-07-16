@@ -878,6 +878,14 @@
 
     const payload = { layout: { elements, background: baggrundsfarve }, opdateret_at: new Date().toISOString() };
     console.log('[redigering-debug] Gemmer, currentContentId=', currentContentId, 'payload=', payload);
+
+    const { data: sessionCheck } = await client.auth.getSession();
+    const { data: userCheck } = await client.auth.getUser();
+    console.log('[redigering-debug] Session lige foer gem: session findes=', !!sessionCheck.session,
+      'session.user.id=', sessionCheck.session && sessionCheck.session.user.id,
+      'getUser() id=', userCheck && userCheck.user && userCheck.user.id,
+      'access_token (foerste 20 tegn)=', sessionCheck.session && sessionCheck.session.access_token.slice(0, 20));
+
     let error, updatedRows;
 
     if (currentContentId) {
