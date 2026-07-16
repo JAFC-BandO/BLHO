@@ -12,25 +12,19 @@
     padding: 0;
     width: 100%;
     height: 100%;
-    background: #000;
+    background: #0a0a0a;
     color: white;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
   }
-  /* .screen laases til 16:9 og "letterboxes" (sorte bjaelker) hvis det faktiske vindue/
-     skaerm ikke er praecis 16:9 -- ellers ville designet se forskudt/strakt ud i forhold
-     til redigeringssidens canvas, som altid er 16:9. container-type goer at cqw-enheder
-     herunder er relative til DENNE boks' bredde, ikke hele vinduet, saa alt skalerer
-     korrekt uanset letterboxing. */
+  /* .screen fylder altid hele den faktiske skaerm/vindue (ikke laast til 16:9) -- den skal
+     tilpasse sig hvilken skaerm Pi'en rent faktisk saeder paa. container-type goer at
+     cqw-enheder herunder er relative til DENNE boks' egen bredde i stedet for hele
+     vinduets rod-viewport, saa nestede elementer (rotator, miljoeffekt) skalerer korrekt. */
   .screen {
     position: relative;
     width: 100vw;
     height: 100vh;
-    max-width: 177.78vh;
-    max-height: 56.25vw;
     background: #0a0a0a;
     container-type: inline-size;
     overflow: hidden;
@@ -51,18 +45,19 @@
   .el-media { width: 100%; height: 100%; object-fit: cover; display: block; }
   .miljoeffekt-card {
     width: 100%; height: 100%; background: #fff; color: #000; box-sizing: border-box;
-    border: 5px solid #f23297; border-radius: 16px; overflow-y: auto;
+    border: 5px solid #f23297; border-radius: 16px; overflow: hidden;
+    container-type: inline-size;
   }
   .miljoeffekt-box1, .miljoeffekt-box2 { border-bottom: 1px solid #f23297; padding: 6% 8%; text-align: center; }
   .miljoeffekt-box3 { padding: 6% 8%; text-align: center; }
-  .miljoeffekt-h4 { font-weight: 900; margin: 0 0 3% 0; font-size: 2.2cqw; }
-  .miljoeffekt-desc { line-height: 1.4; margin: 0; font-size: 1.1cqw; }
-  .miljoeffekt-amount { font-weight: 800; margin: 2% 0; font-size: 1.6cqw; }
-  .miljoeffekt-label { margin: 1% 0; font-size: 1.1cqw; }
+  .miljoeffekt-h4 { font-weight: 900; margin: 0 0 3% 0; font-size: 8.5cqw; }
+  .miljoeffekt-desc { line-height: 1.4; margin: 0; font-size: 4.5cqw; }
+  .miljoeffekt-amount { font-weight: 800; margin: 2% 0; font-size: 6.5cqw; }
+  .miljoeffekt-label { margin: 1% 0; font-size: 4.5cqw; }
   .miljoeffekt-linkbox { text-align: center; padding: 4% 0 6% 0; }
   .miljoeffekt-btn {
     display: inline-block; background: #f23297; color: #fff; font-weight: 800;
-    padding: 2% 6%; border-radius: 10px; text-decoration: none; font-size: 1.1cqw;
+    padding: 2% 6%; border-radius: 10px; text-decoration: none; font-size: 4.5cqw;
   }
 
   /* Legacy fallback (ingen layout gemt endnu) */

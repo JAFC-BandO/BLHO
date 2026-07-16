@@ -136,7 +136,7 @@
   .emoji-picker button:hover { background: #eee; }
   .miljoeffekt-card {
     width: 100%; height: 100%; background: #fff; color: #000; box-sizing: border-box;
-    border: 5px solid #f23297; border-radius: 16px; overflow-y: auto;
+    border: 5px solid #f23297; border-radius: 16px; overflow: hidden;
   }
   .miljoeffekt-box1, .miljoeffekt-box2 { border-bottom: 1px solid #f23297; padding: 6% 8%; text-align: center; }
   .miljoeffekt-box3 { padding: 6% 8%; text-align: center; }
@@ -1413,11 +1413,11 @@
       body.appendChild(card);
 
       function applyFontSizes() {
-        card.querySelectorAll('.miljoeffekt-h4').forEach(n => { n.style.fontSize = canvasFontSizePx(2.2); });
-        card.querySelectorAll('.miljoeffekt-desc').forEach(n => { n.style.fontSize = canvasFontSizePx(1.1); });
-        card.querySelectorAll('.miljoeffekt-amount').forEach(n => { n.style.fontSize = canvasFontSizePx(1.6); });
-        card.querySelectorAll('.miljoeffekt-label').forEach(n => { n.style.fontSize = canvasFontSizePx(1.1); });
-        card.querySelectorAll('.miljoeffekt-btn').forEach(n => { n.style.fontSize = canvasFontSizePx(1.1); });
+        card.querySelectorAll('.miljoeffekt-h4').forEach(n => { n.style.fontSize = elementFontSizePx(card, 8.5); });
+        card.querySelectorAll('.miljoeffekt-desc').forEach(n => { n.style.fontSize = elementFontSizePx(card, 4.5); });
+        card.querySelectorAll('.miljoeffekt-amount').forEach(n => { n.style.fontSize = elementFontSizePx(card, 6.5); });
+        card.querySelectorAll('.miljoeffekt-label').forEach(n => { n.style.fontSize = elementFontSizePx(card, 4.5); });
+        card.querySelectorAll('.miljoeffekt-btn').forEach(n => { n.style.fontSize = elementFontSizePx(card, 4.5); });
       }
 
       fetchMiljoeffektData().then(data => {
@@ -1519,6 +1519,13 @@
   // om til faktiske pixels ud fra canvas'ets egen bredde, så det ser ens ud begge steder.
   function canvasFontSizePx(percentOfWidth) {
     const rect = canvas.getBoundingClientRect();
+    return (percentOfWidth / 100 * rect.width) + 'px';
+  }
+  // Samme idé, men relativt til et vilkårligt elements EGEN bredde (fx en boks der har sit
+  // eget indhold, som Miljøeffekt) i stedet for hele canvas'et, så indholdet skalerer med
+  // boksen selv når man ændrer dens størrelse.
+  function elementFontSizePx(domNode, percentOfWidth) {
+    const rect = domNode.getBoundingClientRect();
     return (percentOfWidth / 100 * rect.width) + 'px';
   }
   function defaultTextColor(type) {
