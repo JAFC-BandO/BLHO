@@ -54,7 +54,6 @@
 <div class="screen" id="screen">
   <div class="fejl">Indlæser...</div>
 </div>
-<div id="debugBox" style="position:fixed; bottom:4px; right:6px; max-width:46vw; max-height:40vh; overflow:auto; font-size:10px; line-height:1.5; color:#6f6; background:rgba(0,0,0,.7); padding:6px 10px; border-radius:6px; font-family:monospace; z-index:99999; white-space:pre-wrap;"></div>
 
 <script>
   const SCRIPT_VERSION = '2026-07-16-debug1';
@@ -65,7 +64,6 @@
 
   const POLL_MS = 10000;
   const screen = document.getElementById('screen');
-  const debugBox = document.getElementById('debugBox');
   const params = new URLSearchParams(location.search);
   const email = params.get('email');
   const password = params.get('password');
@@ -74,9 +72,7 @@
   let sidstOpdateret = null;
 
   function debugLog(msg) {
-    const line = new Date().toLocaleTimeString('da-DK') + '  ' + msg;
-    debugBox.textContent = (debugBox.textContent + '\n' + line).split('\n').slice(-25).join('\n');
-    console.log('[skaerm-debug]', line);
+    console.log('[skaerm-debug]', new Date().toLocaleTimeString('da-DK'), msg);
   }
   debugLog('Script version: ' + SCRIPT_VERSION);
 

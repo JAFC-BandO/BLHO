@@ -182,7 +182,6 @@
   <div class="topbar">
     <div class="butik-badge" id="butikNavn"></div>
     <div class="topbar-actions">
-      <span id="debugInfo" style="font-size:10px; color:#aaa; font-family:monospace;"></span>
       <div class="msg" id="saveMsg" style="display:none;"></div>
       <button id="saveBtn">Gem ændringer</button>
       <div class="logout" id="logoutBtn">Log ud</div>
@@ -397,8 +396,6 @@
       .maybeSingle();
 
     console.log('[redigering-debug] Hentet content-raekke:', contentRow && contentRow.id, 'opdateret_at:', contentRow && contentRow.opdateret_at);
-    document.getElementById('debugInfo').textContent =
-      'v' + SCRIPT_VERSION + ' | raekke: ' + (contentRow ? contentRow.opdateret_at : 'ingen');
 
     if (contentRow) {
       currentContentId = contentRow.id;
@@ -906,8 +903,7 @@
       showMsg(saveMsg, 'ADVARSEL: Gem-kaldet ramte 0 rækker (formentlig en RLS/id-uoverensstemmelse) - intet blev reelt gemt!', false);
     } else {
       showMsg(saveMsg, 'Gemt!', true);
-      document.getElementById('debugInfo').textContent =
-        'v' + SCRIPT_VERSION + ' | sidst gemt: ' + payload.opdateret_at;
+      console.log('[redigering-debug] Gemt OK, opdateret_at:', payload.opdateret_at);
     }
   });
 </script>
