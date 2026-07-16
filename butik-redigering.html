@@ -625,6 +625,12 @@
     await checkPasswordThenProceed();
   });
 
+  ['email', 'password'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('loginBtn').click();
+    });
+  });
+
   document.getElementById('logoutBtn').addEventListener('click', async () => {
     await client.auth.signOut();
     app.style.display = 'none';
@@ -688,6 +694,12 @@
 
     document.getElementById('setPasswordCard').style.display = 'none';
     await loadEverything();
+  });
+
+  ['newPassword1', 'newPassword2'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('setPasswordBtn').click();
+    });
   });
 
   // ---------- Media library ----------
@@ -788,7 +800,8 @@
 
       const label = document.createElement('span');
       const icon = s.type === 'side' ? '📄 ' : s.type === 'gruppe' ? '📦 ' : '🧩 ';
-      label.textContent = icon + s.navn;
+      label.textContent = icon + s.navn + (s.delt ? ' 🌍' : '');
+      label.title = s.delt ? 'Delt med alle butikker' : '';
       label.style.cssText = 'flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
       row.appendChild(label);
 
@@ -798,11 +811,13 @@
       useBtn.addEventListener('click', () => applySkabelon(s));
       row.appendChild(useBtn);
 
-      const delBtn = document.createElement('span');
-      delBtn.textContent = '✕';
-      delBtn.style.cssText = 'color:#b92a15; cursor:pointer; padding:0 4px;';
-      delBtn.addEventListener('click', () => deleteSkabelon(s.id));
-      row.appendChild(delBtn);
+      if (s.butik_id === currentButikId) {
+        const delBtn = document.createElement('span');
+        delBtn.textContent = '✕';
+        delBtn.style.cssText = 'color:#b92a15; cursor:pointer; padding:0 4px;';
+        delBtn.addEventListener('click', () => deleteSkabelon(s.id));
+        row.appendChild(delBtn);
+      }
 
       grid.appendChild(row);
     });
