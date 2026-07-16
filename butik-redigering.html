@@ -111,6 +111,7 @@
     min-height: 30px;
   }
   .el.selectable-target { outline: 2px solid #ffb300; }
+  .el.selected { outline: 2px solid #4d5bff; }
   .el-header {
     display: flex; align-items: center; justify-content: space-between;
     background: rgba(0,0,0,.55); padding: 2px 4px; cursor: move; flex-shrink: 0;
@@ -181,6 +182,25 @@
         <button class="add-btn" data-add="video">+ Video</button>
       </div>
 
+      <div id="propsPanel" style="display:none; margin-bottom:20px; padding:12px; background:#f7f7fb; border-radius:8px;">
+        <h2 style="margin-top:0;">Egenskaber</h2>
+        <div id="propsFontSizeRow" style="margin-bottom:12px;">
+          <label style="margin-top:0;">Skriftstørrelse</label>
+          <input type="range" id="propFontSize" min="0.8" max="8" step="0.1" style="width:100%;">
+        </div>
+        <div id="propsTextColorRow" style="margin-bottom:12px;">
+          <label style="margin-top:0;">Tekstfarve</label>
+          <input type="color" id="propTextColor" style="width:40px; height:32px; border:none; border-radius:6px; cursor:pointer; padding:0;">
+        </div>
+        <div>
+          <label style="margin-top:0;">Boksens baggrundsfarve</label>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input type="color" id="propBoxColor" style="width:40px; height:32px; border:none; border-radius:6px; cursor:pointer; padding:0;">
+            <button id="propBoxColorClear" style="padding:6px 10px; font-size:12px;">Ryd</button>
+          </div>
+        </div>
+      </div>
+
       <h2>Baggrund</h2>
       <div style="display:flex; align-items:center; gap:10px; margin-bottom:20px;">
         <input type="color" id="bgColorInput" value="#0a0a0a" style="width:40px; height:32px; border:none; border-radius:6px; cursor:pointer; padding:0;">
@@ -213,6 +233,7 @@
   let baggrundsfarve = '#0a0a0a';
   let mediaLibrary = [];
   let armedElementId = null;
+  let selectedElementId = null;
 
   const loginWrap = document.getElementById('loginWrap');
   const app = document.getElementById('app');
@@ -433,6 +454,13 @@
     elements.forEach(el => canvas.appendChild(buildElementNode(el)));
   }
 
+  canvas.addEventListener('click', (e) => {
+    if (e.target === canvas && selectedElementId) {
+      selectedElementId = null;
+      renderPropsPanel();
+    }
+  });
+
   function buildElementNode(el) {
     const node = document.createElement('div');
     node.className = 'el';
@@ -441,6 +469,8 @@
     node.style.top = el.y + '%';
     node.style.width = el.w + '%';
     node.style.height = el.h + '%';
+    if (el.boxColor) node.style.background = el.boxColor;
+    node.addEventListener('click', () => selectElement(el.id));
 
     const header = document.createElement('div');
     header.className = 'el-header';
@@ -450,9 +480,11 @@
     const del = document.createElement('span');
     del.className = 'del';
     del.textContent = '✕';
-    del.addEventListener('click', () => {
-      elements = elements.filter(e => e.id !== el.id);
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      elements = elements.filter(x => x.id !== el.id);
       if (armedElementId === el.id) { armedElementId = null; mediaBanner.classList.remove('active'); renderMediaGrid(); }
+      if (selectedElementId === el.id) { selectedElementId = null; renderPropsPanel(); }
       renderCanvas();
     });
     header.appendChild(tag);
@@ -468,6 +500,8 @@
       textDiv.className = 'el-text';
       textDiv.contentEditable = 'true';
       textDiv.textContent = el.text || '';
+      if (el.fontSize) textDiv.style.fontSize = el.fontSize + 'vw';
+      if (el.textColor) textDiv.style.color = el.textColor;
       textDiv.addEventListener('input', () => { el.text = textDiv.textContent; });
       body.appendChild(textDiv);
     } else {
@@ -548,6 +582,7 @@
     node.appendChild(resizeHandle);
 
     if (el.id === armedElementId) node.classList.add('selectable-target');
+    if (el.id === selectedElementId) node.classList.add('selected');
 
     return node;
   }
@@ -558,6 +593,60 @@
     renderCanvas();
     renderMediaGrid();
   }
+
+  function selectElement(id) {
+    selectedElementId = id;
+    renderPropsPanel();
+    renderCanvas();
+  }
+
+  function defaultFontSize(type) {
+    return type === 'titel' ? 2.6 : 1.4;
+  }
+  function defaultTextColor(type) {
+    return type === 'titel' ? '#ffffff' : '#d0d0d0';
+  }
+
+  function renderPropsPanel() {
+    const el = elements.find(e => e.id === selectedElementId);
+    const panel = document.getElementById('propsPanel');
+    if (!el) {
+      panel.style.display = 'none';
+      return;
+    }
+    panel.style.display = 'block';
+    const isText = el.type === 'titel' || el.type === 'tekst';
+    document.getElementById('propsFontSizeRow').style.display = isText ? 'block' : 'none';
+    document.getElementById('propsTextColorRow').style.display = isText ? 'block' : 'none';
+    document.getElementById('propFontSize').value = el.fontSize || defaultFontSize(el.type);
+    document.getElementById('propTextColor').value = el.textColor || defaultTextColor(el.type);
+    document.getElementById('propBoxColor').value = el.boxColor || '#000000';
+  }
+
+  document.getElementById('propFontSize').addEventListener('input', (e) => {
+    const el = elements.find(x => x.id === selectedElementId);
+    if (!el) return;
+    el.fontSize = parseFloat(e.target.value);
+    renderCanvas();
+  });
+  document.getElementById('propTextColor').addEventListener('input', (e) => {
+    const el = elements.find(x => x.id === selectedElementId);
+    if (!el) return;
+    el.textColor = e.target.value;
+    renderCanvas();
+  });
+  document.getElementById('propBoxColor').addEventListener('input', (e) => {
+    const el = elements.find(x => x.id === selectedElementId);
+    if (!el) return;
+    el.boxColor = e.target.value;
+    renderCanvas();
+  });
+  document.getElementById('propBoxColorClear').addEventListener('click', () => {
+    const el = elements.find(x => x.id === selectedElementId);
+    if (!el) return;
+    delete el.boxColor;
+    renderCanvas();
+  });
 
   function startDrag(e, el, node) {
     e.preventDefault();

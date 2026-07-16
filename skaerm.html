@@ -91,11 +91,14 @@
       node.style.top = el.y + '%';
       node.style.width = el.w + '%';
       node.style.height = el.h + '%';
+      if (el.boxColor) node.style.background = el.boxColor;
 
       if (el.type === 'titel' || el.type === 'tekst') {
         const t = document.createElement('div');
         t.className = 'el-text';
         t.textContent = el.text || '';
+        if (el.fontSize) t.style.fontSize = el.fontSize + 'vw';
+        if (el.textColor) t.style.color = el.textColor;
         node.appendChild(t);
       } else if (el.type === 'billede' && el.url) {
         const img = document.createElement('img');
