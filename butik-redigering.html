@@ -396,7 +396,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master28';
+  const SCRIPT_VERSION = '2026-07-18-master29';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1813,24 +1813,16 @@
       textDiv = document.createElement('div');
       textDiv.className = 'el-text';
       textDiv.contentEditable = canEdit ? 'true' : 'false';
-      textDiv.innerHTML = el.html != null ? stripInlineFontSize(el.html) : escapeHtml(el.text || '');
+      const raaTekst = el.html != null ? stripInlineFontSize(el.html) : escapeHtml(el.text || '');
+      // Raa {{butik}}-tekst vises/redigeres KUN inde i selve "Rediger fælles skabelon" --
+      // det er der (og udelukkende der) man redigerer skabelonens kildetekst. Alle andre
+      // steder (en almindelig butiks egen visning -- laast-flettet ind eller butikkens eget)
+      // skal det vises PRAECIS som det reelt ser ud paa den rigtige skaerm.
+      textDiv.innerHTML = masterEditMode ? raaTekst : indsaetButikNavn(raaTekst);
       textDiv.style.fontSize = canvasFontSizePx(el.fontSize || defaultFontSize(el.type));
       if (el.textColor) textDiv.style.color = el.textColor;
       textDiv.addEventListener('input', () => { el.html = stripInlineFontSize(textDiv.innerHTML); });
       body.appendChild(textDiv);
-
-      // {{butik}}-tag: tekstfeltet beholder ALTID den raa {{butik}}-tekst du selv skrev --
-      // vi maa aldrig baelge det udregnede butiksnavn ind i det der rent faktisk gemmes.
-      // Denne lille, ikke-redigerbare linje viser til gengaeld hvad det bliver til for den
-      // butik du lige nu redigerer/er skiftet til som, saa du kan se det virker uden risiko.
-      const raaTekst = el.html != null ? el.html : escapeHtml(el.text || '');
-      const resolvedTekst = indsaetButikNavn(raaTekst);
-      if (resolvedTekst !== raaTekst) {
-        const hint = document.createElement('div');
-        hint.style.cssText = 'position:absolute; bottom:2px; left:4px; right:4px; font-size:9px; color:#4d5bff; background:rgba(255,255,255,.85); padding:1px 4px; border-radius:3px; pointer-events:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
-        hint.textContent = 'Vises som: ' + hentAktuelButikNavn();
-        body.appendChild(hint);
-      }
     } else if (el.type === 'billede' || el.type === 'video') {
       if (el.url) {
         let media;
