@@ -398,7 +398,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master15';
+  const SCRIPT_VERSION = '2026-07-18-master16';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1171,7 +1171,7 @@
     const delt = erSuperadmin && confirm('Del denne skabelon med ALLE butikker?\n\nOK = del med alle butikker\nAnnuller = kun til denne butik (' + document.getElementById('butikNavn').textContent + ')');
     const { data, error } = await client
       .from('sabloner')
-      .insert({ butik_id: currentButikId, type: 'side', navn, delt, data: { elements, background: baggrundsfarve } })
+      .insert({ butik_id: currentButikId, type: 'side', navn, delt, data: { elements: stripLockedMasterElements(elements), background: baggrundsfarve } })
       .select()
       .single();
     if (error) { alert('Kunne ikke gemme skabelon: ' + error.message); return; }
@@ -1316,9 +1316,20 @@
 
   // ---------- Sider (flere redigerbare sider pr. butik) ----------
 
+  // Fjerner evt. fastfrosne, forældede kopier af låste master-elementer fra en liste --
+  // disse skal ALTID komme fra den live fletning (mergeMasterElements), aldrig ligge bagt
+  // ind i en butiks egne gemte data. Rammer bl.a. sider oprettet foer standardSideData()
+  // blev rettet til kun at klone ulaaste elementer -- selvhelende, koeres ved hvert commit.
+  function stripLockedMasterElements(list) {
+    if (!masterTemplate || !Array.isArray(list)) return list;
+    const lockedIds = new Set(masterTemplate.elements.filter(e => e.locked).map(e => e.id));
+    return list.filter(e => !lockedIds.has(e.id));
+  }
+
   function commitActiveSide() {
     const side = sider.find(s => s.id === aktivSideId);
     if (side) {
+      elements = stripLockedMasterElements(elements);
       side.elements = elements;
       side.background = baggrundsfarve;
     }
@@ -1849,9 +1860,12 @@
               ? { elements, background: baggrundsfarve }
               : sider.find(s => s.id === id);
             if (side) {
+              // stripLockedMasterElements: en aeldre side kan have en fastfrosset kopi af
+              // et laast element liggende fra foer det blev rettet -- den skal IKKE med ind
+              // i rotator-sliden, laast indhold kommer udelukkende fra den live fletning.
               el.slides.push({
                 type: 'side',
-                elements: JSON.parse(JSON.stringify(side.elements || [])),
+                elements: stripLockedMasterElements(JSON.parse(JSON.stringify(side.elements || []))),
                 background: side.background || '#0a0a0a',
               });
               renderCanvas();
@@ -1861,7 +1875,7 @@
             if (chosen) {
               el.slides.push({
                 type: 'side',
-                elements: JSON.parse(JSON.stringify(chosen.data.elements || [])),
+                elements: stripLockedMasterElements(JSON.parse(JSON.stringify(chosen.data.elements || []))),
                 background: chosen.data.background || '#0a0a0a',
               });
               renderCanvas();
