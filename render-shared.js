@@ -95,11 +95,21 @@ async function fetchMiljoeffektData() {
 }
 
 async function fetchDrNyheder() {
-  const res = await fetch(RSS2JSON_URL);
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  const data = await res.json();
-  if (data.status !== 'ok') throw new Error('rss2json fejl');
-  return data.items.map(item => item.title);
+  // Timeout via AbortController: uden dette kan et haengende (aldrig svarende) kald til
+  // rss2json.com samle sig op i det uendelige paa en enhed der koerer i ugevis -- hvert
+  // hængende fetch-kald ville aldrig blive ryddet op, kun ERSTATTET af det naeste 5-minutters
+  // forsoeg, og de kunne derfor ophobe sig som laekkede ressourcer paa svagere hardware.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(RSS2JSON_URL, { signal: controller.signal });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data.status !== 'ok') throw new Error('rss2json fejl');
+    return data.items.map(item => item.title);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function buildNyhedsbannerNode(el, registerInterval) {
@@ -122,6 +132,7 @@ function buildNyhedsbannerNode(el, registerInterval) {
   viewport.appendChild(track);
   node.appendChild(viewport);
 
+  let harIndlaestFoerste = false;
   const load = () => {
     fetchDrNyheder().then(overskrifter => {
       // Overskrifterne saettes ind TO GANGE efter hinanden, saa CSS-animationen kan loope
@@ -129,8 +140,18 @@ function buildNyhedsbannerNode(el, registerInterval) {
       // se et hak/spring hver gang den naar enden af listen.
       const tekst = overskrifter.map(t => escapeHtml(t)).join(' &nbsp;•&nbsp; ');
       track.innerHTML = tekst + ' &nbsp;•&nbsp; ' + tekst + ' &nbsp;•&nbsp; ';
+      harIndlaestFoerste = true;
     }).catch(() => {
-      track.textContent = 'Kunne ikke hente nyheder fra DR lige nu.';
+      // Behold sidste kendte gode indhold ved en FORBIGAAENDE fejl (rss2json nede,
+      // netvaerks-hik) i stedet for at erstatte det med en kort fejltekst -- den korte
+      // streng er IKKE doblet, saa den braekker CSS-loopets translateX(-50%)-antagelse og
+      // faar banneret til at se ud som om det er gaaet i staa/koerer i slowmotion (praecis
+      // det symptom vi har set paa enhederne, men aldrig i en almindelig browser hvor man
+      // kun tester kortvarigt og sjaeldent rammer en fejl). Vis kun fejlteksten hvis vi
+      // ALDRIG har haft noget rigtigt indhold at falde tilbage paa.
+      if (!harIndlaestFoerste) {
+        track.textContent = 'Kunne ikke hente nyheder fra DR lige nu.';
+      }
     });
   };
   load();
