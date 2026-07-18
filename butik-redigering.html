@@ -326,8 +326,9 @@
           <div style="font-size:11px; color:#888; margin-top:4px;">Låste elementer vises identisk (uden kasser/kontroller) på ALLE butikkers skærme — almindelige admins kan se dem, men ikke flytte/redigere/slette dem.</div>
           <div id="propKunPaaSideRow" style="display:none; margin-top:8px;">
             <label style="margin-top:0;">Vis kun på side (valgfrit)</label>
-            <input type="text" id="propKunPaaSide" placeholder="Blank = alle sider, fx &quot;Side 1&quot;" style="width:100%;">
-            <div style="font-size:11px; color:#888; margin-top:4px;">Skal matche navnet på siden præcis (som det står på sidefanen). Blank = elementet vises på alle butikkers sider.</div>
+            <input type="text" id="propKunPaaSide" list="sideNavneListe" placeholder="Blank = alle sider, fx &quot;Side 1&quot;" style="width:100%;">
+            <datalist id="sideNavneListe"></datalist>
+            <div style="font-size:11px; color:#888; margin-top:4px;">Skal matche navnet på siden præcis (som det står på sidefanen) — vælg fra listen for at undgå tastefejl. Blank = elementet vises på alle butikkers sider.</div>
           </div>
         </div>
       </div>
@@ -363,7 +364,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-16-master7';
+  const SCRIPT_VERSION = '2026-07-18-master8';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1906,6 +1907,10 @@
     document.getElementById('propLockBtn').textContent = el.locked ? '🔒 Lås op' : '🔓 Lås element';
     document.getElementById('propKunPaaSideRow').style.display = (masterEditMode && el.locked) ? 'block' : 'none';
     document.getElementById('propKunPaaSide').value = el.kunPaaSide || '';
+    // sider (butikkens egne sidefaner) rammes ikke af master-edit-mode-swappet, saa vi kan
+    // altid bruge dem her som forslag -- reducerer risikoen for en tastefejl der stille
+    // ville betyde "matcher ingen side, vises derfor ingen steder".
+    document.getElementById('sideNavneListe').innerHTML = sider.map(s => '<option value="' + escapeHtml(s.navn) + '">').join('');
 
     const canEditSelected = masterEditMode || !el.locked;
     panel.querySelectorAll('input, button').forEach(ctrl => {
