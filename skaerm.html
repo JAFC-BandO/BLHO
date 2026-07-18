@@ -75,7 +75,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master12';
+  const SCRIPT_VERSION = '2026-07-18-master13';
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
@@ -83,7 +83,10 @@
     auth: { storageKey: 'sb-skaerm-auth' }
   });
 
-  const POLL_MS = 10000;
+  // 30s i stedet for tidligere 10s: en aendring skal jo bare vises inden for et minuts tid,
+  // ikke oejeblikkeligt -- og hver poll er et Supabase-kald i den SAMME Chrome-proces der
+  // ogsaa tegner skaermen, saa sjaeldnere kald letter reelt presset paa svag Android-hardware.
+  const POLL_MS = 30000;
   const screen = document.getElementById('screen');
   const params = new URLSearchParams(location.search);
   const email = params.get('email');
