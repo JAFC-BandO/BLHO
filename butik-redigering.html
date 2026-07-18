@@ -394,7 +394,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master22';
+  const SCRIPT_VERSION = '2026-07-18-master23';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -866,7 +866,7 @@
       if (e.custom_kommando_sat_at && !svarErFriskere) {
         const afventer = document.createElement('div');
         afventer.style.cssText = 'font-size:11px; color:#888; margin-top:4px;';
-        afventer.textContent = '⏳ Afventer svar (køres ved næste check-in, op til et minuts tid)...';
+        afventer.textContent = '⏳ Afventer svar (køres ved næste check-in, op til ca. 15 sekunder)...';
         info.appendChild(afventer);
       } else if (svarErFriskere) {
         const svarWrap = document.createElement('div');
