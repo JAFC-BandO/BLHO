@@ -52,6 +52,12 @@
   display: inline-block; white-space: nowrap; font-weight: 700; font-size: 1.4cqw;
   animation: nyhedsbanner-scroll 90s linear infinite;
   padding-left: 1cqw;
+  /* will-change: hint til browseren om at forfremme dette element til sit eget
+     GPU-komposit-lag PAA FORHAAND. En transform-only animation paa et forfremmet lag koeres
+     af compositor-tråden uafhaengigt af hovedtråden -- den bliver derfor langt mere robust
+     mod jank/pauser fra alt andet der sker paa siden (JS, layout, garbage collection), som er
+     netop den slags der ophobede sig paa den svage Android-hardware over tid. */
+  will-change: transform;
 }
 .nyhedsbanner-track a { color: #ffffff; text-decoration: none; }
 @keyframes nyhedsbanner-scroll {
