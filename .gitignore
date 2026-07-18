@@ -6,3 +6,4 @@ supabase/migration_master_side.sql
 supabase/migration_enheder.sql
 media/
 SUPABASE.md
+ANDROID-KIOSK-SETUP.md
