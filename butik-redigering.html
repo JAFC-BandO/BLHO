@@ -202,6 +202,7 @@
   .side-tab .del { font-size: 12px; opacity: .6; cursor: pointer; }
   .side-tab .del:hover { opacity: 1; }
   .side-tab-new { padding: 6px 10px; border-radius: 6px; background: #f4f4f2; color: #666; font-size: 13px; cursor: pointer; }
+  .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #e6342c; margin-right: 5px; vertical-align: middle; }
 
   .save-row { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
   #saveMsg.msg { margin-top: 0; }
@@ -397,7 +398,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master13';
+  const SCRIPT_VERSION = '2026-07-18-master14';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1416,7 +1417,13 @@
       const tab = document.createElement('div');
       tab.className = 'side-tab' + (s.id === aktivSideId ? ' active' : '');
       const label = document.createElement('span');
-      label.textContent = (s.id === liveAktivSideId ? 'LIVE ' : '') + s.navn;
+      if (s.id === liveAktivSideId) {
+        const dot = document.createElement('span');
+        dot.className = 'live-dot';
+        dot.title = 'Denne side er lige nu vist på skærmen';
+        label.appendChild(dot);
+      }
+      label.appendChild(document.createTextNode(s.navn));
       tab.appendChild(label);
       const del = document.createElement('span');
       del.className = 'del';
@@ -2118,12 +2125,17 @@
   });
 
   function moveElement(id, direction) {
+    // "Send forrest"/"Send bagud" betyder helt til fronten/bagerst -- ikke bare ét lag ad
+    // gangen -- ellers skal man klikke en gang per element der ligger foran, hvilket ikke
+    // matcher det knapperne lover.
     const idx = elements.findIndex(e => e.id === id);
     if (idx === -1) return;
-    const newIdx = idx + direction;
-    if (newIdx < 0 || newIdx >= elements.length) return;
     const [item] = elements.splice(idx, 1);
-    elements.splice(newIdx, 0, item);
+    if (direction > 0) {
+      elements.push(item);
+    } else {
+      elements.unshift(item);
+    }
     renderCanvas();
   }
   document.getElementById('propMoveBack').addEventListener('click', () => {
