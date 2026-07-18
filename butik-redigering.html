@@ -396,7 +396,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master26';
+  const SCRIPT_VERSION = '2026-07-18-master27';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1724,19 +1724,37 @@
     resizeTimer = setTimeout(renderCanvas, 150);
   });
 
+  // Pile-taster: 0.2%/tryk for fin justering, Shift+pil for 1% ad gangen til hurtigere/grovere
+  // flytning -- markant mere praecist end at trykke og traekke med musen, saerligt til
+  // finjustering naar man allerede har placeret elementet nogenlunde rigtigt.
+  const PILE_RETNINGER = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
-    if (!selectedElementId) return;
     const t = e.target;
     const isEditable = t.isContentEditable || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT';
     if (isEditable) return;
+    if (!selectedElementId) return;
     const selEl = elements.find(x => x.id === selectedElementId);
-    if (selEl && selEl.locked && !masterEditMode) return;
-    e.preventDefault();
-    elements = elements.filter(x => x.id !== selectedElementId);
-    selectedElementId = null;
-    renderPropsPanel();
-    renderCanvas();
+    if (!selEl) return;
+    if (selEl.locked && !masterEditMode) return;
+
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault();
+      elements = elements.filter(x => x.id !== selectedElementId);
+      selectedElementId = null;
+      renderPropsPanel();
+      renderCanvas();
+      return;
+    }
+
+    if (PILE_RETNINGER[e.key]) {
+      e.preventDefault();
+      const trin = e.shiftKey ? 1 : 0.2;
+      const [dx, dy] = PILE_RETNINGER[e.key];
+      selEl.x = Math.round((selEl.x + dx * trin) * 100) / 100;
+      selEl.y = Math.round((selEl.y + dy * trin) * 100) / 100;
+      renderCanvas();
+    }
   });
 
   canvas.addEventListener('click', (e) => {
