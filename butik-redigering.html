@@ -241,6 +241,7 @@
         <div id="superadminMenu" style="display:none; position:absolute; top:100%; left:0; margin-top:6px; background:white; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.2); padding:14px; width:280px; z-index:1000;">
           <h2 style="margin:0 0 10px 0; font-size:13px; text-transform:uppercase; letter-spacing:.03em; color:#888;">Superadmin</h2>
           <button id="masterEditBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">🌍 Rediger fælles skabelon</button>
+          <button id="enhederBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">📡 Enheder / Fjernsupport</button>
           <div style="font-size:11px; color:#666; line-height:1.5;">
             <b>Fælles skabelon:</b> ét layout du redigerer ét sted. Elementer du låser der (🔓-knappen i Egenskaber) vises identisk og skrivebeskyttet på ALLE butikkers skærme med det samme.<br>
             <b>Del/afmærk en almindelig skabelon:</b> brug "Gem side" / "Gem valgt element" i sidebaren, eller ⭐ ud for en eksisterende skabelon.
@@ -258,6 +259,32 @@
   <div id="masterEditBanner" style="display:none; align-items:center; justify-content:space-between; background:#ffd700; color:#5a4600; font-weight:700; font-size:13px; padding:8px 20px;">
     <span>🌍 Du redigerer den FÆLLES skabelon — låste elementer synkroniseres live til ALLE butikkers skærme</span>
     <button id="exitMasterEditBtn" style="padding:6px 14px; font-size:12px;">Afslut</button>
+  </div>
+
+  <div id="enhederOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:2000; align-items:center; justify-content:center;">
+    <div style="background:white; border-radius:10px; padding:24px; width:min(720px, 92vw); max-height:85vh; overflow-y:auto;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+        <h2 style="margin:0;">📡 Enheder / Fjernsupport</h2>
+        <span id="enhederCloseBtn" style="cursor:pointer; font-size:20px; color:#888; line-height:1;">✕</span>
+      </div>
+
+      <div style="font-size:12px; color:#888; margin-bottom:16px;">
+        Enheden "melder sig" selv med jævne mellemrum — status opdateres derfor ikke i realtid, men typisk indenfor et minut. En kommando udføres af enheden ved næste check-in.
+      </div>
+
+      <div id="enhederListe" style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;"></div>
+
+      <h2 style="font-size:14px;">Registrér ny enhed</h2>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <select id="nyEnhedButik" style="flex:1; min-width:140px; padding:8px;"></select>
+        <input type="text" id="nyEnhedNavn" placeholder="Navn, fx &quot;Horsens skærm (Android)&quot;" style="flex:2; min-width:180px; padding:8px;">
+        <select id="nyEnhedType" style="padding:8px;">
+          <option value="android">Android</option>
+          <option value="pi">Raspberry Pi</option>
+        </select>
+        <button id="nyEnhedGemBtn" style="padding:8px 16px;">Tilføj</button>
+      </div>
+    </div>
   </div>
 
   <div class="main">
@@ -364,7 +391,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master8';
+  const SCRIPT_VERSION = '2026-07-18-master9';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -707,6 +734,125 @@
     enterMasterEditMode();
   });
   document.getElementById('exitMasterEditBtn').addEventListener('click', exitMasterEditMode);
+
+  // ---------- Enheder / fjernsupport ----------
+  // Enheden "melder sig" selv (se ANDROID-KIOSK-SETUP.md) i stedet for at vi skal naa
+  // ind til den via en kendt IP -- loeser at hver butik har sit eget netvaerk med
+  // skiftende/ukendte IP'er, umuligt at naa udefra uden port-forwarding per butik.
+
+  let alleEnheder = [];
+  let alleButikkerListe = [];
+
+  function tidSiden(iso) {
+    if (!iso) return 'Aldrig';
+    const sekunder = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (sekunder < 90) return 'for ' + sekunder + ' sek. siden';
+    const minutter = Math.floor(sekunder / 60);
+    if (minutter < 90) return 'for ' + minutter + ' min. siden';
+    const timer = Math.floor(minutter / 60);
+    if (timer < 48) return 'for ' + timer + ' timer siden';
+    return 'for ' + Math.floor(timer / 24) + ' dage siden';
+  }
+
+  function enhedStatusFarve(iso) {
+    if (!iso) return '#999';
+    const minutter = (Date.now() - new Date(iso).getTime()) / 60000;
+    if (minutter < 3) return '#1a9b4b';
+    if (minutter < 15) return '#c98a1b';
+    return '#c0392b';
+  }
+
+  async function loadEnheder() {
+    const { data, error } = await client
+      .from('enheder')
+      .select('*, butikker(navn)')
+      .order('oprettet_at', { ascending: false });
+    if (!error && data) alleEnheder = data;
+    renderEnhederListe();
+  }
+
+  async function loadAlleButikkerListe() {
+    const { data, error } = await client.from('butikker').select('id, navn').order('navn');
+    if (!error && data) alleButikkerListe = data;
+    const sel = document.getElementById('nyEnhedButik');
+    sel.innerHTML = alleButikkerListe.map(b => '<option value="' + b.id + '">' + escapeHtml(b.navn) + '</option>').join('');
+  }
+
+  function renderEnhederListe() {
+    const wrap = document.getElementById('enhederListe');
+    wrap.innerHTML = '';
+    if (!alleEnheder.length) {
+      wrap.innerHTML = '<div style="color:#888; font-size:13px;">Ingen enheder registreret endnu.</div>';
+      return;
+    }
+    alleEnheder.forEach(e => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; align-items:center; gap:10px; background:#f7f7fb; border-radius:8px; padding:10px 12px; font-size:13px;';
+
+      const dot = document.createElement('span');
+      dot.style.cssText = 'width:10px; height:10px; border-radius:50%; background:' + enhedStatusFarve(e.sidst_set_at) + '; flex-shrink:0;';
+      row.appendChild(dot);
+
+      const info = document.createElement('div');
+      info.style.flex = '1';
+      info.innerHTML =
+        '<div style="font-weight:600;">' + (e.type === 'android' ? '🤖' : '🍓') + ' ' + escapeHtml(e.navn) + '</div>' +
+        '<div style="color:#888; font-size:11px;">' + escapeHtml(e.butikker ? e.butikker.navn : '?') + ' · ' +
+          tidSiden(e.sidst_set_at) + (e.lokal_ip ? ' · ' + escapeHtml(e.lokal_ip) : '') +
+          (e.kommando ? ' · ⏳ ' + escapeHtml(e.kommando) + ' afventer' : '') + '</div>';
+      row.appendChild(info);
+
+      const rebootBtn = document.createElement('button');
+      rebootBtn.textContent = '🔁 Genstart enhed';
+      rebootBtn.style.cssText = 'padding:6px 10px; font-size:12px;';
+      rebootBtn.addEventListener('click', () => saetKommando(e.id, 'reboot'));
+      row.appendChild(rebootBtn);
+
+      const kioskBtn = document.createElement('button');
+      kioskBtn.textContent = '🔄 Genstart skærm';
+      kioskBtn.style.cssText = 'padding:6px 10px; font-size:12px;';
+      kioskBtn.addEventListener('click', () => saetKommando(e.id, 'genstart_kiosk'));
+      row.appendChild(kioskBtn);
+
+      const delBtn = document.createElement('span');
+      delBtn.textContent = '✕';
+      delBtn.style.cssText = 'cursor:pointer; color:#c0392b; padding:0 4px;';
+      delBtn.addEventListener('click', async () => {
+        if (!confirm('Fjern "' + e.navn + '" fra listen?')) return;
+        await client.from('enheder').delete().eq('id', e.id);
+        await loadEnheder();
+      });
+      row.appendChild(delBtn);
+
+      wrap.appendChild(row);
+    });
+  }
+
+  async function saetKommando(enhedId, kommando) {
+    await client.from('enheder').update({ kommando, kommando_sat_at: new Date().toISOString() }).eq('id', enhedId);
+    await loadEnheder();
+  }
+
+  document.getElementById('enhederBtn').addEventListener('click', async () => {
+    document.getElementById('superadminMenu').style.display = 'none';
+    document.getElementById('enhederOverlay').style.display = 'flex';
+    await loadAlleButikkerListe();
+    await loadEnheder();
+  });
+  document.getElementById('enhederCloseBtn').addEventListener('click', () => {
+    document.getElementById('enhederOverlay').style.display = 'none';
+  });
+
+  document.getElementById('nyEnhedGemBtn').addEventListener('click', async () => {
+    const butik_id = document.getElementById('nyEnhedButik').value;
+    const navn = document.getElementById('nyEnhedNavn').value.trim();
+    const type = document.getElementById('nyEnhedType').value;
+    if (!butik_id || !navn) { alert('Udfyld navn og vælg butik.'); return; }
+    const { error } = await client.from('enheder').insert({ butik_id, navn, type });
+    if (error) { alert('Kunne ikke tilføje: ' + error.message); return; }
+    document.getElementById('nyEnhedNavn').value = '';
+    await loadEnheder();
+  });
 
   async function saveMasterTemplate() {
     const btn = document.getElementById('saveBtn');
