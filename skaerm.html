@@ -75,7 +75,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master10';
+  const SCRIPT_VERSION = '2026-07-18-master11';
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
@@ -94,6 +94,16 @@
   let rotatorIntervals = [];
   let masterOpdateretAt = null;
   let masterElements = [];
+  let harVistFoersteIndlaesning = false;
+
+  // Bruges baade af den faste 10-minutters auto-genindlaesning og af aendrings-detektionen
+  // i hentContent() -- en tilfoejet ?_cb= sikrer en rigtig frisk navigation, ikke bare et
+  // cache-hit paa selve HTML-siden.
+  function hardReload() {
+    const url = new URL(location.href);
+    url.searchParams.set('_cb', Date.now());
+    location.href = url.toString();
+  }
 
   function debugLog(msg) {
     console.log('[skaerm-debug]', new Date().toLocaleTimeString('da-DK'), msg);
@@ -198,6 +208,17 @@
     debugLog('NY data fundet: ' + sidstOpdateret + ' -> ' + combinedKey);
     sidstOpdateret = combinedKey;
 
+    // Foerste hentning (lige efter login) skal bare tegne op paa staedet. Enhver AENDRING
+    // opdaget derefter (butikkens egen "Gem" i redigeringen, eller den faelles skabelon
+    // aendret) betyder at nogen har trykket Gem -- saa genindlaes hele siden i stedet for
+    // kun at gentegne, saa alt (kode, cache, layout) er 100% frisk.
+    if (harVistFoersteIndlaesning) {
+      debugLog('Aendring opdaget efter foerste indlaesning -- genindlaeser hele siden.');
+      hardReload();
+      return;
+    }
+    harVistFoersteIndlaesning = true;
+
     try {
       if (data.layout && Array.isArray(data.layout.elements) && data.layout.elements.length) {
         const sider = Array.isArray(data.layout.sider) ? data.layout.sider : [];
@@ -219,11 +240,7 @@
 
   const RELOAD_MS = 10 * 60 * 1000; // genindlæs siden hvert 10. minut for altid at hente frisk kode
   function scheduleAutoReload() {
-    setTimeout(() => {
-      const url = new URL(location.href);
-      url.searchParams.set('_cb', Date.now());
-      location.href = url.toString();
-    }, RELOAD_MS);
+    setTimeout(hardReload, RELOAD_MS);
   }
 
   async function start() {
