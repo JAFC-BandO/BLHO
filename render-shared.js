@@ -95,13 +95,24 @@ async function fetchDrNyheder() {
   return data.items.map(item => item.title);
 }
 
-function buildNyhedsbannerNode(registerInterval) {
+function buildNyhedsbannerNode(el, registerInterval) {
   const node = document.createElement('div');
   node.className = 'nyhedsbanner';
+
+  const logo = document.createElement('div');
+  logo.className = 'nyhedsbanner-logo';
+  logo.textContent = 'DR';
+  node.appendChild(logo);
+
+  const viewport = document.createElement('div');
+  viewport.className = 'nyhedsbanner-viewport';
   const track = document.createElement('div');
   track.className = 'nyhedsbanner-track';
+  track.style.fontSize = (el.fontSize || 1.4) + 'cqw';
+  track.style.animationDuration = (el.scrollSekunder || 90) + 's';
   track.textContent = 'Henter nyheder fra DR ...';
-  node.appendChild(track);
+  viewport.appendChild(track);
+  node.appendChild(viewport);
 
   const load = () => {
     fetchDrNyheder().then(overskrifter => {
@@ -237,7 +248,7 @@ function buildElNode(el, registerInterval) {
   } else if (el.type === 'ur') {
     node.appendChild(buildUrNode(registerInterval));
   } else if (el.type === 'nyhedsbanner') {
-    node.appendChild(buildNyhedsbannerNode(registerInterval));
+    node.appendChild(buildNyhedsbannerNode(el, registerInterval));
   }
   return node;
 }
