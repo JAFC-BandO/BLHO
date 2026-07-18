@@ -237,14 +237,14 @@
     <div style="display:flex; align-items:center;">
       <div class="butik-badge" id="butikNavn"></div>
       <div style="position:relative; display:inline-block; margin-left:8px;">
-        <span id="superadminBadge" style="display:none; background:#ffd700; color:#5a4600; font-weight:700; font-size:12px; padding:4px 10px; border-radius:20px; cursor:pointer; user-select:none;">👑 Superadmin ▾</span>
+        <span id="superadminBadge" style="display:none; background:#ffd700; color:#5a4600; font-weight:700; font-size:12px; padding:4px 10px; border-radius:20px; cursor:pointer; user-select:none;">Admin ▾</span>
         <div id="superadminMenu" style="display:none; position:absolute; top:100%; left:0; margin-top:6px; background:white; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.2); padding:14px; width:280px; z-index:1000;">
-          <h2 style="margin:0 0 10px 0; font-size:13px; text-transform:uppercase; letter-spacing:.03em; color:#888;">Superadmin</h2>
-          <button id="masterEditBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">🌍 Rediger fælles skabelon</button>
-          <button id="enhederBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">📡 Enheder / Fjernsupport</button>
+          <h2 style="margin:0 0 10px 0; font-size:13px; text-transform:uppercase; letter-spacing:.03em; color:#888;">Admin</h2>
+          <button id="masterEditBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Rediger fælles skabelon</button>
+          <button id="enhederBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Enheder / Fjernsupport</button>
           <div style="font-size:11px; color:#666; line-height:1.5;">
-            <b>Fælles skabelon:</b> ét layout du redigerer ét sted. Elementer du låser der (🔓-knappen i Egenskaber) vises identisk og skrivebeskyttet på ALLE butikkers skærme med det samme.<br>
-            <b>Del/afmærk en almindelig skabelon:</b> brug "Gem side" / "Gem valgt element" i sidebaren, eller ⭐ ud for en eksisterende skabelon.
+            <b>Fælles skabelon:</b> ét layout du redigerer ét sted. Elementer du låser der (lås-knappen i Egenskaber) vises identisk og skrivebeskyttet på ALLE butikkers skærme med det samme.<br>
+            <b>Del/afmærk en almindelig skabelon:</b> brug "Gem side" / "Gem valgt element" i sidebaren, eller "Sæt standard" ud for en eksisterende skabelon.
           </div>
         </div>
       </div>
@@ -257,14 +257,14 @@
   </div>
 
   <div id="masterEditBanner" style="display:none; align-items:center; justify-content:space-between; background:#ffd700; color:#5a4600; font-weight:700; font-size:13px; padding:8px 20px;">
-    <span>🌍 Du redigerer den FÆLLES skabelon — låste elementer synkroniseres live til ALLE butikkers skærme</span>
+    <span>Du redigerer den FÆLLES skabelon — låste elementer synkroniseres live til ALLE butikkers skærme</span>
     <button id="exitMasterEditBtn" style="padding:6px 14px; font-size:12px;">Afslut</button>
   </div>
 
   <div id="enhederOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:2000; align-items:center; justify-content:center;">
     <div style="background:white; border-radius:10px; padding:24px; width:min(720px, 92vw); max-height:85vh; overflow-y:auto;">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
-        <h2 style="margin:0;">📡 Enheder / Fjernsupport</h2>
+        <h2 style="margin:0;">Enheder / Fjernsupport</h2>
         <span id="enhederCloseBtn" style="cursor:pointer; font-size:20px; color:#888; line-height:1;">✕</span>
       </div>
 
@@ -349,7 +349,7 @@
         </div>
         <div id="propsLockRow" style="display:none;">
           <label style="margin-top:0;">Lås i fælles skabelon</label>
-          <button id="propLockBtn" style="padding:6px 10px; font-size:12px; width:100%;">🔓 Lås element</button>
+          <button id="propLockBtn" style="padding:6px 10px; font-size:12px; width:100%;">Lås element</button>
           <div style="font-size:11px; color:#888; margin-top:4px;">Låste elementer vises identisk (uden kasser/kontroller) på ALLE butikkers skærme — almindelige admins kan se dem, men ikke flytte/redigere/slette dem.</div>
           <div id="propKunPaaSideRow" style="display:none; margin-top:8px;">
             <label style="margin-top:0;">Vis kun på side (valgfrit)</label>
@@ -391,7 +391,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master10';
+  const SCRIPT_VERSION = '2026-07-18-master11';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -796,7 +796,7 @@
       const info = document.createElement('div');
       info.style.flex = '1';
       info.innerHTML =
-        '<div style="font-weight:600;">' + (e.type === 'android' ? '🤖' : '🍓') + ' ' + escapeHtml(e.navn) + '</div>' +
+        '<div style="font-weight:600;">' + escapeHtml(e.navn) + ' <span style="color:#aaa; font-weight:400; font-size:11px;">(' + (e.type === 'android' ? 'Android' : 'Pi') + ')</span></div>' +
         '<div style="color:#888; font-size:11px;">' + escapeHtml(e.butikker ? e.butikker.navn : '?') + ' · ' +
           tidSiden(e.sidst_set_at) + (e.lokal_ip ? ' · ' + escapeHtml(e.lokal_ip) : '') +
           (e.kommando ? ' · ⏳ ' + escapeHtml(e.kommando) + ' afventer' : '') + '</div>' +
@@ -811,13 +811,13 @@
       });
 
       const rebootBtn = document.createElement('button');
-      rebootBtn.textContent = '🔁 Genstart enhed';
+      rebootBtn.textContent = 'Genstart enhed';
       rebootBtn.style.cssText = 'padding:6px 10px; font-size:12px;';
       rebootBtn.addEventListener('click', () => saetKommando(e.id, 'reboot'));
       row.appendChild(rebootBtn);
 
       const kioskBtn = document.createElement('button');
-      kioskBtn.textContent = '🔄 Genstart skærm';
+      kioskBtn.textContent = 'Genstart skærm';
       kioskBtn.style.cssText = 'padding:6px 10px; font-size:12px;';
       kioskBtn.addEventListener('click', () => saetKommando(e.id, 'genstart_kiosk'));
       row.appendChild(kioskBtn);
@@ -1072,15 +1072,16 @@
       row.style.cssText = 'display:flex; align-items:center; gap:6px; background:#f7f7fb; padding:6px 8px; border-radius:6px; font-size:12px;';
 
       const label = document.createElement('span');
-      const icon = s.type === 'side' ? '📄 ' : s.type === 'gruppe' ? '📦 ' : '🧩 ';
-      label.textContent = icon + s.navn + (s.delt ? ' 🌍' : '') + (s.standard ? ' ⭐' : '');
+      const icon = s.type === 'side' ? '[Side] ' : s.type === 'gruppe' ? '[Gruppe] ' : '[Element] ';
+      label.textContent = icon + s.navn + (s.delt ? ' (delt)' : '') + (s.standard ? ' (standard)' : '');
       label.title = (s.delt ? 'Delt med alle butikker. ' : '') + (s.standard ? 'Standard-skabelon for nye sider.' : '');
       label.style.cssText = 'flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
       row.appendChild(label);
 
       if (erSuperadmin && s.type === 'side') {
         const starBtn = document.createElement('span');
-        starBtn.textContent = s.standard ? '⭐' : '☆';
+        starBtn.textContent = s.standard ? 'Standard' : 'Sæt standard';
+        starBtn.style.fontWeight = s.standard ? '700' : '400';
         starBtn.title = s.standard ? 'Fjern som standard' : 'Sæt som standard for nye sider';
         starBtn.style.cssText = 'cursor:pointer; padding:0 2px;';
         starBtn.addEventListener('click', () => setStandardSkabelon(s));
@@ -1415,7 +1416,7 @@
       const tab = document.createElement('div');
       tab.className = 'side-tab' + (s.id === aktivSideId ? ' active' : '');
       const label = document.createElement('span');
-      label.textContent = (s.id === liveAktivSideId ? '🔴 ' : '') + s.navn;
+      label.textContent = (s.id === liveAktivSideId ? 'LIVE ' : '') + s.navn;
       tab.appendChild(label);
       const del = document.createElement('span');
       del.className = 'del';
@@ -1634,7 +1635,7 @@
       } else if (!canEdit) {
         const placeholder = document.createElement('div');
         placeholder.className = 'el-placeholder';
-        placeholder.textContent = '🔒 Låst';
+        placeholder.textContent = 'Låst';
         body.appendChild(placeholder);
       } else {
         const placeholder = document.createElement('div');
@@ -1697,7 +1698,7 @@
           if (slide.type === 'side') {
             const badge = document.createElement('div');
             badge.style.cssText = 'width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#aaa; font-size:11px; text-align:center; padding:6px; background:' + (slide.background || '#0a0a0a') + ';';
-            badge.textContent = '📄 Side (' + (slide.elements || []).length + ' elementer)';
+            badge.textContent = 'Side (' + (slide.elements || []).length + ' elementer)';
             preview.appendChild(badge);
             idx = (idx + 1) % el.slides.length;
             return;
@@ -1744,7 +1745,7 @@
           thumb.appendChild(img);
         } else if (slide.type === 'side') {
           const ico = document.createElement('div');
-          ico.textContent = '📄';
+          ico.textContent = 'Side';
           ico.style.cssText = 'width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:13px;';
           thumb.appendChild(ico);
         } else {
@@ -1934,7 +1935,7 @@
       header.className = 'el-header';
       const tag = document.createElement('span');
       tag.className = 'tag';
-      tag.textContent = el.type + (el.locked ? ' 🔒' : '');
+      tag.textContent = el.type + (el.locked ? ' [låst]' : '');
       header.appendChild(tag);
 
       if (textDiv) {
@@ -2064,7 +2065,7 @@
     }
 
     document.getElementById('propsLockRow').style.display = masterEditMode ? 'block' : 'none';
-    document.getElementById('propLockBtn').textContent = el.locked ? '🔒 Lås op' : '🔓 Lås element';
+    document.getElementById('propLockBtn').textContent = el.locked ? 'Lås op' : 'Lås element';
     document.getElementById('propKunPaaSideRow').style.display = (masterEditMode && el.locked) ? 'block' : 'none';
     document.getElementById('propKunPaaSide').value = el.kunPaaSide || '';
     // sider (butikkens egne sidefaner) rammes ikke af master-edit-mode-swappet, saa vi kan
