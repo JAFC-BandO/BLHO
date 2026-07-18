@@ -8,8 +8,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="render-shared.css?v=2026-07-18-12">
-<script src="render-shared.js?v=2026-07-18-12"></script>
+<link rel="stylesheet" href="render-shared.css?v=2026-07-18-13">
+<script src="render-shared.js?v=2026-07-18-13"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -241,6 +241,8 @@
         <span id="superadminBadge" style="display:none; background:#ffd700; color:#5a4600; font-weight:700; font-size:12px; padding:4px 10px; border-radius:20px; cursor:pointer; user-select:none;">Admin ▾</span>
         <div id="superadminMenu" style="display:none; position:absolute; top:100%; left:0; margin-top:6px; background:white; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.2); padding:14px; width:280px; z-index:1000;">
           <h2 style="margin:0 0 10px 0; font-size:13px; text-transform:uppercase; letter-spacing:.03em; color:#888;">Admin</h2>
+          <label style="font-size:11px; color:#888; display:block; margin-bottom:3px;">Skift butik (redigér som)</label>
+          <select id="skiftButikSelect" style="width:100%; padding:6px; font-size:13px; margin-bottom:10px;"></select>
           <button id="masterEditBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Rediger fælles skabelon</button>
           <button id="enhederBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Enheder / Fjernsupport</button>
           <div style="font-size:11px; color:#666; line-height:1.5;">
@@ -394,7 +396,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master25';
+  const SCRIPT_VERSION = '2026-07-18-master26';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -525,29 +527,22 @@
 
   // ---------- Login / bootstrap ----------
 
-  async function loadEverything() {
-    const { data: { user } } = await client.auth.getUser();
-    if (!user) return;
+  // Indlaeser ALT butik-specifikt data (sabloner, faelles skabelon, content, media, canvas,
+  // Live View) for én given butik_id. Udtrukket som sin egen funktion saa den kan genbruges
+  // BAADE ved login OG naar en superadmin "skifter butik" (se skiftTilButik nedenfor) uden at
+  // skulle logge ud/ind igen med den butiks egne credentials.
+  async function loadButikData(butikId, butikNavn) {
+    if (masterEditMode) exitMasterEditMode(); // undgaa at blande skabelon-redigering med skift
 
-    const { data: brugerRow, error: brugerErr } = await client
-      .from('brugere')
-      .select('butik_id, er_superadmin, butikker(navn)')
-      .eq('id', user.id)
-      .single();
+    currentButikId = butikId;
+    document.getElementById('butikNavn').textContent = butikNavn;
+    saetAktuelButikNavn(butikNavn); // {{butik}}-tag i Live View skal matche den viste butik
+    const skiftSelect = document.getElementById('skiftButikSelect');
+    if (skiftSelect) skiftSelect.value = butikId;
 
-    if (brugerErr || !brugerRow) {
-      showMsg(loginMsg, 'Din bruger er ikke koblet til en butik endnu. Kontakt admin.', false);
-      return;
-    }
-
-    erSuperadmin = !!brugerRow.er_superadmin;
-    console.log('[redigering-debug] Logget ind som', user.email, '| er_superadmin=', erSuperadmin, '| butik_id=', brugerRow.butik_id);
-    document.getElementById('superadminBadge').style.display = erSuperadmin ? 'inline-block' : 'none';
-    document.querySelectorAll('.superadmin-only').forEach(elNode => {
-      elNode.style.display = erSuperadmin ? '' : 'none';
-    });
-    currentButikId = brugerRow.butik_id;
-    document.getElementById('butikNavn').textContent = brugerRow.butikker.navn;
+    selectedElementId = null;
+    armedElementId = null;
+    multiSelected.clear();
 
     await loadSabloner();
     await loadMasterTemplate();
@@ -607,6 +602,50 @@
     canvas.style.background = baggrundsfarve;
     await loadMedia();
     renderSiderTabs();
+    renderCanvas();
+    renderPropsPanel();
+
+    await loadLiveView();
+    if (liveViewPollHandle) clearInterval(liveViewPollHandle);
+    liveViewPollHandle = setInterval(loadLiveView, 10000);
+  }
+
+  // Kun superadmin: skift hvilken butik man redigerer som, uden at logge ud/ind igen med den
+  // butiks egne credentials. Kraever at content/media/sabloner-RLS har et superadmin-bypass
+  // (se supabase/migration_superadmin_full_access.sql) -- ellers ville alle Supabase-kaldene
+  // for den nye butik blive afvist af RLS, uanset hvad UI'et her lader en vaelge.
+  async function skiftTilButik(butikId) {
+    const butik = alleButikkerListe.find(b => b.id === butikId);
+    if (!butik) return;
+    await loadButikData(butik.id, butik.navn);
+  }
+  document.getElementById('skiftButikSelect').addEventListener('change', (e) => {
+    skiftTilButik(e.target.value);
+  });
+
+  async function loadEverything() {
+    const { data: { user } } = await client.auth.getUser();
+    if (!user) return;
+
+    const { data: brugerRow, error: brugerErr } = await client
+      .from('brugere')
+      .select('butik_id, er_superadmin, butikker(navn)')
+      .eq('id', user.id)
+      .single();
+
+    if (brugerErr || !brugerRow) {
+      showMsg(loginMsg, 'Din bruger er ikke koblet til en butik endnu. Kontakt admin.', false);
+      return;
+    }
+
+    erSuperadmin = !!brugerRow.er_superadmin;
+    console.log('[redigering-debug] Logget ind som', user.email, '| er_superadmin=', erSuperadmin, '| butik_id=', brugerRow.butik_id);
+    document.getElementById('superadminBadge').style.display = erSuperadmin ? 'inline-block' : 'none';
+    document.querySelectorAll('.superadmin-only').forEach(elNode => {
+      elNode.style.display = erSuperadmin ? '' : 'none';
+    });
+
+    if (erSuperadmin) await loadAlleButikkerListe();
 
     // #app (og dermed canvas) er stadig display:none her, saa canvas.getBoundingClientRect()
     // ville give bredde 0 -- vis appen FOeR vi tegner, ellers bliver skriftstoerrelsen 0px
@@ -615,11 +654,7 @@
     loginWrap.style.display = 'none';
     app.style.display = 'block';
 
-    renderCanvas();
-
-    await loadLiveView();
-    if (liveViewPollHandle) clearInterval(liveViewPollHandle);
-    liveViewPollHandle = setInterval(loadLiveView, 10000);
+    await loadButikData(brugerRow.butik_id, brugerRow.butikker.navn);
   }
 
   function normalizeHex(v) {
@@ -780,8 +815,13 @@
   async function loadAlleButikkerListe() {
     const { data, error } = await client.from('butikker').select('id, navn').order('navn');
     if (!error && data) alleButikkerListe = data;
-    const sel = document.getElementById('nyEnhedButik');
-    sel.innerHTML = alleButikkerListe.map(b => '<option value="' + b.id + '">' + escapeHtml(b.navn) + '</option>').join('');
+    const options = alleButikkerListe.map(b => '<option value="' + b.id + '">' + escapeHtml(b.navn) + '</option>').join('');
+    document.getElementById('nyEnhedButik').innerHTML = options;
+    const skiftSelect = document.getElementById('skiftButikSelect');
+    if (skiftSelect) {
+      skiftSelect.innerHTML = options;
+      skiftSelect.value = currentButikId;
+    }
   }
 
   function renderEnhederListe() {
@@ -1474,11 +1514,13 @@
   }
 
   function addNewSide() {
+    const forslag = 'Side ' + (sider.length + 1);
+    const navn = (prompt('Navn på den nye side:', forslag) || '').trim() || forslag;
     commitActiveSide();
     const std = standardSideData();
     const nyt = {
       id: uid(),
-      navn: 'Side ' + (sider.length + 1),
+      navn: navn,
       background: std ? std.background : '#0a0a0a',
       elements: std ? std.elements : [],
     };
@@ -1543,8 +1585,8 @@
       const navnSpan = document.createElement('span');
       navnSpan.textContent = s.navn;
       navnSpan.title = 'Dobbeltklik for at omdøbe';
-      navnSpan.addEventListener('dblclick', (e) => {
-        e.stopPropagation();
+      const startOmdoeb = (ev) => {
+        ev.stopPropagation();
         const input = document.createElement('input');
         input.type = 'text';
         input.value = s.navn;
@@ -1555,16 +1597,22 @@
           renderSiderTabs();
         };
         input.addEventListener('blur', afslut);
-        input.addEventListener('keydown', (ev) => {
-          if (ev.key === 'Enter') input.blur();
-          if (ev.key === 'Escape') { input.value = s.navn; input.blur(); }
+        input.addEventListener('keydown', (kev) => {
+          if (kev.key === 'Enter') input.blur();
+          if (kev.key === 'Escape') { input.value = s.navn; input.blur(); }
         });
         navnSpan.replaceWith(input);
         input.focus();
         input.select();
-      });
+      };
+      navnSpan.addEventListener('dblclick', startOmdoeb);
       label.appendChild(navnSpan);
       tab.appendChild(label);
+      const omdoebLink = document.createElement('span');
+      omdoebLink.textContent = 'omdøb';
+      omdoebLink.style.cssText = 'color:#999; font-size:10px; text-decoration:underline; cursor:pointer; margin-left:4px;';
+      omdoebLink.addEventListener('click', startOmdoeb);
+      tab.appendChild(omdoebLink);
       const del = document.createElement('span');
       del.className = 'del';
       del.textContent = '✕';

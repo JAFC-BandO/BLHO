@@ -4,6 +4,7 @@ supabase/migration_superadmin.sql
 supabase/migration_standard_lock.sql
 supabase/migration_master_side.sql
 supabase/migration_enheder.sql
+supabase/migration_superadmin_full_access.sql
 media/
 SUPABASE.md
 ANDROID-KIOSK-SETUP.md

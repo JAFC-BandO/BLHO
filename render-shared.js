@@ -233,6 +233,20 @@ function remapElementIntoRotator(subEl, rotatorEl) {
   });
 }
 
+// Dynamisk butik-navn-tag: lader ÉT faelles titel/tekst-element (typisk i den delte,
+// laaste master-skabelon) automatisk vise HVER butiks eget navn i stedet for at skulle
+// vaere en separat, haardkodet kopi pr. butik. Sat via saetAktuelButikNavn() FOER en
+// rendering (skaerm.html og redigeringssidens Live View saetter den ud fra deres egen
+// kendte butik). "Butik "-praefikset fjernes, saa "Butik Horsens" bliver til "Horsens" --
+// det er den by/navne-del man reelt vil indsaette i en saetning som "Børneloppen {{butik}}".
+let AKTUEL_BUTIK_NAVN = '';
+function saetAktuelButikNavn(navn) {
+  AKTUEL_BUTIK_NAVN = (navn || '').replace(/^Butik\s+/i, '');
+}
+function indsaetButikNavn(html) {
+  return html.replace(/\{\{\s*butik\s*\}\}/gi, escapeHtml(AKTUEL_BUTIK_NAVN));
+}
+
 function buildElNode(el, registerInterval) {
   const node = document.createElement('div');
   node.className = 'el';
@@ -249,7 +263,7 @@ function buildElNode(el, registerInterval) {
   if (el.type === 'titel' || el.type === 'tekst') {
     const t = document.createElement('div');
     t.className = 'el-text';
-    t.innerHTML = el.html != null ? stripInlineFontSize(el.html) : escapeHtml(el.text || '');
+    t.innerHTML = indsaetButikNavn(el.html != null ? stripInlineFontSize(el.html) : escapeHtml(el.text || ''));
     if (el.fontSize) t.style.fontSize = el.fontSize + 'cqw';
     if (el.textColor) t.style.color = el.textColor;
     node.appendChild(t);
