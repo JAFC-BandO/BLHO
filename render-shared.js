@@ -246,6 +246,9 @@ function saetAktuelButikNavn(navn) {
 function indsaetButikNavn(html) {
   return html.replace(/\{\{\s*butik\s*\}\}/gi, escapeHtml(AKTUEL_BUTIK_NAVN));
 }
+function hentAktuelButikNavn() {
+  return AKTUEL_BUTIK_NAVN;
+}
 
 function buildElNode(el, registerInterval) {
   const node = document.createElement('div');
