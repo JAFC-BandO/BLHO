@@ -181,6 +181,8 @@
       if (data.layout && Array.isArray(data.layout.elements) && data.layout.elements.length) {
         const sider = Array.isArray(data.layout.sider) ? data.layout.sider : [];
         const aktivSide = sider.find(s => s.id === data.layout.aktivSideId);
+        debugLog('Gemte sider i DB: ' + sider.map(s => s.navn + ': ' + s.elements.map(e => e.type).join(',')).join(' | '));
+        debugLog('Top-niveau elements (det der reelt vises): ' + data.layout.elements.map(e => e.type).join(','));
         const merged = mergeMasterElements(data.layout.elements, masterElements, aktivSide ? aktivSide.navn : null);
         debugLog('Tegner layout med ' + merged.length + ' elementer (inkl. faelles skabelon)');
         visLayout(merged, data.layout.background);

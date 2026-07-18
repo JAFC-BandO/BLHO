@@ -570,6 +570,7 @@
     const aktivSide = sider.find(s => s.id === aktivSideId);
     elements = aktivSide.elements;
     baggrundsfarve = aktivSide.background;
+    console.log('[redigering-debug] Indlaest sider fra DB:', sider.map(s => s.navn + ': ' + s.elements.map(e => e.type).join(',')).join(' | '));
 
     document.getElementById('bgColorInput').value = baggrundsfarve;
     document.getElementById('bgColorHex').value = baggrundsfarve;
@@ -1249,6 +1250,11 @@
   }
 
   function renderSiderTabs() {
+    console.log('[redigering-debug] Sider-status:', sider.map(s => ({
+      navn: s.navn,
+      id: s.id.slice(0, 8),
+      elementer: s.elements.map(e => e.type + '(' + e.id.slice(0, 6) + ')'),
+    })), '| aktivSideId=', (aktivSideId || '').slice(0, 8), '| elements-array er sider[aktiv]?', sider.find(x => x.id === aktivSideId) && sider.find(x => x.id === aktivSideId).elements === elements);
     const wrap = document.getElementById('siderTabs');
     wrap.innerHTML = '';
     sider.forEach(s => {
@@ -2131,6 +2137,7 @@
       opdateret_at: new Date().toISOString(),
     };
     console.log('[redigering-debug] Gemmer, currentContentId=', currentContentId, 'payload=', payload);
+    console.log('[redigering-debug] Gemmer sider:', sider.map(s => s.navn + ': ' + s.elements.map(e => e.type).join(',')).join(' | '));
 
     const { data: sessionCheck } = await client.auth.getSession();
     const { data: userCheck } = await client.auth.getUser();
