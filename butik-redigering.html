@@ -279,10 +279,6 @@
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <select id="nyEnhedButik" style="flex:1; min-width:140px; padding:8px;"></select>
         <input type="text" id="nyEnhedNavn" placeholder="Navn, fx &quot;Horsens skærm (Android)&quot;" style="flex:2; min-width:180px; padding:8px;">
-        <select id="nyEnhedType" style="padding:8px;">
-          <option value="android">Android</option>
-          <option value="pi">Raspberry Pi</option>
-        </select>
         <button id="nyEnhedGemBtn" style="padding:8px 16px;">Tilføj</button>
       </div>
     </div>
@@ -398,7 +394,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master20';
+  const SCRIPT_VERSION = '2026-07-18-master21';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -867,9 +863,8 @@
   document.getElementById('nyEnhedGemBtn').addEventListener('click', async () => {
     const butik_id = document.getElementById('nyEnhedButik').value;
     const navn = document.getElementById('nyEnhedNavn').value.trim();
-    const type = document.getElementById('nyEnhedType').value;
     if (!butik_id || !navn) { alert('Udfyld navn og vælg butik.'); return; }
-    const { error } = await client.from('enheder').insert({ butik_id, navn, type });
+    const { error } = await client.from('enheder').insert({ butik_id, navn, type: 'android' });
     if (error) { alert('Kunne ikke tilføje: ' + error.message); return; }
     document.getElementById('nyEnhedNavn').value = '';
     await loadEnheder();
