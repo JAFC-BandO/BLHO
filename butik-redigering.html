@@ -394,7 +394,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master21';
+  const SCRIPT_VERSION = '2026-07-18-master22';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -783,6 +783,16 @@
 
   function renderEnhederListe() {
     const wrap = document.getElementById('enhederListe');
+    // Bevar en igangvaerende kommando-tekst + fokus hen over et baggrunds-refresh (se
+    // enhederPollHandle) -- ellers mister man det man er ved at skrive, hver gang panelet
+    // auto-opdaterer for at hente et evt. nyt svar.
+    const aktivInput = document.activeElement;
+    const bevaretEnhedId = aktivInput && aktivInput.classList && aktivInput.classList.contains('enhedCmdInput')
+      ? aktivInput.dataset.enhedId : null;
+    const bevaretValue = bevaretEnhedId ? aktivInput.value : null;
+    const bevaretSelStart = bevaretEnhedId ? aktivInput.selectionStart : null;
+    const bevaretSelEnd = bevaretEnhedId ? aktivInput.selectionEnd : null;
+
     wrap.innerHTML = '';
     if (!alleEnheder.length) {
       wrap.innerHTML = '<div style="color:#888; font-size:13px;">Ingen enheder registreret endnu.</div>';
@@ -790,7 +800,7 @@
     }
     alleEnheder.forEach(e => {
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex; align-items:center; gap:10px; background:#f7f7fb; border-radius:8px; padding:10px 12px; font-size:13px;';
+      row.style.cssText = 'display:flex; align-items:flex-start; gap:10px; background:#f7f7fb; border-radius:8px; padding:10px 12px; font-size:13px;';
 
       const dot = document.createElement('span');
       dot.style.cssText = 'width:10px; height:10px; border-radius:50%; background:' + enhedStatusFarve(e.sidst_set_at) + '; flex-shrink:0;';
@@ -825,6 +835,53 @@
         });
       }
 
+      // Fejlfindings-konsol: IKKE en live terminal -- kommandoen hentes og koeres af
+      // enhedens eget check-in-script ved naeste check-in (op til ca. et minut), og svaret
+      // vises her et lille oejeblik efter. Koeres som den almindelige Termux-bruger.
+      const consoleWrap = document.createElement('div');
+      consoleWrap.style.cssText = 'margin-top:6px; display:flex; gap:6px;';
+      const cmdInput = document.createElement('input');
+      cmdInput.type = 'text';
+      cmdInput.className = 'enhedCmdInput';
+      cmdInput.dataset.enhedId = e.id;
+      cmdInput.placeholder = 'Fejlfindings-kommando, fx: df -h';
+      cmdInput.style.cssText = 'flex:1; font-size:12px; padding:5px 7px; border:1px solid #ddd; border-radius:4px;';
+      const sendCmdBtn = document.createElement('button');
+      sendCmdBtn.textContent = 'Send';
+      sendCmdBtn.style.cssText = 'padding:5px 10px; font-size:12px;';
+      const sendCmd = () => {
+        const cmd = cmdInput.value.trim();
+        if (!cmd) return;
+        sendCustomKommando(e.id, cmd);
+        cmdInput.value = '';
+      };
+      sendCmdBtn.addEventListener('click', sendCmd);
+      cmdInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') sendCmd(); });
+      consoleWrap.appendChild(cmdInput);
+      consoleWrap.appendChild(sendCmdBtn);
+      info.appendChild(consoleWrap);
+
+      const svarErFriskere = e.custom_kommando_besvaret_at && e.custom_kommando_sat_at
+        && new Date(e.custom_kommando_besvaret_at) >= new Date(e.custom_kommando_sat_at);
+      if (e.custom_kommando_sat_at && !svarErFriskere) {
+        const afventer = document.createElement('div');
+        afventer.style.cssText = 'font-size:11px; color:#888; margin-top:4px;';
+        afventer.textContent = '⏳ Afventer svar (køres ved næste check-in, op til et minuts tid)...';
+        info.appendChild(afventer);
+      } else if (svarErFriskere) {
+        const svarWrap = document.createElement('div');
+        svarWrap.style.cssText = 'margin-top:4px;';
+        const svarLabel = document.createElement('div');
+        svarLabel.style.cssText = 'font-size:10px; color:#aaa;';
+        svarLabel.textContent = 'Svar (' + tidSiden(e.custom_kommando_besvaret_at) + '):';
+        const svarPre = document.createElement('pre');
+        svarPre.style.cssText = 'font-size:11px; background:#111; color:#0f0; padding:6px 8px; border-radius:4px; max-height:120px; overflow:auto; white-space:pre-wrap; word-break:break-all; margin:2px 0 0 0;';
+        svarPre.textContent = e.custom_kommando_svar;
+        svarWrap.appendChild(svarLabel);
+        svarWrap.appendChild(svarPre);
+        info.appendChild(svarWrap);
+      }
+
       const rebootBtn = document.createElement('button');
       rebootBtn.textContent = 'Genstart enhed';
       rebootBtn.style.cssText = 'padding:6px 10px; font-size:12px;';
@@ -843,6 +900,15 @@
 
       wrap.appendChild(row);
     });
+
+    if (bevaretEnhedId) {
+      const restoreInput = wrap.querySelector('.enhedCmdInput[data-enhed-id="' + bevaretEnhedId + '"]');
+      if (restoreInput) {
+        restoreInput.value = bevaretValue;
+        restoreInput.focus();
+        restoreInput.setSelectionRange(bevaretSelStart, bevaretSelEnd);
+      }
+    }
   }
 
   async function saetKommando(enhedId, kommando) {
@@ -850,14 +916,30 @@
     await loadEnheder();
   }
 
+  async function sendCustomKommando(enhedId, cmd) {
+    await client.from('enheder').update({
+      custom_kommando: cmd,
+      custom_kommando_sat_at: new Date().toISOString(),
+      custom_kommando_svar: null,
+      custom_kommando_besvaret_at: null,
+    }).eq('id', enhedId);
+    await loadEnheder();
+  }
+
+  let enhederPollHandle = null;
   document.getElementById('enhederBtn').addEventListener('click', async () => {
     document.getElementById('superadminMenu').style.display = 'none';
     document.getElementById('enhederOverlay').style.display = 'flex';
     await loadAlleButikkerListe();
     await loadEnheder();
+    // Auto-opdatér mens panelet er åbent, så et fejlfindings-svar dukker op af sig selv
+    // uden man skal lukke/genåbne panelet manuelt hvert minut for at tjekke.
+    if (enhederPollHandle) clearInterval(enhederPollHandle);
+    enhederPollHandle = setInterval(loadEnheder, 15000);
   });
   document.getElementById('enhederCloseBtn').addEventListener('click', () => {
     document.getElementById('enhederOverlay').style.display = 'none';
+    if (enhederPollHandle) { clearInterval(enhederPollHandle); enhederPollHandle = null; }
   });
 
   document.getElementById('nyEnhedGemBtn').addEventListener('click', async () => {
