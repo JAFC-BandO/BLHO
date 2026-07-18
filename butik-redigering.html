@@ -398,7 +398,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master16';
+  const SCRIPT_VERSION = '2026-07-18-master17';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1917,10 +1917,9 @@
     if (el.type === 'streg') {
       // En streg er en ren skillelinje, ligesom en "page divider" i Confluence -- ikke en
       // resizebar kasse. Hoejden er derfor altid fast/tynd uanset hvad der maatte staa i
-      // data (aeldre elementer, kopierede skabeloner osv.) -- ingen resize-haandtag, kun
-      // traek for at placere den. Den generelle .el-klasse laegger en kant + lys baggrund
-      // paa ALLE elementer (saa man kan se rammen af fx en tom tekstboks) -- det skal en
-      // streg aldrig have.
+      // data (aeldre elementer, kopierede skabeloner osv.). Bredden (laengden) maa gerne
+      // justeres, derfor et bredde-kun resize-haandtag -- det generelle haandtag aendrer
+      // baade bredde OG hoejde, hvilket ville laase op for at goere den til en kasse igen.
       node.style.border = 'none';
       node.style.height = '0.4%';
       node.style.cursor = canEdit ? 'move' : 'default';
@@ -1939,6 +1938,14 @@
         });
         node.appendChild(del);
         node.addEventListener('pointerdown', (e) => startDrag(e, el, node));
+
+        const resizeHandle = document.createElement('div');
+        resizeHandle.className = 'resize-handle';
+        // Kun bredden kan aendres her (se startResize's widthOnly) -- centreret lodret og
+        // med vandret piletegn, saa den ikke ser ud til at love hoejde-justering med.
+        resizeHandle.style.cssText = 'bottom: auto; top: 50%; transform: translateY(-50%); cursor: ew-resize;';
+        resizeHandle.addEventListener('pointerdown', (e) => startResize(e, el, node, true));
+        node.appendChild(resizeHandle);
       }
 
       if (el.id === armedElementId) node.classList.add('selectable-target');
@@ -2289,21 +2296,25 @@
     document.addEventListener('pointerup', onUp);
   }
 
-  function startResize(e, el, node) {
+  function startResize(e, el, node, widthOnly) {
     e.preventDefault();
     e.stopPropagation();
     const rect = canvas.getBoundingClientRect();
     const startX = e.clientX, startY = e.clientY;
     const startW = el.w, startH = el.h;
 
-    const minSize = 5;
+    const minSize = widthOnly ? 2 : 5;
     function onMove(ev) {
       const dw = ((ev.clientX - startX) / rect.width) * 100;
-      const dh = ((ev.clientY - startY) / rect.height) * 100;
       el.w = clamp(startW + dw, minSize, 100 - el.x);
-      el.h = clamp(startH + dh, minSize, 100 - el.y);
       node.style.width = el.w + '%';
-      node.style.height = el.h + '%';
+      // widthOnly (streg): hoejden skal ALDRIG kunne aendres via haandtaget -- den er altid
+      // en fast tynd linje, sat direkte i buildElementNode uafhaengigt af el.h.
+      if (!widthOnly) {
+        const dh = ((ev.clientY - startY) / rect.height) * 100;
+        el.h = clamp(startH + dh, minSize, 100 - el.y);
+        node.style.height = el.h + '%';
+      }
     }
     function onUp() {
       document.removeEventListener('pointermove', onMove);
