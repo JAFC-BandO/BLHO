@@ -58,6 +58,9 @@
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .nyhedsbanner-track { animation: none; }
-}
+/* Bevidst INGEN prefers-reduced-motion-respekt her: dette er en ubemandet butiksskærm, ikke
+   en personlig enhed -- der er ingen menneske der "bruger" skærmen hvis bevaegelsesfoelsomhed
+   skal respekteres. Android-signage-bokse saetter ofte prefers-reduced-motion: reduce som en
+   systemdaekkende batterisparings-standard, hvilket ellers slog hele banner-scrollet helt fra
+   (tekst vist, men fuldstaendig statisk) -- praecis symptomet der blev observeret paa boksen,
+   mens det virkede fint i en almindelig browser uden den systemindstilling. */
