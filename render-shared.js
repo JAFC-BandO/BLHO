@@ -200,6 +200,18 @@ function buildMediaNode(spec) {
 // registerInterval: kaldes med et interval-id, saa den side der bruger denne funktion selv
 // kan holde styr paa og rydde op i sine egne timere (rotator-skift, miljoeffekt-opdatering)
 // naar den tegner om. Uden dette ville hver genrendering efterlade "spøgelses"-timere.
+// Regner et sub-elements fuldskaerm-relative x/y/w/h om til koordinater relative til
+// rotator-elementets eget omraade (rotatorEl.x/y/w/h er ogsaa fuldskaerm-relative, da
+// rotatoren selv er et helt almindeligt top-niveau element).
+function remapElementIntoRotator(subEl, rotatorEl) {
+  return Object.assign({}, subEl, {
+    x: (subEl.x - rotatorEl.x) / rotatorEl.w * 100,
+    y: (subEl.y - rotatorEl.y) / rotatorEl.h * 100,
+    w: subEl.w / rotatorEl.w * 100,
+    h: subEl.h / rotatorEl.h * 100,
+  });
+}
+
 function buildElNode(el, registerInterval) {
   const node = document.createElement('div');
   node.className = 'el';
@@ -233,7 +245,12 @@ function buildElNode(el, registerInterval) {
         const inner = document.createElement('div');
         inner.style.cssText = 'position:relative; width:100%; height:100%; overflow:hidden; container-type:inline-size;';
         if (slide.background) inner.style.background = slide.background;
-        (slide.elements || []).forEach(subEl => inner.appendChild(buildElNode(subEl, registerInterval)));
+        // En "side" tilfoejet som slide har elementer med koordinater relative til HELE
+        // skaermen (saadan som siden ser ud naar den vises for sig selv) -- men rotatoren
+        // selv fylder typisk kun en del af skaermen (f.eks. fordi der er en laast sidebar).
+        // Uden dette skift bliver koordinaterne genfortolket relativt til rotatorens eget,
+        // mindre og forskudte omraade, saa indholdet ser forskudt/forkert skaleret ud.
+        (slide.elements || []).forEach(subEl => inner.appendChild(buildElNode(remapElementIntoRotator(subEl, el), registerInterval)));
         node.appendChild(inner);
       } else {
         node.appendChild(buildMediaNode(slide));
