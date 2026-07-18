@@ -259,7 +259,7 @@ function buildElNode(el, registerInterval) {
     };
     showSlide();
     if (el.slides.length > 1) {
-      registerInterval(setInterval(showSlide, el.intervalMs || 5000));
+      registerInterval(setInterval(showSlide, el.intervalMs || 30000));
     }
   } else if (el.type === 'miljoeffekt') {
     const card = document.createElement('div');

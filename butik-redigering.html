@@ -8,8 +8,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="render-shared.css?v=2026-07-18-9">
-<script src="render-shared.js?v=2026-07-18-9"></script>
+<link rel="stylesheet" href="render-shared.css?v=2026-07-18-10">
+<script src="render-shared.js?v=2026-07-18-10"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -398,7 +398,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master19';
+  const SCRIPT_VERSION = '2026-07-18-master20';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1446,7 +1446,30 @@
         dot.title = 'Denne side er lige nu vist på skærmen';
         label.appendChild(dot);
       }
-      label.appendChild(document.createTextNode(s.navn));
+      const navnSpan = document.createElement('span');
+      navnSpan.textContent = s.navn;
+      navnSpan.title = 'Dobbeltklik for at omdøbe';
+      navnSpan.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = s.navn;
+        input.style.cssText = 'width:70px; font-size:inherit; font-family:inherit;';
+        const afslut = () => {
+          const nyNavn = input.value.trim();
+          if (nyNavn) s.navn = nyNavn;
+          renderSiderTabs();
+        };
+        input.addEventListener('blur', afslut);
+        input.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter') input.blur();
+          if (ev.key === 'Escape') { input.value = s.navn; input.blur(); }
+        });
+        navnSpan.replaceWith(input);
+        input.focus();
+        input.select();
+      });
+      label.appendChild(navnSpan);
       tab.appendChild(label);
       const del = document.createElement('span');
       del.className = 'del';
@@ -1533,7 +1556,7 @@
         billede: { x: 55, y: 5,  w: 40, h: 45, url: null },
         video:   { x: 5,  y: 50, w: 90, h: 40, url: null },
         boks:    { x: 10, y: 10, w: 40, h: 30, boxColor: '#1a1a1a' },
-        rotator: { x: 10, y: 10, w: 50, h: 50, slides: [], intervalMs: 5000 },
+        rotator: { x: 10, y: 10, w: 50, h: 50, slides: [], intervalMs: 30000 },
         miljoeffekt: { x: 10, y: 10, w: 50, h: 30 },
         streg: { x: 10, y: 50, w: 80, h: 1, boxColor: '#ffffff' },
         ur: { x: 10, y: 10, w: 25, h: 15 },
@@ -1759,7 +1782,7 @@
         };
         showSlide();
         if (el.slides.length > 1) {
-          rotatorIntervals.push(setInterval(showSlide, el.intervalMs || 5000));
+          rotatorIntervals.push(setInterval(showSlide, el.intervalMs || 30000));
         }
       }
 
@@ -2102,7 +2125,7 @@
     const isRotator = el.type === 'rotator';
     document.getElementById('propsIntervalRow').style.display = isRotator ? 'block' : 'none';
     if (isRotator) {
-      document.getElementById('propInterval').value = Math.round((el.intervalMs || 5000) / 1000);
+      document.getElementById('propInterval').value = Math.round((el.intervalMs || 30000) / 1000);
     }
 
     document.getElementById('propsScrollRow').style.display = isNyhedsbanner ? 'block' : 'none';
