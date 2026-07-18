@@ -44,9 +44,8 @@
   display: flex; align-items: stretch; overflow: hidden; box-sizing: border-box;
 }
 .nyhedsbanner-logo {
-  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-  background: #dc0000; color: #ffffff; font-weight: 900; padding: 0 3cqw;
-  font-size: 2cqw; letter-spacing: 0.02em;
+  flex-shrink: 0; height: 45%; align-self: center; object-fit: contain;
+  margin: 0 2.5cqw 0 2cqw;
 }
 .nyhedsbanner-viewport { flex: 1; overflow: hidden; display: flex; align-items: center; }
 .nyhedsbanner-track {
