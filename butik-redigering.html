@@ -391,7 +391,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master9';
+  const SCRIPT_VERSION = '2026-07-18-master10';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -799,8 +799,16 @@
         '<div style="font-weight:600;">' + (e.type === 'android' ? '🤖' : '🍓') + ' ' + escapeHtml(e.navn) + '</div>' +
         '<div style="color:#888; font-size:11px;">' + escapeHtml(e.butikker ? e.butikker.navn : '?') + ' · ' +
           tidSiden(e.sidst_set_at) + (e.lokal_ip ? ' · ' + escapeHtml(e.lokal_ip) : '') +
-          (e.kommando ? ' · ⏳ ' + escapeHtml(e.kommando) + ' afventer' : '') + '</div>';
+          (e.kommando ? ' · ⏳ ' + escapeHtml(e.kommando) + ' afventer' : '') + '</div>' +
+        '<div style="color:#aaa; font-size:10px; margin-top:2px;">ID (til check-in-scriptet): ' +
+          '<code class="enhedIdKopier" data-id="' + e.id + '" style="cursor:pointer; background:#eee; padding:1px 5px; border-radius:3px;" title="Klik for at kopiere">' +
+          e.id + '</code></div>';
       row.appendChild(info);
+      info.querySelector('.enhedIdKopier').addEventListener('click', (ev) => {
+        navigator.clipboard.writeText(ev.target.dataset.id);
+        ev.target.textContent = 'Kopieret!';
+        setTimeout(() => { ev.target.textContent = e.id; }, 1200);
+      });
 
       const rebootBtn = document.createElement('button');
       rebootBtn.textContent = '🔁 Genstart enhed';
