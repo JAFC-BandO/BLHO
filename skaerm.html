@@ -4,6 +4,27 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Butik Skærm</title>
+<script>
+  // Dynamisk manifest, saa "Foej til startskaerm" (Android/Chrome) installerer en
+  // fuldskaerms-genvej uden adresselinje/browser-UI. Et almindeligt statisk manifest.json
+  // kunne ikke bruges her, fordi alle butikker deler denne samme fil -- start_url skal
+  // vaere netop DENNE butiks fulde URL inkl. ?email=&password=, ellers ville genvejen
+  // logge ind som en forkert/ingen butik. Bygges derfor dynamisk ud fra location.href.
+  (function () {
+    const manifest = {
+      name: 'Butik Skærm',
+      display: 'fullscreen',
+      start_url: location.href,
+      background_color: '#0a0a0a',
+      theme_color: '#0a0a0a',
+    };
+    const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+    const link = document.createElement('link');
+    link.rel = 'manifest';
+    link.href = URL.createObjectURL(blob);
+    document.head.appendChild(link);
+  })();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
@@ -54,7 +75,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-16-master5';
+  const SCRIPT_VERSION = '2026-07-18-master6';
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
