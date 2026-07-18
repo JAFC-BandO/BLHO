@@ -394,7 +394,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master23';
+  const SCRIPT_VERSION = '2026-07-18-master24';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -745,6 +745,9 @@
 
   let alleEnheder = [];
   let alleButikkerListe = [];
+  // Hurtig-knapper i fejlfindings-konsollen -- de kommandoer der rent faktisk er brugt igen
+  // og igen ved fejlfinding af Android-enhederne.
+  const HURTIG_KOMMANDOER = ['tailscaled-start', 'tailscale-cli ip', 'tailscale-test', 'df -h', 'ps aux'];
 
   function tidSiden(iso) {
     if (!iso) return 'Aldrig';
@@ -860,6 +863,20 @@
       consoleWrap.appendChild(cmdInput);
       consoleWrap.appendChild(sendCmdBtn);
       info.appendChild(consoleWrap);
+
+      // Hurtig-knapper: de kommandoer vi rent faktisk er endt med at bruge igen og igen ved
+      // fejlfinding -- ét klik sender den med det samme, ingen indtastning noedvendig.
+      const presetWrap = document.createElement('div');
+      presetWrap.style.cssText = 'margin-top:4px; display:flex; gap:4px; flex-wrap:wrap;';
+      HURTIG_KOMMANDOER.forEach(preset => {
+        const presetBtn = document.createElement('button');
+        presetBtn.textContent = preset;
+        presetBtn.title = preset;
+        presetBtn.style.cssText = 'padding:3px 8px; font-size:11px; color:#555; background:#eee; border:1px solid #ddd; border-radius:12px; cursor:pointer;';
+        presetBtn.addEventListener('click', () => sendCustomKommando(e.id, preset));
+        presetWrap.appendChild(presetBtn);
+      });
+      info.appendChild(presetWrap);
 
       const svarErFriskere = e.custom_kommando_besvaret_at && e.custom_kommando_sat_at
         && new Date(e.custom_kommando_besvaret_at) >= new Date(e.custom_kommando_sat_at);
