@@ -396,7 +396,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master29';
+  const SCRIPT_VERSION = '2026-07-18-master30';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1283,11 +1283,21 @@
 
   async function deleteSkabelon(id) {
     if (!confirm('Slet denne skabelon?')) return;
-    const { error } = await client.from('sabloner').delete().eq('id', id);
-    if (!error) {
-      sabloner = sabloner.filter(s => s.id !== id);
-      renderSablonerGrid();
+    // .select() efter .delete() er noedvendigt for at kunne se om noget REELT blev slettet --
+    // hvis RLS stille blokerer sletningen (fx en skabelon der hoerer til en anden butik end
+    // den du selv er logget ind/skiftet til som), returnerer Postgrest 0 paavirkede raekker
+    // UDEN fejl. Uden dette tjek troede UI'et sletningen lykkedes og fjernede den lokalt,
+    // mens raekken (og et evt. standard=true-flag) reelt stadig laa i databasen -- det er
+    // netop det der har forhindret en NY skabelon i at kunne saettes som standard bagefter
+    // (kun én raekke maa vaere standard=true, haandhaevet af en unique index).
+    const { data, error } = await client.from('sabloner').delete().eq('id', id).select();
+    if (error) { alert('Kunne ikke slette: ' + error.message); return; }
+    if (!data || !data.length) {
+      alert('Skabelonen blev IKKE slettet -- den tilhører formentlig en anden butik, og du har ikke rettigheder til at slette den (kræver superadmin for skabeloner uden for din egen butik, og at supabase/migration_superadmin_full_access.sql er kørt).');
+      return;
     }
+    sabloner = sabloner.filter(s => s.id !== id);
+    renderSablonerGrid();
   }
 
   async function setStandardSkabelon(target) {
