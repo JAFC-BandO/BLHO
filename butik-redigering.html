@@ -8,8 +8,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="render-shared.css?v=2026-07-16-5">
-<script src="render-shared.js?v=2026-07-16-5"></script>
+<link rel="stylesheet" href="render-shared.css?v=2026-07-18-6">
+<script src="render-shared.js?v=2026-07-18-6"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -306,6 +306,7 @@
         <button class="add-btn superadmin-only" data-add="miljoeffekt" style="display:none;">+ Miljøeffekt</button>
         <button class="add-btn superadmin-only" data-add="streg" style="display:none;">+ Streg</button>
         <button class="add-btn superadmin-only" data-add="ur" style="display:none;">+ Ur</button>
+        <button class="add-btn superadmin-only" data-add="nyhedsbanner" style="display:none;">+ Nyhedsbanner (DR)</button>
       </div>
 
       <div id="propsPanel" style="display:none; margin-bottom:20px; padding:12px; background:#f7f7fb; border-radius:8px;">
@@ -391,7 +392,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master11';
+  const SCRIPT_VERSION = '2026-07-18-master12';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -815,12 +816,6 @@
       rebootBtn.style.cssText = 'padding:6px 10px; font-size:12px;';
       rebootBtn.addEventListener('click', () => saetKommando(e.id, 'reboot'));
       row.appendChild(rebootBtn);
-
-      const kioskBtn = document.createElement('button');
-      kioskBtn.textContent = 'Genstart skærm';
-      kioskBtn.style.cssText = 'padding:6px 10px; font-size:12px;';
-      kioskBtn.addEventListener('click', () => saetKommando(e.id, 'genstart_kiosk'));
-      row.appendChild(kioskBtn);
 
       const delBtn = document.createElement('span');
       delBtn.textContent = '✕';
@@ -1507,6 +1502,7 @@
         miljoeffekt: { x: 10, y: 10, w: 50, h: 30 },
         streg: { x: 10, y: 50, w: 80, h: 1, boxColor: '#ffffff' },
         ur: { x: 10, y: 10, w: 25, h: 15 },
+        nyhedsbanner: { x: 0, y: 92, w: 100, h: 8 },
       }[type];
       elements.push(Object.assign({ id: uid(), type }, defaults));
       renderCanvas();
@@ -1888,15 +1884,19 @@
       // buildUrNode regner selv sin skriftstoerrelse ud fra elementets egen rect (bredde OG
       // hoejde) hvert sekund -- ingen ekstra editor-specifik korrektion noedvendig her.
       body.appendChild(buildUrNode(id => rotatorIntervals.push(id)));
+    } else if (el.type === 'nyhedsbanner') {
+      body.appendChild(buildNyhedsbannerNode(id => rotatorIntervals.push(id)));
     }
 
     if (el.type === 'streg') {
-      // Minimal haandtering uden header-bjaelke -- en tynd streg skal ikke se ud som en
-      // kasse med kontroller ovenpaa. Traek direkte i stregen for at flytte den.
-      // Den generelle .el-klasse laegger en kant + lys baggrund paa ALLE elementer (saa man
-      // kan se rammen af fx en tom tekstboks) -- det skal en streg ALDRIG have, kant eller
-      // ej laast, ellers ligner den en kasse i stedet for en ren linje.
+      // En streg er en ren skillelinje, ligesom en "page divider" i Confluence -- ikke en
+      // resizebar kasse. Hoejden er derfor altid fast/tynd uanset hvad der maatte staa i
+      // data (aeldre elementer, kopierede skabeloner osv.) -- ingen resize-haandtag, kun
+      // traek for at placere den. Den generelle .el-klasse laegger en kant + lys baggrund
+      // paa ALLE elementer (saa man kan se rammen af fx en tom tekstboks) -- det skal en
+      // streg aldrig have.
       node.style.border = 'none';
+      node.style.height = '0.4%';
       node.style.cursor = canEdit ? 'move' : 'default';
 
       if (canEdit) {
@@ -1913,11 +1913,6 @@
         });
         node.appendChild(del);
         node.addEventListener('pointerdown', (e) => startDrag(e, el, node));
-
-        const resizeHandle = document.createElement('div');
-        resizeHandle.className = 'resize-handle';
-        resizeHandle.addEventListener('pointerdown', (e) => startResize(e, el, node));
-        node.appendChild(resizeHandle);
       }
 
       if (el.id === armedElementId) node.classList.add('selectable-target');
@@ -2258,7 +2253,7 @@
     const startX = e.clientX, startY = e.clientY;
     const startW = el.w, startH = el.h;
 
-    const minSize = el.type === 'streg' ? 0.2 : 5;
+    const minSize = 5;
     function onMove(ev) {
       const dw = ((ev.clientX - startX) / rect.width) * 100;
       const dh = ((ev.clientY - startY) / rect.height) * 100;

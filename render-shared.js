@@ -5,6 +5,14 @@
 
 const MILJOEFFEKT_URL = 'https://www.boerneloppen.dk/boerneloppen-theme/world_goals/calculateConsumptionVariables.json';
 
+// DR's eget RSS-feed har ingen CORS-header (bekraeftet: `curl -sI` viser ingen
+// Access-Control-Allow-Origin) -- en browser kan derfor ikke hente det direkte, uanset
+// hvilket JS-bibliotek man bruger. rss2json.com fungerer som mellemled: henter feedet
+// server-side og returnerer JSON med CORS aabent. Ingen API-noegle noedvendig til dette
+// simple kald (bekraeftet virker).
+const DR_RSS_FEED_URL = 'https://www.dr.dk/nyheder/service/feeds/senestenyt';
+const RSS2JSON_URL = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(DR_RSS_FEED_URL);
+
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
@@ -79,6 +87,38 @@ async function fetchMiljoeffektData() {
   return res.json();
 }
 
+async function fetchDrNyheder() {
+  const res = await fetch(RSS2JSON_URL);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const data = await res.json();
+  if (data.status !== 'ok') throw new Error('rss2json fejl');
+  return data.items.map(item => item.title);
+}
+
+function buildNyhedsbannerNode(registerInterval) {
+  const node = document.createElement('div');
+  node.className = 'nyhedsbanner';
+  const track = document.createElement('div');
+  track.className = 'nyhedsbanner-track';
+  track.textContent = 'Henter nyheder fra DR ...';
+  node.appendChild(track);
+
+  const load = () => {
+    fetchDrNyheder().then(overskrifter => {
+      // Overskrifterne saettes ind TO GANGE efter hinanden, saa CSS-animationen kan loope
+      // saedeloest fra "midt i" den foerste kopi til "midt i" den anden -- ellers ville man
+      // se et hak/spring hver gang den naar enden af listen.
+      const tekst = overskrifter.map(t => escapeHtml(t)).join(' &nbsp;•&nbsp; ');
+      track.innerHTML = tekst + ' &nbsp;•&nbsp; ' + tekst + ' &nbsp;•&nbsp; ';
+    }).catch(() => {
+      track.textContent = 'Kunne ikke hente nyheder fra DR lige nu.';
+    });
+  };
+  load();
+  registerInterval(setInterval(load, 5 * 60000));
+  return node;
+}
+
 function miljoeffektCardHtml(data) {
   return (
     '<div class="miljoeffekt-box1">' +
@@ -148,7 +188,10 @@ function buildElNode(el, registerInterval) {
   node.style.left = el.x + '%';
   node.style.top = el.y + '%';
   node.style.width = el.w + '%';
-  node.style.height = el.h + '%';
+  // En streg er altid en fast tynd skillelinje, uanset hvad der maatte staa gemt i
+  // el.h (aeldre data fra foer redigerings-canvas'et laasede hoejden) -- ellers kan den
+  // vise sig som en tyk kasse paa den rigtige skaerm selvom editoren ser rigtig ud.
+  node.style.height = el.type === 'streg' ? '0.4%' : (el.h + '%');
   if (el.boxColor) node.style.background = el.boxColor;
 
   if (el.type === 'titel' || el.type === 'tekst') {
@@ -193,6 +236,8 @@ function buildElNode(el, registerInterval) {
     registerInterval(setInterval(load, 60000));
   } else if (el.type === 'ur') {
     node.appendChild(buildUrNode(registerInterval));
+  } else if (el.type === 'nyhedsbanner') {
+    node.appendChild(buildNyhedsbannerNode(registerInterval));
   }
   return node;
 }
