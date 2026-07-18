@@ -398,7 +398,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master18';
+  const SCRIPT_VERSION = '2026-07-18-master19';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -809,13 +809,25 @@
           (e.kommando ? ' · ⏳ ' + escapeHtml(e.kommando) + ' afventer' : '') + '</div>' +
         '<div style="color:#aaa; font-size:10px; margin-top:2px;">ID (til check-in-scriptet): ' +
           '<code class="enhedIdKopier" data-id="' + e.id + '" style="cursor:pointer; background:#eee; padding:1px 5px; border-radius:3px;" title="Klik for at kopiere">' +
-          e.id + '</code></div>';
+          e.id + '</code></div>' +
+        (e.tailscale_ip ?
+          '<div style="color:#aaa; font-size:10px; margin-top:2px;">Tailscale-IP (SSH herfra uanset netvaerk): ' +
+          '<code class="enhedTailscaleKopier" data-ip="' + escapeHtml(e.tailscale_ip) + '" style="cursor:pointer; background:#eee; padding:1px 5px; border-radius:3px;" title="Klik for at kopiere">' +
+          escapeHtml(e.tailscale_ip) + '</code></div>' : '');
       row.appendChild(info);
       info.querySelector('.enhedIdKopier').addEventListener('click', (ev) => {
         navigator.clipboard.writeText(ev.target.dataset.id);
         ev.target.textContent = 'Kopieret!';
         setTimeout(() => { ev.target.textContent = e.id; }, 1200);
       });
+      const tailscaleKopier = info.querySelector('.enhedTailscaleKopier');
+      if (tailscaleKopier) {
+        tailscaleKopier.addEventListener('click', (ev) => {
+          navigator.clipboard.writeText(ev.target.dataset.ip);
+          ev.target.textContent = 'Kopieret!';
+          setTimeout(() => { ev.target.textContent = e.tailscale_ip; }, 1200);
+        });
+      }
 
       const rebootBtn = document.createElement('button');
       rebootBtn.textContent = 'Genstart enhed';
