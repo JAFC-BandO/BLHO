@@ -3,13 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Butik Content - Redigering</title>
+<title>Butik Indhold - Redigering</title>
+<link rel="icon" type="image/png" href="../favicon.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-15">
-<script src="../render-shared.js?v=2026-07-19-15"></script>
+<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-16">
+<script src="../render-shared.js?v=2026-07-19-16"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -30,6 +31,15 @@
     flex-direction: column;
     justify-content: center;
   }
+  /* Logoet er hvidt (samme fil som bruges laast i skabelonen), saa det kraever en moerk
+     baggrund for at kunne ses -- en panel-lockup ovenover login-kortet, i samme brand-blaa
+     som resten af appen, i stedet for direkte paa den lyse side-baggrund. */
+  .login-logo-panel {
+    background: #040DB1; border-radius: 12px; padding: 28px 20px;
+    display: flex; justify-content: center; margin-bottom: 16px;
+    box-shadow: 0 2px 12px rgba(4,13,177,0.25);
+  }
+  .login-logo-panel img { width: 100%; max-width: 220px; height: auto; display: block; }
   .card {
     background: white;
     border-radius: 12px;
@@ -225,14 +235,23 @@
 
   .save-row { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
   #saveMsg.msg { margin-top: 0; }
+
+  #feedbackFloatBtn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(4,13,177,0.45); }
+  .feedback-type-btn { border-radius: 8px; }
+  .feedback-type-btn:not(.active) { background: #f4f4f2; color: #666; }
+  .feedback-type-btn.active { background: #eef0fd; color: #040DB1; }
+  #feedbackBeskrivelse { margin-top: 6px; }
 </style>
 </head>
 <body>
 
 <div class="login-wrap" id="loginWrap">
+  <div class="login-logo-panel">
+    <img src="../logo-boerneloppen.svg" alt="Børneloppen">
+  </div>
   <div class="card" id="loginCard">
     <h1>Log ind</h1>
-    <div class="subtitle">Rediger content til din butiks skærm</div>
+    <div class="subtitle">Rediger indholdet på din butiks skærm</div>
     <label for="email">Email</label>
     <input type="email" id="email" autocomplete="username">
     <label for="password">Adgangskode</label>
@@ -265,6 +284,7 @@
           <button id="masterEditBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Rediger fælles skabelon</button>
           <button id="enhederBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Enheder / Fjernsupport</button>
           <button id="aktivitetslogBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Aktivitetslog</button>
+          <button id="feedbackAdminBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Feedback fra butikker</button>
           <div style="font-size:11px; color:#666; line-height:1.5;">
             <b>Fælles skabelon:</b> ét layout du redigerer ét sted. Elementer du låser der (lås-knappen i Egenskaber) vises identisk og skrivebeskyttet på ALLE butikkers skærme med det samme.<br>
             <b>Del/afmærk en almindelig skabelon:</b> brug "Gem side" / "Gem valgt element" i sidebaren, eller "Sæt standard" ud for en eksisterende skabelon.
@@ -274,6 +294,7 @@
     </div>
     <div class="topbar-actions">
       <div class="msg" id="saveMsg" style="display:none;"></div>
+      <span id="guideOpenBtn" title="Se guiden til systemet" style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:#eef0fd; color:#040DB1; font-weight:700; font-size:14px; cursor:pointer; user-select:none;">?</span>
       <button id="saveBtn">Gem ændringer</button>
       <div class="logout" id="logoutBtn">Log ud</div>
     </div>
@@ -327,10 +348,50 @@
           <option value="gem_indhold">Gemt indhold</option>
           <option value="gem_skabelon">Gemt fælles skabelon</option>
           <option value="js_fejl">JS-fejl</option>
+          <option value="status">Status (heartbeat)</option>
         </select>
       </div>
 
       <div id="aktivitetslogListe" style="display:flex; flex-direction:column; gap:4px;"></div>
+    </div>
+  </div>
+
+  <div id="feedbackAdminOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:2000; align-items:center; justify-content:center;">
+    <div style="background:white; border-radius:10px; padding:24px; width:min(720px, 92vw); max-height:85vh; overflow-y:auto;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+        <h2 style="margin:0;">Feedback fra butikker</h2>
+        <span id="feedbackAdminCloseBtn" style="cursor:pointer; font-size:20px; color:#888; line-height:1;">✕</span>
+      </div>
+
+      <div style="font-size:12px; color:#888; margin-bottom:16px;">
+        Fejlrapporter og ønsker om ændringer, sendt fra "Feedback"-knappen — kun synligt for superadmin. De seneste 300.
+      </div>
+
+      <div style="display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;">
+        <select id="feedbackAdminButikFilter" style="flex:1; min-width:160px; padding:8px;">
+          <option value="">Alle butikker</option>
+        </select>
+        <select id="feedbackAdminTypeFilter" style="padding:8px;">
+          <option value="">Alle typer</option>
+          <option value="fejl">Fejl</option>
+          <option value="aendring">Ønske om ændring</option>
+        </select>
+      </div>
+
+      <div id="feedbackAdminListe" style="display:flex; flex-direction:column; gap:8px;"></div>
+    </div>
+  </div>
+
+  <div id="guideOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:3000; align-items:center; justify-content:center;">
+    <div style="background:white; border-radius:16px; padding:32px; width:min(440px, 92vw); text-align:center;">
+      <div id="guideIkon" style="font-size:40px; margin-bottom:10px;"></div>
+      <h1 id="guideTitel" style="margin:0 0 10px 0;"></h1>
+      <div id="guideBody" style="color:#555; font-size:14px; line-height:1.6; margin-bottom:22px;"></div>
+      <div id="guideDots" style="display:flex; justify-content:center; gap:6px; margin-bottom:22px;"></div>
+      <div style="display:flex; gap:8px;">
+        <button id="guideSkipBtn" style="flex:1; background:#f4f4f2; color:#666;">Spring over</button>
+        <button id="guideNextBtn" style="flex:1;">Næste</button>
+      </div>
     </div>
   </div>
 
@@ -474,10 +535,47 @@
       <div class="canvas" id="canvas"></div>
     </div>
   </div>
+
+  <!-- Feedback: enhver butiks-admin kan sende en fejlrapport eller et ønske om ændring, som
+       kun superadmin ser (i admin-menuens "Feedback"). Fast placeret nederst til højre saa
+       den altid er let at finde, uden at fylde i selve redigerings-fladen. -->
+  <button id="feedbackFloatBtn" title="Send feedback" style="position:fixed; right:24px; bottom:24px; z-index:1500; display:flex; align-items:center; gap:8px; padding:14px 20px; border-radius:999px; background:#040DB1; color:white; font-size:14px; font-weight:700; box-shadow:0 6px 20px rgba(4,13,177,0.35); transition:transform .15s, box-shadow .15s;">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5.5C3 4.12 4.12 3 5.5 3h9C15.88 3 17 4.12 17 5.5v6c0 1.38-1.12 2.5-2.5 2.5H9l-3.5 3v-3h-1C3.12 14 3 12.88 3 11.5v-6z" stroke="white" stroke-width="1.4" stroke-linejoin="round"/><circle cx="7" cy="8.3" r=".9" fill="white"/><circle cx="10" cy="8.3" r=".9" fill="white"/><circle cx="13" cy="8.3" r=".9" fill="white"/></svg>
+    Feedback
+  </button>
+
+  <div id="feedbackOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:2000; align-items:center; justify-content:center;">
+    <div style="background:white; border-radius:14px; padding:28px; width:min(480px, 92vw); max-height:90vh; overflow-y:auto;">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <h1 style="margin:0;">Send feedback</h1>
+        <span id="feedbackCloseBtn" style="cursor:pointer; font-size:20px; color:#888; line-height:1;">✕</span>
+      </div>
+      <div class="subtitle" style="margin-bottom:20px;">Fandt du en fejl, eller mangler der noget? Det lander direkte hos os.</div>
+
+      <div style="display:flex; gap:8px; margin-bottom:16px;">
+        <button type="button" class="feedback-type-btn active" data-type="fejl">🐞 Fejl</button>
+        <button type="button" class="feedback-type-btn" data-type="aendring">💡 Ønske om ændring</button>
+      </div>
+
+      <label for="feedbackTitel" style="margin-top:0;">Titel</label>
+      <input type="text" id="feedbackTitel" placeholder="Kort beskrivelse i én sætning" maxlength="200">
+
+      <label id="feedbackBeskrivelseLabel" for="feedbackBeskrivelse">Hvad skete der, og hvordan genskaber vi det?</label>
+      <textarea id="feedbackBeskrivelse" rows="5" placeholder="Fx: 1. Jeg trykkede på X. 2. Så skete Y i stedet for Z." style="width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:8px; font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+
+      <div id="feedbackHvorRow">
+        <label for="feedbackHvor">Hvor sker det?</label>
+        <input type="text" id="feedbackHvor" placeholder="Fx en bestemt side, element eller knap" maxlength="200">
+      </div>
+
+      <button id="feedbackSubmitBtn" class="primary-btn" style="margin-top:20px;">Send feedback</button>
+      <div class="msg" id="feedbackMsg"></div>
+    </div>
+  </div>
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master52';
+  const SCRIPT_VERSION = '2026-07-19-master55';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -789,6 +887,11 @@
     app.style.display = 'block';
 
     await loadButikData(brugerRow.butik_id, brugerRow.butikker.navn);
+
+    // Foerste-gangs-guide: vist automatisk én gang pr. browser, derefter kun paa
+    // forespoergsel via "?"-knappen. Et lokalt flag (ikke i databasen) er bevidst simpelt --
+    // skifter en admin browser/enhed, ser de bare guiden igen, hvilket er en harmlos gentagelse.
+    if (!localStorage.getItem('blho_guide_set')) aabnGuide();
   }
 
   function normalizeHex(v) {
@@ -848,6 +951,72 @@
     loginWrap.style.display = 'flex';
     loginMsg.className = 'msg';
     loginMsg.style.display = 'none';
+  });
+
+  // ---------- Feedback (alle butikker/brugere kan sende, kun superadmin kan se) ----------
+
+  let feedbackType = 'fejl';
+
+  function opdaterFeedbackFelter() {
+    const erFejl = feedbackType === 'fejl';
+    document.getElementById('feedbackBeskrivelseLabel').textContent = erFejl
+      ? 'Hvad skete der, og hvordan genskaber vi det?'
+      : 'Hvad ønsker du, og hvorfor?';
+    document.getElementById('feedbackBeskrivelse').placeholder = erFejl
+      ? 'Fx: 1. Jeg trykkede på X. 2. Så skete Y i stedet for Z.'
+      : 'Beskriv hvad du gerne vil kunne, og hvorfor det ville hjælpe dig';
+    document.getElementById('feedbackHvorRow').style.display = erFejl ? 'block' : 'none';
+  }
+
+  document.querySelectorAll('.feedback-type-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      feedbackType = btn.dataset.type;
+      document.querySelectorAll('.feedback-type-btn').forEach(b => b.classList.toggle('active', b === btn));
+      opdaterFeedbackFelter();
+    });
+  });
+
+  function aabnFeedbackOverlay() {
+    feedbackType = 'fejl';
+    document.querySelectorAll('.feedback-type-btn').forEach(b => b.classList.toggle('active', b.dataset.type === 'fejl'));
+    opdaterFeedbackFelter();
+    document.getElementById('feedbackTitel').value = '';
+    document.getElementById('feedbackBeskrivelse').value = '';
+    document.getElementById('feedbackHvor').value = '';
+    const msg = document.getElementById('feedbackMsg');
+    msg.className = 'msg';
+    msg.style.display = 'none';
+    document.getElementById('feedbackOverlay').style.display = 'flex';
+  }
+  document.getElementById('feedbackFloatBtn').addEventListener('click', aabnFeedbackOverlay);
+  document.getElementById('feedbackCloseBtn').addEventListener('click', () => {
+    document.getElementById('feedbackOverlay').style.display = 'none';
+  });
+
+  document.getElementById('feedbackSubmitBtn').addEventListener('click', async () => {
+    const titel = document.getElementById('feedbackTitel').value.trim();
+    const beskrivelse = document.getElementById('feedbackBeskrivelse').value.trim();
+    const hvor = document.getElementById('feedbackHvor').value.trim();
+    const msg = document.getElementById('feedbackMsg');
+    if (!titel) {
+      showMsg(msg, 'Skriv en titel.', false);
+      return;
+    }
+    const btn = document.getElementById('feedbackSubmitBtn');
+    btn.disabled = true;
+    const { error } = await client.rpc('indsend_feedback', {
+      p_type: feedbackType,
+      p_titel: titel,
+      p_beskrivelse: beskrivelse || null,
+      p_hvor: feedbackType === 'fejl' ? (hvor || null) : null,
+    });
+    btn.disabled = false;
+    if (error) {
+      showMsg(msg, 'Kunne ikke sende feedback: ' + error.message, false);
+      return;
+    }
+    showMsg(msg, 'Tak! Din feedback er sendt.', true);
+    setTimeout(() => { document.getElementById('feedbackOverlay').style.display = 'none'; }, 1200);
   });
 
   document.getElementById('superadminBadge').addEventListener('click', (e) => {
@@ -926,7 +1095,7 @@
   const KOMMANDO_SVAR_STALE_MINUTTER = 20;
   // Hurtig-knapper i fejlfindings-konsollen -- de kommandoer der rent faktisk er brugt igen
   // og igen ved fejlfinding af Android-enhederne.
-  const HURTIG_KOMMANDOER = ['tailscaled-start', 'tailscale-cli ip', 'tailscale-test', 'df -h', 'ps aux'];
+  const HURTIG_KOMMANDOER = ['tailscaled-start', 'tailscale-cli ip', 'tailscale-test', 'tail -30 ~/tailscale-selfheal.log', 'pgrep -f tailscaled', 'df -h', 'ps aux'];
 
   // Selv-gemte hurtig-kommandoer (lokalt i browseren, per-admin) -- ud over de faste
   // ovenfor, saa man kan tilfoeje sine egne ofte-brugte fejlfindings-kommandoer som knapper.
@@ -1049,7 +1218,15 @@
         (e.tailscale_ip ?
           '<div style="color:#aaa; font-size:10px; margin-top:2px;">Tailscale-IP (SSH herfra uanset netvaerk): ' +
           '<code class="enhedTailscaleKopier" data-ip="' + escapeHtml(e.tailscale_ip) + '" style="cursor:pointer; background:#eee; padding:1px 5px; border-radius:3px;" title="Klik for at kopiere">' +
-          escapeHtml(e.tailscale_ip) + '</code></div>' : '');
+          escapeHtml(e.tailscale_ip) + '</code></div>' : '') +
+        // tailscale_ok er bevidst IKKE coalesced server-side (modsat tailscale_ip) -- den
+        // afspejler check-in-scriptets seneste FAKTISKE test, saa en advarsel her opdager en
+        // nede-Tailscale PROAKTIVT, i stedet for at det foerst opdages ved et mislykket
+        // SSH-forsoeg (som lige er sket for Horsens).
+        (e.tailscale_ok === false ?
+          '<div style="color:#b92a15; font-size:11px; font-weight:600; margin-top:2px;">⚠️ Tailscale nede' +
+          (e.tailscale_ok_sidst_at ? ' (sidst OK ' + tidSiden(e.tailscale_ok_sidst_at) + ')' : '') +
+          ' — check-in-loopet forsøger selv at genstarte den hvert minut</div>' : '');
       row.appendChild(info);
       info.querySelector('.enhedIdKopier').addEventListener('click', (ev) => {
         navigator.clipboard.writeText(ev.target.dataset.id);
@@ -1302,7 +1479,7 @@
       .then(({ error }) => { if (error) console.warn('[aktivitetslog] kunne ikke logge:', error.message); });
   }
 
-  const HANDLING_LABELS = { login: 'Login', gem_indhold: 'Gemte indhold', gem_skabelon: 'Gemte fælles skabelon', js_fejl: 'JS-fejl' };
+  const HANDLING_LABELS = { login: 'Login', gem_indhold: 'Gemte indhold', gem_skabelon: 'Gemte fælles skabelon', js_fejl: 'JS-fejl', status: 'Status' };
 
   async function loadAktivitetslog() {
     const butikFilter = document.getElementById('aktivitetslogButikFilter').value;
@@ -1328,10 +1505,10 @@
       const brugerEmail = row.bruger_email || '(ukendt bruger)';
       const label = HANDLING_LABELS[row.handling] || row.handling;
       const erFejl = row.handling === 'js_fejl';
-      return '<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:' + (erFejl ? '#fdecea' : '#f7f7fb') + '; border-radius:8px; padding:8px 12px; font-size:13px;">' +
+      return '<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px; background:' + (erFejl ? '#fdecea' : '#f7f7fb') + '; border-radius:8px; padding:8px 12px; font-size:13px;">' +
         '<div><b>' + escapeHtml(butikNavn) + '</b> — ' + escapeHtml(label) +
         ' <span style="color:#888;">(' + escapeHtml(brugerEmail) + ')</span>' +
-        (row.detaljer ? '<br><span style="color:' + (erFejl ? '#b92a15' : '#888') + '; font-size:12px;">' + escapeHtml(row.detaljer) + '</span>' : '') + '</div>' +
+        (row.detaljer ? '<br><span style="color:' + (erFejl ? '#b92a15' : '#888') + '; font-size:12px; white-space:pre-wrap; font-family:monospace; display:block; max-height:160px; overflow-y:auto; margin-top:4px;">' + escapeHtml(row.detaljer) + '</span>' : '') + '</div>' +
         '<div style="color:#aaa; font-size:11px; white-space:nowrap;">' + tidSiden(row.oprettet_at) + '</div>' +
         '</div>';
     }).join('');
@@ -1352,6 +1529,97 @@
   });
   document.getElementById('aktivitetslogButikFilter').addEventListener('change', loadAktivitetslog);
   document.getElementById('aktivitetslogHandlingFilter').addEventListener('change', loadAktivitetslog);
+
+  // ---------- Feedback-visning (kun superadmin) ----------
+
+  const FEEDBACK_TYPE_LABELS = { fejl: '🐞 Fejl', aendring: '💡 Ønske om ændring' };
+
+  async function loadFeedbackAdmin() {
+    const butikFilter = document.getElementById('feedbackAdminButikFilter').value;
+    const typeFilter = document.getElementById('feedbackAdminTypeFilter').value;
+    const { data, error } = await client.rpc('hent_feedback', {
+      p_butik_id: butikFilter || null,
+      p_type: typeFilter || null,
+    });
+    const liste = document.getElementById('feedbackAdminListe');
+    if (error) {
+      liste.innerHTML = '<div style="color:#c0392b; font-size:13px;">Kunne ikke hente feedback: ' + escapeHtml(error.message) + '</div>';
+      return;
+    }
+    if (!data || !data.length) {
+      liste.innerHTML = '<div style="color:#888; font-size:13px;">Ingen feedback endnu.</div>';
+      return;
+    }
+    liste.innerHTML = data.map(row => {
+      const label = FEEDBACK_TYPE_LABELS[row.type] || row.type;
+      return '<div style="background:#f7f7fb; border-radius:8px; padding:12px 14px; font-size:13px;">' +
+        '<div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">' +
+        '<div><b>' + label + ' — ' + escapeHtml(row.titel) + '</b></div>' +
+        '<div style="color:#aaa; font-size:11px; white-space:nowrap;">' + tidSiden(row.oprettet_at) + '</div>' +
+        '</div>' +
+        '<div style="color:#888; font-size:12px; margin-top:4px;">' + escapeHtml(row.butik_navn || '(ukendt butik)') + ' · ' + escapeHtml(row.bruger_email || '(ukendt bruger)') + '</div>' +
+        (row.beskrivelse ? '<div style="margin-top:8px; white-space:pre-wrap;">' + escapeHtml(row.beskrivelse) + '</div>' : '') +
+        (row.hvor ? '<div style="margin-top:6px; font-size:12px; color:#666;"><b>Hvor:</b> ' + escapeHtml(row.hvor) + '</div>' : '') +
+        '</div>';
+    }).join('');
+  }
+
+  document.getElementById('feedbackAdminBtn').addEventListener('click', async () => {
+    document.getElementById('superadminMenu').style.display = 'none';
+    const filter = document.getElementById('feedbackAdminButikFilter');
+    if (filter.options.length <= 1) {
+      filter.innerHTML = '<option value="">Alle butikker</option>' +
+        alleButikkerListe.map(b => '<option value="' + b.id + '">' + escapeHtml(b.navn) + '</option>').join('');
+    }
+    document.getElementById('feedbackAdminOverlay').style.display = 'flex';
+    await loadFeedbackAdmin();
+  });
+  document.getElementById('feedbackAdminCloseBtn').addEventListener('click', () => {
+    document.getElementById('feedbackAdminOverlay').style.display = 'none';
+  });
+  document.getElementById('feedbackAdminButikFilter').addEventListener('change', loadFeedbackAdmin);
+  document.getElementById('feedbackAdminTypeFilter').addEventListener('change', loadFeedbackAdmin);
+
+  // ---------- Guide (vist automatisk foerste gang, ellers via "?"-knappen) ----------
+
+  const GUIDE_TRIN = [
+    { ikon: '👋', titel: 'Velkommen til jeres skærm-styring', body: 'Her redigerer du indholdet på jeres butiksskærm. Guiden her tager under et minut — du kan altid åbne den igen senere via "?"-knappen øverst.' },
+    { ikon: '➕', titel: 'Tilføj indhold', body: 'Klik en af knapperne under "Tilføj element" i venstre side for at tilføje tekst, billeder, videoer, eller en rotator der selv skifter mellem flere ting.' },
+    { ikon: '✋', titel: 'Flyt og tilpas', body: 'Træk i et element for at flytte det, og i håndtaget nederst til højre for at ændre størrelsen. Klik på elementet for at se dets indstillinger til venstre under "Egenskaber".' },
+    { ikon: '💾', titel: 'Gem, og se det med det samme', body: '"Live nu på skærmen" øverst til venstre viser altid præcis hvad der kører på jeres rigtige skærm — og husk "Gem ændringer" øverst til højre, når du er tilfreds.' },
+    { ikon: '💬', titel: 'Noget der driller?', body: 'Brug "Feedback"-knappen nederst til højre til at sende os en fejl eller et ønske til en ændring — det lander direkte hos os. God fornøjelse!' },
+  ];
+  let guideTrinIdx = 0;
+
+  function renderGuideTrin() {
+    const trin = GUIDE_TRIN[guideTrinIdx];
+    document.getElementById('guideIkon').textContent = trin.ikon;
+    document.getElementById('guideTitel').textContent = trin.titel;
+    document.getElementById('guideBody').textContent = trin.body;
+    document.getElementById('guideDots').innerHTML = GUIDE_TRIN.map((_, i) =>
+      '<span style="width:7px; height:7px; border-radius:50%; background:' + (i === guideTrinIdx ? '#040DB1' : '#ddd') + ';"></span>'
+    ).join('');
+    const erSidsteTrin = guideTrinIdx === GUIDE_TRIN.length - 1;
+    document.getElementById('guideNextBtn').textContent = erSidsteTrin ? 'Forstået!' : 'Næste';
+    document.getElementById('guideSkipBtn').style.visibility = erSidsteTrin ? 'hidden' : 'visible';
+  }
+
+  function aabnGuide() {
+    guideTrinIdx = 0;
+    renderGuideTrin();
+    document.getElementById('guideOverlay').style.display = 'flex';
+  }
+  function lukGuide() {
+    localStorage.setItem('blho_guide_set', '1');
+    document.getElementById('guideOverlay').style.display = 'none';
+  }
+  document.getElementById('guideOpenBtn').addEventListener('click', aabnGuide);
+  document.getElementById('guideSkipBtn').addEventListener('click', lukGuide);
+  document.getElementById('guideNextBtn').addEventListener('click', () => {
+    if (guideTrinIdx === GUIDE_TRIN.length - 1) { lukGuide(); return; }
+    guideTrinIdx++;
+    renderGuideTrin();
+  });
 
   async function saveMasterTemplate() {
     const btn = document.getElementById('saveBtn');
