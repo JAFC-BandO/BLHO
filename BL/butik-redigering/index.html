@@ -8,8 +8,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-9">
-<script src="../render-shared.js?v=2026-07-19-9"></script>
+<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-10">
+<script src="../render-shared.js?v=2026-07-19-10"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -326,6 +326,7 @@
           <option value="login">Login</option>
           <option value="gem_indhold">Gemt indhold</option>
           <option value="gem_skabelon">Gemt fælles skabelon</option>
+          <option value="js_fejl">JS-fejl</option>
         </select>
       </div>
 
@@ -358,6 +359,20 @@
 
       <div id="propsPanel" style="display:none; margin-bottom:20px; padding:12px; background:#f7f7fb; border-radius:8px;">
         <h2 style="margin-top:0;">Egenskaber</h2>
+        <div id="propsSizeRow" style="margin-bottom:12px;">
+          <label style="margin-top:0;">Størrelse (%)</label>
+          <div style="display:flex; align-items:flex-end; gap:8px;">
+            <div>
+              <div style="font-size:10px; color:#888; margin-bottom:2px;">Bredde</div>
+              <input type="number" id="propWidth" min="1" max="100" step="0.5" style="width:70px;">
+            </div>
+            <div>
+              <div style="font-size:10px; color:#888; margin-bottom:2px;">Højde</div>
+              <input type="number" id="propHeight" min="1" max="100" step="0.5" style="width:70px;">
+            </div>
+          </div>
+          <div style="font-size:11px; color:#888; margin-top:4px;">Skriv et tal for at gøre elementet større/mindre, uden at skulle trække i det.</div>
+        </div>
         <div id="propsFontSizeRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Skriftstørrelse (vw)</label>
           <input type="number" id="propFontSize" min="0.5" max="20" step="0.1" style="width:80px;">
@@ -457,13 +472,37 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master44';
+  const SCRIPT_VERSION = '2026-07-19-master46';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
   const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
     auth: { storageKey: 'sb-butik-redigering-auth' }
+  });
+
+  // ---------- Fejl-fangst (til Aktivitetslog) ----------
+  // Ubehandlede JS-fejl logges samme vej som login/gem-haendelser (logAdminHandling, defineret
+  // laengere nede -- function-deklarationer er hoisted, saa den kan bruges her), saa superadmin
+  // kan se om en butik har ramt en fejl uden selv at skulle beskrive den praecist. Fire-and-
+  // forget, og med et loft + dedup per session, saa en fejl der gentager sig i et loop (fx i
+  // en setInterval) ikke oversvoemmer loggen med hundredvis af identiske raekker.
+  const loggedeJsFejl = new Set();
+  let jsFejlLogAntal = 0;
+  const MAX_JS_FEJL_LOG_PR_SESSION = 20;
+  function logJsFejl(besked) {
+    besked = (besked || 'Ukendt fejl').slice(0, 500);
+    if (jsFejlLogAntal >= MAX_JS_FEJL_LOG_PR_SESSION || loggedeJsFejl.has(besked)) return;
+    loggedeJsFejl.add(besked);
+    jsFejlLogAntal++;
+    logAdminHandling('js_fejl', besked);
+  }
+  window.addEventListener('error', (e) => {
+    logJsFejl((e.message || 'Ukendt fejl') + ' @ ' + (e.filename || '?') + ':' + (e.lineno || '?'));
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    const grund = e.reason && e.reason.message ? e.reason.message : String(e.reason);
+    logJsFejl('Unhandled promise: ' + grund);
   });
 
   let currentButikId = null;
@@ -475,6 +514,11 @@
   let liveAktivSideId = null;
   let liveViewIntervals = [];
   let liveViewPollHandle = null;
+  // Samme "kun gentegn hvis noget reelt aendrede sig"-noegle som skaerm.htmls sidstOpdateret
+  // -- ellers gentegnede Live View (og dermed nulstillede rotator-tid/video/nyhedsbanner-
+  // scroll fra bunden) hvert 10. sekund UANSET om noget reelt var nyt, hvilket saa ud som et
+  // konstant "blink" ogsaa naar den rigtige skaerm slet ikke havde aendret sig.
+  let liveViewSidstOpdateret = null;
   let mediaLibrary = [];
   let sabloner = [];
   let erSuperadmin = false;
@@ -1253,19 +1297,18 @@
       .then(({ error }) => { if (error) console.warn('[aktivitetslog] kunne ikke logge:', error.message); });
   }
 
-  const HANDLING_LABELS = { login: 'Login', gem_indhold: 'Gemte indhold', gem_skabelon: 'Gemte fælles skabelon' };
+  const HANDLING_LABELS = { login: 'Login', gem_indhold: 'Gemte indhold', gem_skabelon: 'Gemte fælles skabelon', js_fejl: 'JS-fejl' };
 
   async function loadAktivitetslog() {
     const butikFilter = document.getElementById('aktivitetslogButikFilter').value;
     const handlingFilter = document.getElementById('aktivitetslogHandlingFilter').value;
-    let query = client
-      .from('admin_log')
-      .select('id, handling, detaljer, oprettet_at, butikker(navn)')
-      .order('oprettet_at', { ascending: false })
-      .limit(200);
-    if (butikFilter) query = query.eq('butik_id', butikFilter);
-    if (handlingFilter) query = query.eq('handling', handlingFilter);
-    const { data, error } = await query;
+    // hent_aktivitetslog() er en SECURITY DEFINER-funktion (se migration_admin_log_v2.sql) --
+    // den slaar bruger_id op mod auth.users server-side (det maa en almindelig klient ALDRIG
+    // selv laese direkte) og returnerer email'en med, saa loggen ogsaa viser HVEM.
+    const { data, error } = await client.rpc('hent_aktivitetslog', {
+      p_butik_id: butikFilter || null,
+      p_handling: handlingFilter || null,
+    });
     const liste = document.getElementById('aktivitetslogListe');
     if (error) {
       liste.innerHTML = '<div style="color:#c0392b; font-size:13px;">Kunne ikke hente aktivitetslog: ' + escapeHtml(error.message) + '</div>';
@@ -1276,11 +1319,14 @@
       return;
     }
     liste.innerHTML = data.map(row => {
-      const butikNavn = row.butikker ? row.butikker.navn : '(ukendt butik)';
+      const butikNavn = row.butik_navn || '(ukendt butik)';
+      const brugerEmail = row.bruger_email || '(ukendt bruger)';
       const label = HANDLING_LABELS[row.handling] || row.handling;
-      return '<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:#f7f7fb; border-radius:8px; padding:8px 12px; font-size:13px;">' +
+      const erFejl = row.handling === 'js_fejl';
+      return '<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:' + (erFejl ? '#fdecea' : '#f7f7fb') + '; border-radius:8px; padding:8px 12px; font-size:13px;">' +
         '<div><b>' + escapeHtml(butikNavn) + '</b> — ' + escapeHtml(label) +
-        (row.detaljer ? ' <span style="color:#888;">(' + escapeHtml(row.detaljer) + ')</span>' : '') + '</div>' +
+        ' <span style="color:#888;">(' + escapeHtml(brugerEmail) + ')</span>' +
+        (row.detaljer ? '<br><span style="color:' + (erFejl ? '#b92a15' : '#888') + '; font-size:12px;">' + escapeHtml(row.detaljer) + '</span>' : '') + '</div>' +
         '<div style="color:#aaa; font-size:11px; white-space:nowrap;">' + tidSiden(row.oprettet_at) + '</div>' +
         '</div>';
     }).join('');
@@ -1492,7 +1538,7 @@
       .maybeSingle();
     if (error) { masterTemplate = null; return; }
     masterTemplate = data
-      ? { id: data.id, elements: (data.data && data.data.elements) || [], background: (data.data && data.data.background) || '#0a0a0a' }
+      ? { id: data.id, elements: (data.data && data.data.elements) || [], background: (data.data && data.data.background) || '#0a0a0a', opdateret_at: data.opdateret_at }
       : null;
   }
 
@@ -1971,16 +2017,18 @@
   // sync -- ser Live View rigtigt ud, goer skaerm.html det ogsaa, og omvendt.
 
   async function loadLiveView() {
-    liveViewIntervals.forEach(id => clearInterval(id));
-    liveViewIntervals = [];
-
     const box = document.getElementById('liveViewBox');
     const badge = document.getElementById('liveViewBadge');
-    box.innerHTML = '';
 
     if (masterEditMode) {
       // Ingen "rigtig" skaerm at spejle her -- vis en live-forhaandsvisning af skabelonen
-      // som den ser ud lige nu i canvas'et, inklusive elementer der endnu ikke er gemt.
+      // som den ser ud lige nu i canvas'et, inklusive elementer der endnu ikke er gemt. Skal
+      // altid gentegne (det ER selve pointen mens man redigerer), saa "uaendret"-noeglen
+      // ryddes her for at undgaa at genkende en tilfaeldig sammenfaldende vaerdi senere.
+      liveViewSidstOpdateret = null;
+      liveViewIntervals.forEach(id => clearInterval(id));
+      liveViewIntervals = [];
+      box.innerHTML = '';
       box.style.background = baggrundsfarve || '#0a0a0a';
       elements.forEach(el => box.appendChild(buildElNode(el, id => liveViewIntervals.push(id))));
       badge.textContent = 'Forhåndsvisning af fælles skabelon';
@@ -1998,11 +2046,29 @@
       .maybeSingle();
 
     if (!data || !data.layout || !Array.isArray(data.layout.elements) || !data.layout.elements.length) {
+      liveViewSidstOpdateret = null;
+      liveViewIntervals.forEach(id => clearInterval(id));
+      liveViewIntervals = [];
+      box.innerHTML = '';
       badge.textContent = 'Intet gemt endnu';
       liveAktivSideId = null;
       renderSiderTabs();
       return;
     }
+
+    // Samme "kun gentegn hvis noget reelt aendrede sig"-tjek som skaerm.html laver (se
+    // combinedKey i hentContent()) -- ELLERS gentegnede Live View sig selv HELT FRA BUNDEN
+    // hvert 10. sekund (den faste poll-cadence herunder), uanset om der reelt var noget nyt.
+    // Det nulstillede rotator-cyklussens timer, genstartede enhver video fra 0, og fik
+    // nyhedsbannerets scroll til at hoppe tilbage til start -- saa Live View "blinkede"
+    // konstant, ogsaa naar den rigtige skaerm slet ikke havde aendret sig.
+    const combinedKey = data.opdateret_at + '|' + (masterTemplate ? masterTemplate.opdateret_at : '');
+    if (combinedKey === liveViewSidstOpdateret) return;
+    liveViewSidstOpdateret = combinedKey;
+
+    liveViewIntervals.forEach(id => clearInterval(id));
+    liveViewIntervals = [];
+    box.innerHTML = '';
 
     // layout.elements/background er altid et spejl af den AKTIVE side (samme felter
     // skaerm.html laeser) -- saa Live View viser garanteret praecis det samme som skaermen.
@@ -2702,6 +2768,13 @@
       return;
     }
     panel.style.display = 'block';
+    // Størrelse ved at skrive et tal i stedet for at trække i haandtaget -- samme gating som
+    // selve resize-haandtaget (buildElementNode's posLaast): en "fast plads" er 100% fast for
+    // ALLE, saa her er der intet at skrive et tal ind i.
+    const posLaast = !!el.posLocked || !!el.slotId;
+    document.getElementById('propsSizeRow').style.display = posLaast ? 'none' : 'block';
+    document.getElementById('propWidth').value = Math.round(el.w * 10) / 10;
+    document.getElementById('propHeight').value = Math.round(el.h * 10) / 10;
     const isText = el.type === 'titel' || el.type === 'tekst';
     const isNyhedsbanner = el.type === 'nyhedsbanner';
     document.getElementById('propsFontSizeRow').style.display = (isText || isNyhedsbanner) ? 'block' : 'none';
@@ -2756,6 +2829,18 @@
     });
   }
 
+  document.getElementById('propWidth').addEventListener('input', (e) => {
+    const el = elements.find(x => x.id === selectedElementId);
+    if (!el) return;
+    const val = parseFloat(e.target.value);
+    if (!isNaN(val) && val > 0) { el.w = val; renderCanvas(); }
+  });
+  document.getElementById('propHeight').addEventListener('input', (e) => {
+    const el = elements.find(x => x.id === selectedElementId);
+    if (!el) return;
+    const val = parseFloat(e.target.value);
+    if (!isNaN(val) && val > 0) { el.h = val; renderCanvas(); }
+  });
   document.getElementById('propFontSize').addEventListener('input', (e) => {
     const el = elements.find(x => x.id === selectedElementId);
     if (!el) return;

@@ -29,8 +29,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="render-shared.css?v=2026-07-19-9">
-<script src="render-shared.js?v=2026-07-19-9"></script>
+<link rel="stylesheet" href="render-shared.css?v=2026-07-19-10">
+<script src="render-shared.js?v=2026-07-19-10"></script>
 <style>
   * { box-sizing: border-box; }
   html, body {
@@ -75,12 +75,40 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master15';
+  const SCRIPT_VERSION = '2026-07-19-master16';
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
   const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
     auth: { storageKey: 'sb-skaerm-auth' }
+  });
+
+  // ---------- Fejl-fangst (til Aktivitetslog) ----------
+  // Samme mekanisme som butik-redigering.html: ubehandlede JS-fejl paa selve skaermen logges
+  // via log_admin_handling (fire-and-forget, kraever kun at enheden er logget ind -- ikke
+  // superadmin), saa vi kan se og fejlfinde et problem paa en butiks fysiske skaerm uden de
+  // selv skal beskrive det. Loft + dedup per session forhindrer at en fejl der gentager sig i
+  // et loop oversvoemmer loggen.
+  const loggedeJsFejl = new Set();
+  let jsFejlLogAntal = 0;
+  const MAX_JS_FEJL_LOG_PR_SESSION = 20;
+  function logAdminHandling(handling, detaljer) {
+    client.rpc('log_admin_handling', { p_handling: handling, p_detaljer: detaljer || null })
+      .then(({ error }) => { if (error) debugLog('[aktivitetslog] kunne ikke logge: ' + error.message); });
+  }
+  function logJsFejl(besked) {
+    besked = (besked || 'Ukendt fejl').slice(0, 500);
+    if (jsFejlLogAntal >= MAX_JS_FEJL_LOG_PR_SESSION || loggedeJsFejl.has(besked)) return;
+    loggedeJsFejl.add(besked);
+    jsFejlLogAntal++;
+    logAdminHandling('js_fejl', besked);
+  }
+  window.addEventListener('error', (e) => {
+    logJsFejl((e.message || 'Ukendt fejl') + ' @ ' + (e.filename || '?') + ':' + (e.lineno || '?'));
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    const grund = e.reason && e.reason.message ? e.reason.message : String(e.reason);
+    logJsFejl('Unhandled promise: ' + grund);
   });
 
   // 30s i stedet for tidligere 10s: en aendring skal jo bare vises inden for et minuts tid,
@@ -239,6 +267,7 @@
       debugLog('Tegning faerdig.');
     } catch (renderErr) {
       debugLog('CRASH under tegning: ' + renderErr.message);
+      logJsFejl('Tegne-crash: ' + renderErr.message);
     }
   }
 
@@ -288,7 +317,12 @@
         langsommeFramesITraek++;
         if (langsommeFramesITraek >= 3) {
           debugLog('Frame-vagthund: browseren hakker (frame-delta ' + Math.round(delta) + 'ms, ' + langsommeFramesITraek + ' gange i traek) -- genindlaeser for en frisk session.');
-          hardReload();
+          logJsFejl('Frame-vagthund: browseren hakkede (frame-delta ' + Math.round(delta) + 'ms) -- genindlæste.');
+          // Kort forsinkelse foer selve genindlaesningen: logJsFejl's netvaerkskald er fire-
+          // and-forget og naar ellers ikke at naa frem, fordi navigationen (location.href
+          // herunder) kan afbryde et igangvaerende kald -- og det er netop DENNE logliniens
+          // hele formaal at overleve, saa vi rent faktisk kan se fejlen bagefter.
+          setTimeout(hardReload, 400);
           return;
         }
       } else {
@@ -304,7 +338,8 @@
     setInterval(() => {
       if (performance.now() - sidsteFrameTid > 5000) {
         debugLog('Frame-vagthund: intet frame modtaget i over 5 sekunder -- genindlaeser.');
-        hardReload();
+        logJsFejl('Frame-vagthund: intet frame i over 5 sekunder -- genindlæste.');
+        setTimeout(hardReload, 400);
       }
     }, 5000);
   }

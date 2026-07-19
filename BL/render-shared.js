@@ -518,6 +518,26 @@ function buildElNode(el, registerInterval) {
     node.appendChild(buildMediaNode({ type: 'video', url: el.url, kind: el.kind }));
   } else if (el.type === 'rotator' && Array.isArray(el.slides) && el.slides.length) {
     let idx = 0;
+    // Forudindlaeser NAESTE slides billede/video i baggrunden MENS den aktuelle slide
+    // stadig vises -- ellers starter en frisk henting FOERST i det oejeblik DOM'en er ryddet
+    // for at vise den, hvilket saas som et kort blink/sort flade indtil den er hentet og
+    // dekodet. "side"-slides (undersider med egne elementer) og YouTube-iframes kan ikke
+    // forudindlaeses meningsfuldt paa denne maade og springes derfor over -- de opfoerer sig
+    // som foer, kun de almindelige billede/video-slides bliver hurtigere.
+    const preloadedeUrls = new Set();
+    function preloadSlide(slide) {
+      if (!slide || !slide.url || preloadedeUrls.has(slide.url)) return;
+      if (slide.type === 'billede') {
+        preloadedeUrls.add(slide.url);
+        new Image().src = slide.url;
+      } else if (slide.type === 'video' && slide.kind !== 'youtube') {
+        preloadedeUrls.add(slide.url);
+        const forvarmer = document.createElement('video');
+        forvarmer.muted = true;
+        forvarmer.preload = 'auto';
+        forvarmer.src = slide.url;
+      }
+    }
     const showSlide = () => {
       node.innerHTML = '';
       const slide = el.slides[idx];
@@ -535,8 +555,10 @@ function buildElNode(el, registerInterval) {
       } else {
         node.appendChild(buildMediaNode(slide));
       }
+      preloadSlide(el.slides[(idx + 1) % el.slides.length]);
       idx = (idx + 1) % el.slides.length;
     };
+    preloadSlide(el.slides[(idx + 1) % el.slides.length]);
     showSlide();
     if (el.slides.length > 1) {
       registerInterval(setInterval(showSlide, el.intervalMs || 30000));

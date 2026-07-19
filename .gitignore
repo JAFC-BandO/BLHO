@@ -8,6 +8,7 @@ supabase/migration_superadmin_full_access.sql
 supabase/migration_admin_log.sql
 supabase/migration_slots_setup.sql
 supabase/migration_slots_fix2.sql
+supabase/migration_admin_log_v2.sql
 media/
 SUPABASE.md
 ANDROID-KIOSK-SETUP.md
