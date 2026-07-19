@@ -201,16 +201,19 @@ async function hentVejrKoordinater(by) {
 
 async function fetchVejrData(by) {
   const koord = await hentVejrKoordinater(by);
+  // forecast_days=4: i dag (bruges til "nu"-visningen) plus de 3 kommende dage til
+  // fremtidsudsigten -- samme kald giver baade "nu" og udsigten, saa der ikke skal to
+  // separate netvaerkskald til for hver genindlaesning.
   const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + koord.lat + '&longitude=' + koord.lon +
-    '&current_weather=true&timezone=auto';
+    '&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=4';
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
   try {
     const res = await fetch(url, { signal: controller.signal });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    if (!data.current_weather) throw new Error('Intet current_weather i svaret');
-    return data.current_weather;
+    if (!data.current_weather || !data.daily) throw new Error('Ufuldstaendigt vejrdata i svaret');
+    return { nu: data.current_weather, dage: data.daily };
   } finally {
     clearTimeout(timeoutId);
   }
@@ -276,52 +279,87 @@ function vejrIkonHtml(kode) {
   return '<svg width="100%" height="100%" viewBox="0 0 36 30" preserveAspectRatio="xMidYMid meet">' + indhold + '</svg>';
 }
 
+function vejrHrNode() {
+  const hr = document.createElement('hr');
+  hr.className = 'vejr-hr';
+  return hr;
+}
+
+// Datoen fra Open-Meteo er en ren "YYYY-MM-DD"-dato-streng uden klokkeslaet -- tolket som
+// UTC-midnat ville et system i en tidszone BAG UTC kunne rulle en dag tilbage. Middag som
+// tidspunkt er en billig sikkerhedsmargen mod den slags tidszone-kant-tilfaelde, uanset
+// hvilken tidszone enheden selv er indstillet til.
+function vejrDagNavn(datoStreng) {
+  const navn = new Date(datoStreng + 'T12:00:00').toLocaleDateString('da-DK', { weekday: 'long' });
+  return navn.charAt(0).toUpperCase() + navn.slice(1);
+}
+
 function buildVejrNode(registerInterval) {
   const wrap = document.createElement('div');
   wrap.className = 'vejr-wrap';
 
-  const ikon = document.createElement('div');
-  ikon.className = 'vejr-ikon';
+  const heading = document.createElement('div');
+  heading.className = 'vejr-heading';
+  wrap.appendChild(heading);
+  wrap.appendChild(vejrHrNode());
+
+  const nuRow = document.createElement('div');
+  nuRow.className = 'vejr-nu-row';
+  const nuIkon = document.createElement('div');
+  nuIkon.className = 'vejr-nu-ikon';
+  const nuInfo = document.createElement('div');
+  nuInfo.className = 'vejr-nu-info';
   const temp = document.createElement('div');
   temp.className = 'vejr-temp';
-  const by = document.createElement('div');
-  by.className = 'vejr-by';
-  wrap.appendChild(ikon);
-  wrap.appendChild(temp);
-  wrap.appendChild(by);
+  const beskrivelse = document.createElement('div');
+  beskrivelse.className = 'vejr-beskrivelse';
+  nuInfo.appendChild(temp);
+  nuInfo.appendChild(beskrivelse);
+  nuRow.appendChild(nuIkon);
+  nuRow.appendChild(nuInfo);
+  wrap.appendChild(nuRow);
+  wrap.appendChild(vejrHrNode());
 
-  // Samme selv-maalende tilgang som buildUrNode: regnes ud fra elementets EGEN rect (begge
-  // akser), saa det passer paa alle skaermstoerrelser uden at blive for lille/stort.
-  const resize = () => {
-    const rect = wrap.getBoundingClientRect();
-    if (rect.width && rect.height) {
-      ikon.style.width = ikon.style.height = Math.min(rect.height * 0.38, rect.width * 0.5) + 'px';
-      temp.style.fontSize = Math.min(rect.height * 0.26, rect.width / 4) + 'px';
-      by.style.fontSize = Math.min(rect.height * 0.12, rect.width / 11) + 'px';
-    }
-  };
+  const forecastWrap = document.createElement('div');
+  forecastWrap.className = 'vejr-forecast-wrap';
+  wrap.appendChild(forecastWrap);
 
   let harIndlaestFoerste = false;
   const load = () => {
     const navn = hentAktuelButikNavn();
     if (!navn) return;
+    heading.textContent = 'Vejret i dag (' + navn + ')';
     fetchVejrData(navn).then(data => {
-      ikon.innerHTML = vejrIkonHtml(data.weathercode);
-      ikon.title = vejrBeskrivelse(data.weathercode);
-      temp.textContent = Math.round(data.temperature) + '°';
-      by.textContent = navn;
+      nuIkon.innerHTML = vejrIkonHtml(data.nu.weathercode);
+      temp.textContent = Math.round(data.nu.temperature) + '°';
+      beskrivelse.textContent = vejrBeskrivelse(data.nu.weathercode);
+
+      // Index 0 i daily-arrayet er "i dag" (allerede vist som "nu" ovenfor) -- udsigten
+      // herunder er derfor de 3 EFTERFOELGENDE dage.
+      forecastWrap.innerHTML = '';
+      data.dage.time.slice(1, 4).forEach((datoStreng, i) => {
+        const idx = i + 1;
+        const row = document.createElement('div');
+        row.className = 'vejr-forecast-row';
+        row.innerHTML =
+          '<span class="vejr-forecast-dag">' + vejrDagNavn(datoStreng) + '</span>' +
+          '<span class="vejr-forecast-ikon">' + vejrIkonHtml(data.dage.weathercode[idx]) + '</span>' +
+          '<span class="vejr-forecast-temp">' + Math.round(data.dage.temperature_2m_max[idx]) + '°</span>';
+        forecastWrap.appendChild(row);
+        if (i < data.dage.time.length - 2) forecastWrap.appendChild(vejrHrNode());
+      });
       harIndlaestFoerste = true;
-      resize();
     }).catch(() => {
       // Behold sidste kendte gode vejr ved en forbigaaende fejl (samme princip som
       // nyhedsbanneret) -- vis kun en tom tilstand hvis vi ALDRIG har hentet noget endnu.
       if (!harIndlaestFoerste) {
-        by.textContent = navn;
+        nuIkon.innerHTML = '';
+        temp.textContent = '';
+        beskrivelse.textContent = 'Vejrdata utilgængelig lige nu';
       }
     });
   };
   load();
-  requestAnimationFrame(resize);
   // Vejret aendrer sig ikke fra minut til minut som et fejlfindings-svar -- hvert 15. minut
   // er hyppigt nok til en "lige nu"-visning uden at overbelaste det gratis, noegle-frie API
   // fra mange enheder samtidig.

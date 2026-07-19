@@ -8,8 +8,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-2">
-<script src="../render-shared.js?v=2026-07-19-2"></script>
+<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-3">
+<script src="../render-shared.js?v=2026-07-19-3"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -397,7 +397,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master32';
+  const SCRIPT_VERSION = '2026-07-19-master33';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -842,7 +842,8 @@
   // Signal-styrke som ikon (4 stigende bjaelker, ligesom paa en telefon) i stedet for en
   // raa dBm-taltekst -- lettere at aflaese paa afstand. Det praecise dBm-tal og det danske
   // label staar stadig i title-attributten (hover).
-  function wifiIkonHtml(dBm) {
+  function wifiIkonHtml(dBm, str) {
+    str = str || 17;
     const niveau = dBm >= -50 ? 4 : dBm >= -60 ? 3 : dBm >= -70 ? 2 : 1;
     const farve = dBm >= -60 ? '#1a9b4b' : dBm >= -70 ? '#c98a1b' : '#c0392b';
     const bjaelkeHoejder = [4, 7, 10, 13];
@@ -850,7 +851,8 @@
       '<rect x="' + (i * 4.2) + '" y="' + (13 - h) + '" width="3" height="' + h + '" rx="0.7" fill="' +
       (i < niveau ? farve : '#ddd') + '"/>'
     ).join('');
-    return '<svg width="17" height="13" viewBox="0 0 17 13" style="vertical-align:middle;"><title>' +
+    // viewBox holder de samme indre koordinater uanset str -- kun den viste stoerrelse skalerer.
+    return '<svg width="' + str + '" height="' + (str * 13 / 17).toFixed(1) + '" viewBox="0 0 17 13" style="vertical-align:middle;"><title>' +
       dBm + ' dBm (' + wifiStyrkeLabel(dBm) + ')</title>' + bjaelker + '</svg>';
   }
 
@@ -913,9 +915,7 @@
         (e.tailscale_ip ?
           '<div style="color:#aaa; font-size:10px; margin-top:2px;">Tailscale-IP (SSH herfra uanset netvaerk): ' +
           '<code class="enhedTailscaleKopier" data-ip="' + escapeHtml(e.tailscale_ip) + '" style="cursor:pointer; background:#eee; padding:1px 5px; border-radius:3px;" title="Klik for at kopiere">' +
-          escapeHtml(e.tailscale_ip) + '</code></div>' : '') +
-        (typeof e.wifi_rssi === 'number' ?
-          '<div style="color:#aaa; font-size:10px; margin-top:2px; display:flex; align-items:center; gap:4px;">WiFi ' + wifiIkonHtml(e.wifi_rssi) + '</div>' : '');
+          escapeHtml(e.tailscale_ip) + '</code></div>' : '');
       row.appendChild(info);
       info.querySelector('.enhedIdKopier').addEventListener('click', (ev) => {
         navigator.clipboard.writeText(ev.target.dataset.id);
@@ -1045,6 +1045,16 @@
         info.appendChild(svarWrap);
       }
 
+      // WiFi-signalet staar for sig selv helt ude i den anden side af raekken (ikke inde i
+      // den i forvejen tætpakkede info-kolonne) -- saa hverken info-teksten eller ikonet
+      // bliver klemt sammen.
+      if (typeof e.wifi_rssi === 'number') {
+        const wifiBoks = document.createElement('div');
+        wifiBoks.style.cssText = 'display:flex; flex-direction:column; align-items:center; gap:2px; flex-shrink:0; padding:0 6px;';
+        wifiBoks.innerHTML = '<div style="font-size:9px; color:#aaa;">WiFi</div>' + wifiIkonHtml(e.wifi_rssi, 26);
+        row.appendChild(wifiBoks);
+      }
+
       const rebootBtn = document.createElement('button');
       rebootBtn.textContent = 'Genstart enhed';
       rebootBtn.style.cssText = 'padding:6px 10px; font-size:12px;';
@@ -1105,11 +1115,19 @@
     if (enhederPollHandle) { clearInterval(enhederPollHandle); enhederPollHandle = null; }
     // Ryd et evt. vist fejlfindings-svar naar man lukker panelet, saa et gammelt svar fra
     // sidste besoeg ikke dukker forvirrende op igen (som om det lige var sket) naeste gang
-    // panelet aabnes -- uden dette blev svaret staaende i databasen for evigt.
+    // panelet aabnes -- uden dette blev svaret staaende i databasen for evigt. custom_kommando
+    // og custom_kommando_sat_at ryddes OGSAA her -- ellers stod sat_at tilbage uden et
+    // tilhoerende svar, hvilket fik raekken til fejlagtigt at vise "Afventer svar" for evigt
+    // (i praksis paa alle enheder man nogensinde har sendt en kommando til).
     const harSvar = alleEnheder.filter(e => e.custom_kommando_svar != null);
     if (harSvar.length) {
       await Promise.all(harSvar.map(e =>
-        client.from('enheder').update({ custom_kommando_svar: null, custom_kommando_besvaret_at: null }).eq('id', e.id)
+        client.from('enheder').update({
+          custom_kommando: null,
+          custom_kommando_sat_at: null,
+          custom_kommando_svar: null,
+          custom_kommando_besvaret_at: null,
+        }).eq('id', e.id)
       ));
     }
   });
@@ -1840,7 +1858,10 @@
         streg: { x: 10, y: 50, w: 80, h: 1, boxColor: '#ffffff' },
         ur: { x: 10, y: 10, w: 25, h: 15 },
         nyhedsbanner: { x: 0, y: 92, w: 100, h: 8 },
-        vejr: { x: 10, y: 10, w: 22, h: 25 },
+        // Vejr-panelet viser overskrift + "nu" + 3 dages udsigt -- en for lav boks klipper
+        // udsigts-raekkerne vaek (overflow:hidden), saa standardstoerrelsen skal vaere hoej
+        // nok til at rumme det hele fra start (admin kan altid goere den mindre bagefter).
+        vejr: { x: 10, y: 10, w: 20, h: 55 },
       }[type];
       elements.push(Object.assign({ id: uid(), type }, defaults));
       renderCanvas();
