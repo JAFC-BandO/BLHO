@@ -32,8 +32,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="render-shared.css?v=2026-07-19-16">
-<script src="render-shared.js?v=2026-07-19-16"></script>
+<link rel="stylesheet" href="render-shared.css?v=2026-07-19-17">
+<script src="render-shared.js?v=2026-07-19-17"></script>
 <style>
   * { box-sizing: border-box; }
   html, body {
@@ -77,8 +77,23 @@
   <div class="fejl">Indlæser...</div>
 </div>
 
+<!-- Vist naar siden besoeges UDEN ?email=&password= i URL'en -- dvs. en admin der selv
+     aabner linket for at se sin egen butiks skaerm, i stedet for kiosk-enhedens automatiske
+     login (som IKKE skal aendres, den skal blive ved at virke uaendret). Ingen kredentialer
+     er bagt ind i selve linket her -- man logger ind med sin egen almindelige konto, og ser
+     saa netop sin egen butik (samme RLS-opslag som resten af systemet). -->
+<div id="loginOverlay" style="display:none; position:fixed; inset:0; background:#0a0a0a; align-items:center; justify-content:center; z-index:10;">
+  <div style="width:min(320px, 90vw); text-align:center;">
+    <div style="font-size:12px; color:#888; margin-bottom:18px; text-transform:uppercase; letter-spacing:.05em;">Se jeres skærm</div>
+    <input type="email" id="skaermLoginEmail" placeholder="Email" autocomplete="username" style="width:100%; padding:11px 12px; margin-bottom:10px; border-radius:8px; border:1px solid #333; background:#1a1a1a; color:white; font-size:14px; box-sizing:border-box;">
+    <input type="password" id="skaermLoginPassword" placeholder="Adgangskode" autocomplete="current-password" style="width:100%; padding:11px 12px; margin-bottom:14px; border-radius:8px; border:1px solid #333; background:#1a1a1a; color:white; font-size:14px; box-sizing:border-box;">
+    <button id="skaermLoginBtn" style="width:100%; padding:12px; border-radius:8px; border:none; background:#040DB1; color:white; font-weight:600; font-size:14px; cursor:pointer;">Log ind</button>
+    <div id="skaermLoginMsg" style="display:none; margin-top:12px; font-size:13px; color:#ff8080;"></div>
+  </div>
+</div>
+
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master19';
+  const SCRIPT_VERSION = '2026-07-19-master20';
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
@@ -297,16 +312,9 @@
     setTimeout(hardReload, RELOAD_MS);
   }
 
-  async function start() {
-    scheduleAutoReload();
-
-    if (!email || !password) {
-      visFejl('Mangler ?email= og &password= i URL\'en.');
-      return;
-    }
-    const loggedIn = await login();
-    if (!loggedIn) return;
-
+  // Fælles for begge login-veje (kiosk-enhedens URL-parametre OG en admins egen interaktive
+  // login herunder) -- alt der skal ske EFTER man er logget ind, uanset hvordan det skete.
+  async function fortsaetEfterLogin() {
     const ok = await findButik();
     if (!ok) return;
 
@@ -320,6 +328,58 @@
     logStatus();
     setInterval(logStatus, STATUS_LOG_MS);
   }
+
+  async function start() {
+    scheduleAutoReload();
+
+    if (email && password) {
+      // Kiosk-enhedens egen, uaendrede flow: login via URL-parametre bagt ind i genvejen.
+      const loggedIn = await login();
+      if (!loggedIn) return;
+      await fortsaetEfterLogin();
+      return;
+    }
+
+    // Ingen URL-parametre: en admin besoeger selv linket for at se sin egen skaerm. Genbrug
+    // en evt. allerede gemt session foerst (saa de ikke skal logge ind hver eneste gang de
+    // aabner linket), ellers vis login-formen.
+    const { data: { session } } = await client.auth.getSession();
+    if (session) {
+      debugLog('Genbruger eksisterende session.');
+      await fortsaetEfterLogin();
+    } else {
+      document.getElementById('loginOverlay').style.display = 'flex';
+    }
+  }
+
+  async function forsoegInteraktivLogin() {
+    const e = document.getElementById('skaermLoginEmail').value.trim();
+    const p = document.getElementById('skaermLoginPassword').value;
+    const msgEl = document.getElementById('skaermLoginMsg');
+    msgEl.style.display = 'none';
+    if (!e || !p) {
+      msgEl.textContent = 'Udfyld både email og adgangskode.';
+      msgEl.style.display = 'block';
+      return;
+    }
+    const btn = document.getElementById('skaermLoginBtn');
+    btn.disabled = true;
+    const { error } = await client.auth.signInWithPassword({ email: e, password: p });
+    btn.disabled = false;
+    if (error) {
+      msgEl.textContent = 'Forkert email eller adgangskode.';
+      msgEl.style.display = 'block';
+      return;
+    }
+    document.getElementById('loginOverlay').style.display = 'none';
+    await fortsaetEfterLogin();
+  }
+  document.getElementById('skaermLoginBtn').addEventListener('click', forsoegInteraktivLogin);
+  ['skaermLoginEmail', 'skaermLoginPassword'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') forsoegInteraktivLogin();
+    });
+  });
 
   // Frame-vagthund: i stedet for at gaette videre paa AARSAGEN til at skaermen "hakker"/kører
   // langsomt efter noget tids drift (hukommelsespres, Chrome/Android-throttling, termisk
