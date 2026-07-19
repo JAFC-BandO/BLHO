@@ -253,28 +253,31 @@ function vejrSkySvg(farve, cx, cy, skala) {
 }
 
 // Simple, letlaeselige ikoner (genkendelige paa afstand af en storskaerm) fremfor detaljerede
-// illustrationer -- bygget af faa grundformer i stedet for haandskrevne SVG-path'er.
+// illustrationer -- bygget af faa grundformer i stedet for haandskrevne SVG-path'er. Rent
+// hvide/monokrome (som et almindeligt ikon-font paa en nyhedsskaerm) -- ingen kulør (gul sol,
+// blaa regn osv.). Dybde/lagdeling laves udelukkende via forskellig OPACITET af hvid, aldrig
+// via andre farver.
 function vejrIkonHtml(kode) {
-  const graa = '#dfe3e9', moerkGraa = '#aeb6c2', gul = '#ffc233', blaa = '#5aa9e6', hvid = '#ffffff';
+  const hvid = '#ffffff';
   let indhold;
   if (kode === 0) {
-    indhold = vejrSolSvg(gul, 18, 14, 6.5);
+    indhold = vejrSolSvg(hvid, 18, 14, 6.5);
   } else if (kode === 1 || kode === 2) {
-    indhold = vejrSolSvg(gul, 12, 9, 4.5) + vejrSkySvg(graa, 20, 17, 1.05);
+    indhold = '<g opacity="0.75">' + vejrSolSvg(hvid, 12, 9, 4.5) + '</g>' + vejrSkySvg(hvid, 20, 17, 1.05);
   } else if (kode === 45 || kode === 48) {
     indhold = [0, 1, 2, 3].map(i =>
-      '<rect x="4" y="' + (8 + i * 5.5) + '" width="28" height="3" rx="1.5" fill="' + graa + '" opacity="' + (1 - i * 0.15).toFixed(2) + '"/>'
+      '<rect x="4" y="' + (8 + i * 5.5) + '" width="28" height="3" rx="1.5" fill="' + hvid + '" opacity="' + (1 - i * 0.2).toFixed(2) + '"/>'
     ).join('');
   } else if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(kode)) {
-    indhold = vejrSkySvg(moerkGraa, 18, 11, 1.15) +
-      [0, 1, 2].map(i => '<line x1="' + (10 + i * 8) + '" y1="21" x2="' + (7 + i * 8) + '" y2="27" stroke="' + blaa + '" stroke-width="2" stroke-linecap="round"/>').join('');
+    indhold = '<g opacity="0.6">' + vejrSkySvg(hvid, 18, 11, 1.15) + '</g>' +
+      [0, 1, 2].map(i => '<line x1="' + (10 + i * 8) + '" y1="21" x2="' + (7 + i * 8) + '" y2="27" stroke="' + hvid + '" stroke-width="2" stroke-linecap="round"/>').join('');
   } else if ([71, 73, 75, 77, 85, 86].includes(kode)) {
-    indhold = vejrSkySvg(moerkGraa, 18, 11, 1.15) +
+    indhold = '<g opacity="0.6">' + vejrSkySvg(hvid, 18, 11, 1.15) + '</g>' +
       [0, 1, 2].map(i => '<circle cx="' + (9 + i * 8) + '" cy="24" r="1.6" fill="' + hvid + '"/>').join('');
   } else if ([95, 96, 99].includes(kode)) {
-    indhold = vejrSkySvg(moerkGraa, 18, 10, 1.15) + '<polygon points="19,16 14,24 18,24 15,30" fill="' + gul + '"/>';
+    indhold = '<g opacity="0.6">' + vejrSkySvg(hvid, 18, 10, 1.15) + '</g>' + '<polygon points="19,16 14,24 18,24 15,30" fill="' + hvid + '"/>';
   } else {
-    indhold = vejrSkySvg(graa, 18, 14, 1.25);
+    indhold = vejrSkySvg(hvid, 18, 14, 1.25);
   }
   return '<svg width="100%" height="100%" viewBox="0 0 36 30" preserveAspectRatio="xMidYMid meet">' + indhold + '</svg>';
 }
@@ -412,7 +415,10 @@ function buildMediaNode(spec) {
   } else if (spec.type === 'billede') {
     media = document.createElement('img');
     media.src = spec.url;
-    media.style.objectFit = 'contain';
+    // cover (ikke contain) -- ellers udfylder billedet ikke hele sin boks, men "svaever"
+    // formindsket midt i den med tomme bjaelker paa siderne naar boksens format ikke
+    // praecis matcher billedets eget (samme adfaerd som video allerede har).
+    media.style.objectFit = 'cover';
   } else {
     media = document.createElement('video');
     media.src = spec.url;

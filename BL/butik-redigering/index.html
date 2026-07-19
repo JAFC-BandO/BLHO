@@ -8,8 +8,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-3">
-<script src="../render-shared.js?v=2026-07-19-3"></script>
+<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-5">
+<script src="../render-shared.js?v=2026-07-19-5"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -75,8 +75,15 @@
   /* --- Sidebar --- */
   .sidebar { background: white; border-radius: 10px; padding: 14px; }
   .sidebar h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .03em; color: #888; margin: 0 0 10px 0; }
-  .add-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; }
-  .add-btn { padding: 10px 6px; font-size: 13px; background: #eef0fd; color: #040DB1; }
+  /* flex-wrap (ikke et fast 2-kolonne grid) -- saa hver knap kun fylder saa meget som dens
+     eget indhold kraever (fx "Ur" er kort, "Nyhedsbanner (DR)" er laengere), i stedet for at
+     blive klemt ned i en fast kolonnebredde hvor teksten braekker over flere linjer. */
+  .add-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  .add-btn {
+    padding: 8px 12px; font-size: 13px; background: #eef0fd; color: #040DB1;
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  }
+  .add-btn svg { flex-shrink: 0; }
   .add-btn:hover { background: #dde1fb; }
 
   .media-banner { display: none; background: #fff4e5; color: #8a5a00; font-size: 12px; padding: 8px 10px; border-radius: 8px; margin-bottom: 10px; }
@@ -104,7 +111,11 @@
     aspect-ratio: 16 / 9;
     background: #0a0a0a;
     border-radius: 8px;
-    overflow: hidden;
+    /* overflow:visible (ikke hidden) -- ellers klippes .el-header vaek naar et element
+       ligger helt oppe ved y=0 (headeren flyder NU over selve boksen, se .el-header
+       herunder, saa den ikke laengere spiser af boksens egen hoejde/plads). Det aendrer
+       ikke hvordan INDHOLD klippes -- det styres stadig af hvert elements egen .el-body. */
+    overflow: visible;
   }
   .el {
     position: absolute;
@@ -126,10 +137,17 @@
   .el.selected .streg-del { display: block; }
   .el.multi-selected { outline: 2px dashed #4d5bff; }
   .el.locked-element { outline: 1px dashed #ffb300; }
+  /* Header FLYDER over boksens egen top (position:absolute, taget ud af flex-flowet)
+     i stedet for at vaere en flex-soesken der spiser af el-body's hoejde -- ellers
+     kunne et element aldrig visuelt fylde HELE sin egen boks (og slet ikke en tynd
+     bar/streg placeret helt oppe ved y=0, hvor headerens egen hoejde nemt kunne
+     overstige heletaboksens). Nu svarer boksens indhold 1:1 til hvad der reelt vises
+     paa den rigtige skaerm (som slet ikke har nogen header). */
   .el-header {
+    position: absolute; left: 0; right: 0; bottom: 100%;
     display: flex; align-items: center; justify-content: space-between;
-    background: rgba(0,0,0,.55); padding: 2px 4px; cursor: move; flex-shrink: 0;
-    flex-wrap: wrap; row-gap: 2px;
+    background: rgba(0,0,0,.55); padding: 2px 4px; cursor: move;
+    flex-wrap: wrap; row-gap: 2px; z-index: 5;
   }
   .el-header .tag { color: #aaa; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; }
   .el-header .del { color: #ff8080; cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 4px; }
@@ -296,17 +314,17 @@
 
       <h2>Tilføj element</h2>
       <div class="add-row">
-        <button class="add-btn" data-add="titel">+ Titel</button>
-        <button class="add-btn" data-add="tekst">+ Tekst</button>
-        <button class="add-btn" data-add="billede">+ Billede</button>
-        <button class="add-btn" data-add="video">+ Video</button>
-        <button class="add-btn" data-add="boks">+ Boks</button>
-        <button class="add-btn" data-add="rotator">+ Rotator</button>
-        <button class="add-btn superadmin-only" data-add="miljoeffekt" style="display:none;">+ Miljøeffekt</button>
-        <button class="add-btn superadmin-only" data-add="streg" style="display:none;">+ Streg</button>
-        <button class="add-btn superadmin-only" data-add="ur" style="display:none;">+ Ur</button>
-        <button class="add-btn superadmin-only" data-add="nyhedsbanner" style="display:none;">+ Nyhedsbanner (DR)</button>
-        <button class="add-btn superadmin-only" data-add="vejr" style="display:none;">+ Vejr</button>
+        <button class="add-btn" data-add="titel"><svg width="18" height="18" viewBox="0 0 20 20"><path d="M4 5h12M10 5v10" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>Titel</button>
+        <button class="add-btn" data-add="tekst"><svg width="18" height="18" viewBox="0 0 20 20"><path d="M4 6h12M4 10h12M4 14h8" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>Tekst</button>
+        <button class="add-btn" data-add="billede"><svg width="18" height="18" viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><circle cx="7.3" cy="8" r="1.3" fill="currentColor"/><path d="M4 14.5l4-4 3 3 2-2 4 3.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Billede</button>
+        <button class="add-btn" data-add="video"><svg width="18" height="18" viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M8 7.3v5.4l5-2.7z" fill="currentColor"/></svg>Video</button>
+        <button class="add-btn" data-add="boks"><svg width="18" height="18" viewBox="0 0 20 20"><rect x="3.5" y="4.5" width="13" height="11" rx="1.5" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>Boks</button>
+        <button class="add-btn" data-add="rotator"><svg width="18" height="18" viewBox="0 0 20 20"><path d="M5 8a5 5 0 0 1 8.6-3.1M15 12a5 5 0 0 1-8.6 3.1" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M13.2 3.4l.7 3.2-3.2-.6M6.8 16.6l-.7-3.2 3.2.6" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Rotator</button>
+        <button class="add-btn superadmin-only" data-add="miljoeffekt" style="display:none;"><svg width="18" height="18" viewBox="0 0 20 20"><path d="M5.5 15C4 9 8 4.5 15 4.5 16 11 12 15.5 5.5 15z" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linejoin="round"/><path d="M5.5 15c2.5-2.8 5-5 8-8" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/></svg>Miljøeffekt</button>
+        <button class="add-btn superadmin-only" data-add="streg" style="display:none;"><svg width="18" height="18" viewBox="0 0 20 20"><path d="M4 10h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Streg</button>
+        <button class="add-btn superadmin-only" data-add="ur" style="display:none;"><svg width="18" height="18" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M10 6.3v3.9l2.8 1.8" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Ur</button>
+        <button class="add-btn superadmin-only" data-add="nyhedsbanner" style="display:none;"><svg width="18" height="18" viewBox="0 0 20 20"><path d="M5 4v12M5 5.2h9l-2.3 2.3 2.3 2.3H5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round" stroke-linecap="round"/></svg>Nyhedsbanner (DR)</button>
+        <button class="add-btn superadmin-only" data-add="vejr" style="display:none;"><svg width="18" height="18" viewBox="0 0 20 20"><circle cx="7" cy="7.5" r="2.6" fill="currentColor" opacity="0.55"/><path d="M8.5 15.5a3.4 3.4 0 0 1 .3-6.8 3.9 3.9 0 0 1 7.4 1.6 2.8 2.8 0 0 1-.6 5.2H8.5z" fill="currentColor"/></svg>Vejr</button>
       </div>
 
       <div id="propsPanel" style="display:none; margin-bottom:20px; padding:12px; background:#f7f7fb; border-radius:8px;">
@@ -397,7 +415,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master34';
+  const SCRIPT_VERSION = '2026-07-19-master36';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
