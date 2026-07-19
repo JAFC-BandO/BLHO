@@ -8,8 +8,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-8">
-<script src="../render-shared.js?v=2026-07-19-8"></script>
+<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-9">
+<script src="../render-shared.js?v=2026-07-19-9"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -457,7 +457,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master43';
+  const SCRIPT_VERSION = '2026-07-19-master44';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -2178,12 +2178,15 @@
     node.style.height = el.h + '%';
     if (el.boxColor) node.style.background = el.boxColor;
     const canEdit = masterEditMode || !el.locked;
-    // Fast plads (slotId): en almindelig admin maa gerne skifte INDHOLDET (billede/video/
-    // rotator-slides osv, styret af canEdit ovenfor), men ikke flytte/resize/slette selve
-    // pladsen -- kun superadmin kan det (matcher "vi som admins kan rykke rundt paa disse,
-    // men alle andre skal bare kunne aendre deres elementer").
-    const posLaast = !!el.posLocked && !erSuperadmin;
-    if (el.posLocked) node.classList.add('slot-element');
+    // Fast plads (slotId): position/størrelse er 100% fast for ALLE -- ogsaa superadmin, ogsaa
+    // inde i "Rediger fælles skabelon" (hvor selve pladsen defineres). Det er bevidst ikke
+    // noget NOGEN vaelger/traekker i UI'et laengere -- kun indholdet (billede/video/rotator-
+    // slides osv, styret af canEdit ovenfor) er redigerbart. Geometrien aendres udelukkende
+    // via en direkte SQL-justering, netop for at undgaa den slags utilsigtet overlap en
+    // museklik-fejl tidligere skabte mellem "banner" og "hoved". `el.slotId` daekker raa
+    // master-skabelon-elementer (i master-edit-mode, foer de er flettet/faar posLocked).
+    const posLaast = !!el.posLocked || !!el.slotId;
+    if (el.posLocked || el.slotId) node.classList.add('slot-element');
     if (el.locked && masterEditMode) node.classList.add('locked-element');
     if (el.locked && !masterEditMode) {
       // Skal se 100% ud som paa den rigtige skaerm -- ogsaa den translucente editor-kant/
@@ -2354,11 +2357,14 @@
       }
 
       const manageBar = document.createElement('div');
-      manageBar.style.cssText = 'height:30%; overflow-x:auto; overflow-y:hidden; display:' + (canEdit ? 'flex' : 'none') + '; gap:4px; align-items:center; padding:4px; background:#111;';
+      manageBar.style.cssText = 'height:30%; overflow-x:auto; overflow-y:hidden; display:' + (canEdit ? 'flex' : 'none') + '; gap:6px; align-items:center; padding:4px; background:#111;';
 
+      // Stoerre thumbnails + et taldelt "1/2/3"-badge og en rigtig video-thumbnail (foerste
+      // frame, ikke bare et generisk ▶-ikon) -- de var for smaa og for ens til at kunne
+      // kende slides fra hinanden (tidligere 34px, samme ikon for alle videoer uanset indhold).
       el.slides.forEach((slide, i) => {
         const thumb = document.createElement('div');
-        thumb.style.cssText = 'position:relative; width:34px; height:34px; flex-shrink:0; background:#333; border-radius:4px; overflow:hidden;';
+        thumb.style.cssText = 'position:relative; width:56px; height:56px; flex-shrink:0; background:#333; border-radius:4px; overflow:hidden;';
         if (slide.type === 'billede') {
           const img = document.createElement('img');
           img.src = slide.url;
@@ -2370,14 +2376,26 @@
           ico.style.cssText = 'width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:13px;';
           thumb.appendChild(ico);
         } else {
-          const ico = document.createElement('div');
-          ico.textContent = '▶';
-          ico.style.cssText = 'width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#aaa; font-size:13px;';
-          thumb.appendChild(ico);
+          const vid = document.createElement('video');
+          vid.src = slide.url + (slide.kind === 'youtube' ? '' : '#t=0.1');
+          vid.muted = true;
+          vid.preload = 'metadata';
+          vid.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+          thumb.appendChild(vid);
+          if (slide.kind === 'youtube') {
+            const ico = document.createElement('div');
+            ico.textContent = '▶ YouTube';
+            ico.style.cssText = 'position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#aaa; font-size:9px; background:#222;';
+            thumb.appendChild(ico);
+          }
         }
+        const num = document.createElement('span');
+        num.textContent = String(i + 1);
+        num.style.cssText = 'position:absolute; bottom:0; left:0; background:rgba(0,0,0,.7); color:#fff; font-size:9px; padding:0 4px; border-radius:0 4px 0 0; line-height:1.4;';
+        thumb.appendChild(num);
         const rm = document.createElement('span');
         rm.textContent = '✕';
-        rm.style.cssText = 'position:absolute; top:0; right:0; background:rgba(0,0,0,.7); color:#f88; font-size:9px; padding:0 3px; cursor:pointer;';
+        rm.style.cssText = 'position:absolute; top:0; right:0; background:rgba(0,0,0,.7); color:#f88; font-size:10px; padding:1px 4px; cursor:pointer;';
         rm.addEventListener('click', (e) => {
           e.stopPropagation();
           el.slides.splice(i, 1);
@@ -2389,7 +2407,7 @@
 
       const addLabel = document.createElement('label');
       addLabel.textContent = '+';
-      addLabel.style.cssText = 'flex-shrink:0; width:34px; height:34px; display:flex; align-items:center; justify-content:center; background:#2a2a2a; color:#ddd; border-radius:4px; cursor:pointer; font-size:16px;';
+      addLabel.style.cssText = 'flex-shrink:0; width:56px; height:56px; display:flex; align-items:center; justify-content:center; background:#2a2a2a; color:#ddd; border-radius:4px; cursor:pointer; font-size:20px;';
       const addInput = document.createElement('input');
       addInput.type = 'file';
       addInput.accept = 'image/*,video/*';
@@ -2569,7 +2587,7 @@
       header.className = 'el-header';
       const tag = document.createElement('span');
       tag.className = 'tag';
-      tag.textContent = el.type + (el.locked ? ' [låst]' : '') + (el.posLocked ? ' [fast plads]' : '');
+      tag.textContent = el.type + (el.locked ? ' [låst]' : '') + ((el.posLocked || el.slotId) ? ' [fast plads]' : '');
       header.appendChild(tag);
 
       if (textDiv) {
