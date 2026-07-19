@@ -264,6 +264,7 @@
           <select id="skiftButikSelect" style="width:100%; padding:6px; font-size:13px; margin-bottom:10px;"></select>
           <button id="masterEditBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Rediger fælles skabelon</button>
           <button id="enhederBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Enheder / Fjernsupport</button>
+          <button id="aktivitetslogBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Aktivitetslog</button>
           <div style="font-size:11px; color:#666; line-height:1.5;">
             <b>Fælles skabelon:</b> ét layout du redigerer ét sted. Elementer du låser der (lås-knappen i Egenskaber) vises identisk og skrivebeskyttet på ALLE butikkers skærme med det samme.<br>
             <b>Del/afmærk en almindelig skabelon:</b> brug "Gem side" / "Gem valgt element" i sidebaren, eller "Sæt standard" ud for en eksisterende skabelon.
@@ -302,6 +303,33 @@
         <input type="text" id="nyEnhedNavn" placeholder="Navn, fx &quot;Horsens skærm (Android)&quot;" style="flex:2; min-width:180px; padding:8px;">
         <button id="nyEnhedGemBtn" style="padding:8px 16px;">Tilføj</button>
       </div>
+    </div>
+  </div>
+
+  <div id="aktivitetslogOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:2000; align-items:center; justify-content:center;">
+    <div style="background:white; border-radius:10px; padding:24px; width:min(720px, 92vw); max-height:85vh; overflow-y:auto;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+        <h2 style="margin:0;">Aktivitetslog</h2>
+        <span id="aktivitetslogCloseBtn" style="cursor:pointer; font-size:20px; color:#888; line-height:1;">✕</span>
+      </div>
+
+      <div style="font-size:12px; color:#888; margin-bottom:16px;">
+        Hvem logger ind, og hvornår indhold/skabeloner bliver gemt — kun synligt for superadmin. De seneste 200 hændelser.
+      </div>
+
+      <div style="display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;">
+        <select id="aktivitetslogButikFilter" style="flex:1; min-width:160px; padding:8px;">
+          <option value="">Alle butikker</option>
+        </select>
+        <select id="aktivitetslogHandlingFilter" style="padding:8px;">
+          <option value="">Alle handlinger</option>
+          <option value="login">Login</option>
+          <option value="gem_indhold">Gemt indhold</option>
+          <option value="gem_skabelon">Gemt fælles skabelon</option>
+        </select>
+      </div>
+
+      <div id="aktivitetslogListe" style="display:flex; flex-direction:column; gap:4px;"></div>
     </div>
   </div>
 
@@ -421,7 +449,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master41';
+  const SCRIPT_VERSION = '2026-07-19-master42';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -747,6 +775,7 @@
       showMsg(loginMsg, 'Forkert email eller adgangskode.', false);
       return;
     }
+    logAdminHandling('login');
     await checkPasswordThenProceed();
   });
 
@@ -1207,6 +1236,64 @@
     await loadEnheder();
   });
 
+  // ---------- Aktivitetslog (kun superadmin) ----------
+  // Fejlfri og "best effort": logningen maa aldrig kunne blokere selve login/gem-flowet,
+  // saa alle kald til logAdminHandling er bevidst fire-and-forget (ingen await i den
+  // kaldende kode, ingen fejl-haandtering ud over en console.warn).
+  function logAdminHandling(handling, detaljer) {
+    client.rpc('log_admin_handling', { p_handling: handling, p_detaljer: detaljer || null })
+      .then(({ error }) => { if (error) console.warn('[aktivitetslog] kunne ikke logge:', error.message); });
+  }
+
+  const HANDLING_LABELS = { login: 'Login', gem_indhold: 'Gemte indhold', gem_skabelon: 'Gemte fælles skabelon' };
+
+  async function loadAktivitetslog() {
+    const butikFilter = document.getElementById('aktivitetslogButikFilter').value;
+    const handlingFilter = document.getElementById('aktivitetslogHandlingFilter').value;
+    let query = client
+      .from('admin_log')
+      .select('id, handling, detaljer, oprettet_at, butikker(navn)')
+      .order('oprettet_at', { ascending: false })
+      .limit(200);
+    if (butikFilter) query = query.eq('butik_id', butikFilter);
+    if (handlingFilter) query = query.eq('handling', handlingFilter);
+    const { data, error } = await query;
+    const liste = document.getElementById('aktivitetslogListe');
+    if (error) {
+      liste.innerHTML = '<div style="color:#c0392b; font-size:13px;">Kunne ikke hente aktivitetslog: ' + escapeHtml(error.message) + '</div>';
+      return;
+    }
+    if (!data || !data.length) {
+      liste.innerHTML = '<div style="color:#888; font-size:13px;">Ingen hændelser endnu.</div>';
+      return;
+    }
+    liste.innerHTML = data.map(row => {
+      const butikNavn = row.butikker ? row.butikker.navn : '(ukendt butik)';
+      const label = HANDLING_LABELS[row.handling] || row.handling;
+      return '<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:#f7f7fb; border-radius:8px; padding:8px 12px; font-size:13px;">' +
+        '<div><b>' + escapeHtml(butikNavn) + '</b> — ' + escapeHtml(label) +
+        (row.detaljer ? ' <span style="color:#888;">(' + escapeHtml(row.detaljer) + ')</span>' : '') + '</div>' +
+        '<div style="color:#aaa; font-size:11px; white-space:nowrap;">' + tidSiden(row.oprettet_at) + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  document.getElementById('aktivitetslogBtn').addEventListener('click', async () => {
+    document.getElementById('superadminMenu').style.display = 'none';
+    const filter = document.getElementById('aktivitetslogButikFilter');
+    if (filter.options.length <= 1) {
+      filter.innerHTML = '<option value="">Alle butikker</option>' +
+        alleButikkerListe.map(b => '<option value="' + b.id + '">' + escapeHtml(b.navn) + '</option>').join('');
+    }
+    document.getElementById('aktivitetslogOverlay').style.display = 'flex';
+    await loadAktivitetslog();
+  });
+  document.getElementById('aktivitetslogCloseBtn').addEventListener('click', () => {
+    document.getElementById('aktivitetslogOverlay').style.display = 'none';
+  });
+  document.getElementById('aktivitetslogButikFilter').addEventListener('change', loadAktivitetslog);
+  document.getElementById('aktivitetslogHandlingFilter').addEventListener('change', loadAktivitetslog);
+
   async function saveMasterTemplate() {
     const btn = document.getElementById('saveBtn');
     btn.disabled = true;
@@ -1227,6 +1314,7 @@
       return;
     }
     showMsg(saveMsg, 'Fælles skabelon gemt — synkroniseres til alle butikker!', true);
+    logAdminHandling('gem_skabelon', 'Fælles skabelon');
     await loadMasterTemplate();
     await loadSabloner();
     loadLiveView();
@@ -2887,6 +2975,8 @@
     } else {
       showMsg(saveMsg, 'Gemt!', true);
       console.log('[redigering-debug] Gemt OK, opdateret_at:', payload.opdateret_at);
+      const aktivSideNavn = (sider.find(s => s.id === aktivSideId) || {}).navn;
+      logAdminHandling('gem_indhold', aktivSideNavn ? 'Side: ' + aktivSideNavn : null);
       loadLiveView();
     }
   }
