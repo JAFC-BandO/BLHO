@@ -90,31 +90,30 @@
    beregnede resultat og derfor stadig kan klippe). Lidt strammere padding/margin/gap end foer
    ("komprimeret vindue") giver ogsaa mere plads til selve indholdet. */
 .vejr-wrap {
-  width: 100%; height: 100%; box-sizing: border-box; padding: 3%;
+  width: 100%; height: 100%; box-sizing: border-box; padding: 2.5%;
   display: flex; flex-direction: column; color: #ffffff; overflow: hidden;
   container-type: size;
 }
-/* Anden runde: standard-stoerrelsen hævet igen (ca. 30% oven i den forrige hævning) -- den
-   forrige runde var stadig for lille til at laese paa afstand paa en stor butiksskærm.
-   Stadig cqmin, saa det forbliver proportionalt uanset boksens facon/stoerrelse (se
-   kommentaren ovenfor .vejr-wrap). OBS: cqmin er relativt til BOKSENS EGEN stoerrelse -- er
-   selve boksen lille, vil selv en hoej procentsats give et lille resultat i faktiske pixels.
-   For en REELT stor visning paa en stor skærm: goer ogsaa selve boksen stoerre via
-   Bredde/Hoejde i Egenskaber -- de to ting virker sammen, ikke i stedet for hinanden. */
-.vejr-heading { font-weight: 700; font-size: 6.5cqmin; }
-.vejr-hr { border: none; border-top: 1px solid rgba(255, 255, 255, 0.35); margin: 1% 0; width: 100%; flex-shrink: 0; }
-.vejr-nu-row { display: flex; align-items: center; justify-content: space-between; gap: 2%; }
-.vejr-nu-ikon { width: 34cqmin; height: 27cqmin; flex-shrink: 0; }
+/* Tredje runde: boksens egen stoerrelse er bevidst IKKE aendret her (det maa admin selv goere
+   via Bredde/Hoejde, hvis de vil) -- i stedet er udsigten skaaret ned fra 3 til 2 dage (se
+   JS'en der bygger listen), og den frigjorte plads er brugt til at goere det resterende
+   markant stoerre i stedet: faerre, stoerre raekker vejer tungere for laesbarhed paa afstand
+   end en ekstra dags udsigt i en fast boks. Stadig cqmin (relativt til boksens egen
+   bredde/hoejde, den mest begraensende led -- se kommentaren ved container-type ovenfor). */
+.vejr-heading { font-weight: 700; font-size: 7.5cqmin; }
+.vejr-hr { border: none; border-top: 1px solid rgba(255, 255, 255, 0.35); margin: 0.8% 0; width: 100%; flex-shrink: 0; }
+.vejr-nu-row { display: flex; align-items: center; justify-content: space-between; gap: 1.5%; }
+.vejr-nu-ikon { width: 40cqmin; height: 32cqmin; flex-shrink: 0; }
 .vejr-nu-ikon svg { display: block; width: 100%; height: 100%; }
 .vejr-nu-info { display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
-.vejr-temp { font-weight: 800; font-size: 14cqmin; font-variant-numeric: tabular-nums; }
-.vejr-beskrivelse { font-size: 5.2cqmin; color: #f0f0f0; }
-.vejr-forecast-wrap { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+.vejr-temp { font-weight: 800; font-size: 17cqmin; font-variant-numeric: tabular-nums; }
+.vejr-beskrivelse { font-size: 6cqmin; color: #f0f0f0; }
+.vejr-forecast-wrap { display: flex; flex-direction: column; flex: 1; overflow: hidden; justify-content: center; }
 .vejr-forecast-row { display: flex; align-items: center; gap: 1%; }
-.vejr-forecast-dag { font-size: 5.2cqmin; flex: 1; }
-.vejr-forecast-ikon { width: 15cqmin; height: 12cqmin; flex-shrink: 0; }
+.vejr-forecast-dag { font-size: 6.5cqmin; flex: 1; }
+.vejr-forecast-ikon { width: 19cqmin; height: 15cqmin; flex-shrink: 0; }
 .vejr-forecast-ikon svg { display: block; width: 100%; height: 100%; }
-.vejr-forecast-temp { font-size: 5.2cqmin; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; flex-shrink: 0; }
+.vejr-forecast-temp { font-size: 6.5cqmin; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; flex-shrink: 0; }
 /* Bevidst INGEN prefers-reduced-motion-respekt her: dette er en ubemandet butiksskærm, ikke
    en personlig enhed -- der er ingen menneske der "bruger" skærmen hvis bevaegelsesfoelsomhed
    skal respekteres. Android-signage-bokse saetter ofte prefers-reduced-motion: reduce som en

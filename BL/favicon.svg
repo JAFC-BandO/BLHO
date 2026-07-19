@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <!-- Baggrund: Afrundet sort kvadrat (bevares, men minimeret ved at maksimere ikonet) -->
+  <rect width="512" height="512" rx="100" fill="#000000"/>
+  
+  <!-- Netværkslinjer - Skaleret op og centreret for at fylde pladsen -->
+  <g stroke="#00d8f6" stroke-width="12" opacity="0.95" stroke-linejoin="round" stroke-linecap="round">
+    <line x1="210" y1="180" x2="150" y2="230"/>
+    <line x1="150" y1="230" x2="110" y2="300"/>
+    <line x1="110" y1="300" x2="190" y2="320"/>
+    <line x1="190" y1="320" x2="210" y2="180"/>
+    <line x1="150" y1="230" x2="190" y2="320"/>
+    
+    <line x1="210" y1="180" x2="302" y2="180"/>
+    <line x1="190" y1="320" x2="256" y2="290"/>
+    <line x1="256" y1="290" x2="322" y2="320"/>
+    
+    <line x1="302" y1="180" x2="362" y2="230"/>
+    <line x1="362" y1="230" x2="402" y2="300"/>
+    <line x1="402" y1="300" x2="322" y2="320"/>
+    <line x1="322" y1="320" x2="302" y2="180"/>
+    <line x1="362" y1="230" x2="322" y2="320"/>
+  </g>
+
+  <!-- Kolbe (Beaker) kontur - Skaleret op og centreret -->
+  <path d="M 220 90 L 292 90 
+           M 236 90 L 236 170 L 150 330 C 135 360, 160 370, 180 370 L 332 370 C 352 370, 377 360, 362 330 L 276 170 L 276 90" 
+        fill="none" stroke="#00d8f6" stroke-width="24" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- Netværksnoder - Skaleret op -->
+  <g fill="#00d8f6">
+    <circle cx="210" cy="180" r="20"/>
+    <circle cx="150" cy="230" r="22"/>
+    <circle cx="110" cy="300" r="24"/>
+    <circle cx="190" cy="320" r="20"/>
+    <circle cx="256" cy="290" r="22"/>
+    <circle cx="302" cy="180" r="20"/>
+    <circle cx="362" cy="230" r="22"/>
+    <circle cx="402" cy="300" r="24"/>
+    <circle cx="322" cy="320" r="20"/>
+  </g>
+  
+  <!-- Hvide indre prikker for lys/glød effekt - Skaleret op -->
+  <g fill="#ffffff">
+    <circle cx="150" cy="230" r="7"/>
+    <circle cx="256" cy="290" r="7"/>
+    <circle cx="362" cy="230" r="7"/>
+    <circle cx="110" cy="300" r="8"/>
+    <circle cx="402" cy="300" r="8"/>
+  </g>
+  
+  <!-- Navnebanner: JFC LABS - Centreret og tydeligt, skaleret med ikonet -->
+  <path d="M 95 385 L 417 385 L 387 465 L 125 465 Z" 
+        fill="#ffffff" stroke="#00d8f6" stroke-width="12" stroke-linejoin="round"/>
+        
+  <text x="256" y="440" 
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
+        font-weight="900" 
+        font-size="44" 
+        fill="#000000" 
+        letter-spacing="2" 
+        text-anchor="middle">JFC LABS</text>
+</svg>

@@ -361,9 +361,13 @@ function buildVejrNode(registerInterval) {
       beskrivelse.textContent = vejrBeskrivelse(data.nu.weathercode);
 
       // Index 0 i daily-arrayet er "i dag" (allerede vist som "nu" ovenfor) -- udsigten
-      // herunder er derfor de 3 EFTERFOELGENDE dage.
+      // herunder viser nu KUN de 2 EFTERFOELGENDE dage (var 3) -- den ekstra plads det
+      // frigiver bruges i stedet til at goere de resterende raekker (og resten af widgeten,
+      // se render-shared.css) stoerre/lettere at laese paa afstand, som eftersprugt frem for
+      // at proppe flere, mindre dage ind i samme faste boks.
       forecastWrap.innerHTML = '';
-      data.dage.time.slice(1, 4).forEach((datoStreng, i) => {
+      const dage = data.dage.time.slice(1, 3);
+      dage.forEach((datoStreng, i) => {
         const idx = i + 1;
         const row = document.createElement('div');
         row.className = 'vejr-forecast-row';
@@ -372,7 +376,11 @@ function buildVejrNode(registerInterval) {
           '<span class="vejr-forecast-ikon">' + vejrIkonHtml(data.dage.weathercode[idx]) + '</span>' +
           '<span class="vejr-forecast-temp">' + Math.round(data.dage.temperature_2m_max[idx]) + '°</span>';
         forecastWrap.appendChild(row);
-        if (i < data.dage.time.length - 2) forecastWrap.appendChild(vejrHrNode());
+        // Rettet mens jeg alligevel var i gang: betingelsen sammenlignede foer med HELE
+        // API-svarets ugelange array (altid "sandt" for et par faa raekker), saa der altid
+        // kom en (overfloedig) skillelinje efter ogsaa den SIDSTE raekke -- skal sammenligne
+        // med selve "dage"-udsnittets egen laengde.
+        if (i < dage.length - 1) forecastWrap.appendChild(vejrHrNode());
       });
       harIndlaestFoerste = true;
     }).catch(() => {
