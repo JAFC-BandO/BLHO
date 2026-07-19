@@ -8,8 +8,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-1">
-<script src="../render-shared.js?v=2026-07-19-1"></script>
+<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-2">
+<script src="../render-shared.js?v=2026-07-19-2"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -306,6 +306,7 @@
         <button class="add-btn superadmin-only" data-add="streg" style="display:none;">+ Streg</button>
         <button class="add-btn superadmin-only" data-add="ur" style="display:none;">+ Ur</button>
         <button class="add-btn superadmin-only" data-add="nyhedsbanner" style="display:none;">+ Nyhedsbanner (DR)</button>
+        <button class="add-btn superadmin-only" data-add="vejr" style="display:none;">+ Vejr</button>
       </div>
 
       <div id="propsPanel" style="display:none; margin-bottom:20px; padding:12px; background:#f7f7fb; border-radius:8px;">
@@ -396,7 +397,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master31';
+  const SCRIPT_VERSION = '2026-07-19-master32';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -780,6 +781,15 @@
 
   let alleEnheder = [];
   let alleButikkerListe = [];
+  // Hvilke enheders fejlfindings-konsol admin selv har foldet ud -- konsollen er skjult som
+  // standard (kun praesenteres paa forespoergsel), men skal blive staaende aaben hen over de
+  // 15-sek. auto-genrenderinger mens panelet er aabent.
+  let konsolAabneEnheder = new Set();
+  // Et fejlfindings-svar regnes kun som "friskt" (og vises) i dette tidsrum efter det er
+  // modtaget -- ellers kunne et svar fra for laenge siden staa og se ud som om det lige
+  // var sket, hvis admin lukkede panelet foer svaret naaede at komme og aldrig genaabnede
+  // det praecis paa det tidspunkt (saa "ryd ved luk"-fixet aldrig naaede at koere).
+  const KOMMANDO_SVAR_STALE_MINUTTER = 20;
   // Hurtig-knapper i fejlfindings-konsollen -- de kommandoer der rent faktisk er brugt igen
   // og igen ved fejlfinding af Android-enhederne.
   const HURTIG_KOMMANDOER = ['tailscaled-start', 'tailscale-cli ip', 'tailscale-test', 'df -h', 'ps aux'];
@@ -827,6 +837,21 @@
     if (dBm >= -70) return 'middel';
     if (dBm >= -80) return 'svagt';
     return 'meget svagt';
+  }
+
+  // Signal-styrke som ikon (4 stigende bjaelker, ligesom paa en telefon) i stedet for en
+  // raa dBm-taltekst -- lettere at aflaese paa afstand. Det praecise dBm-tal og det danske
+  // label staar stadig i title-attributten (hover).
+  function wifiIkonHtml(dBm) {
+    const niveau = dBm >= -50 ? 4 : dBm >= -60 ? 3 : dBm >= -70 ? 2 : 1;
+    const farve = dBm >= -60 ? '#1a9b4b' : dBm >= -70 ? '#c98a1b' : '#c0392b';
+    const bjaelkeHoejder = [4, 7, 10, 13];
+    const bjaelker = bjaelkeHoejder.map((h, i) =>
+      '<rect x="' + (i * 4.2) + '" y="' + (13 - h) + '" width="3" height="' + h + '" rx="0.7" fill="' +
+      (i < niveau ? farve : '#ddd') + '"/>'
+    ).join('');
+    return '<svg width="17" height="13" viewBox="0 0 17 13" style="vertical-align:middle;"><title>' +
+      dBm + ' dBm (' + wifiStyrkeLabel(dBm) + ')</title>' + bjaelker + '</svg>';
   }
 
   async function loadEnheder() {
@@ -890,7 +915,7 @@
           '<code class="enhedTailscaleKopier" data-ip="' + escapeHtml(e.tailscale_ip) + '" style="cursor:pointer; background:#eee; padding:1px 5px; border-radius:3px;" title="Klik for at kopiere">' +
           escapeHtml(e.tailscale_ip) + '</code></div>' : '') +
         (typeof e.wifi_rssi === 'number' ?
-          '<div style="color:#aaa; font-size:10px; margin-top:2px;">WiFi: ' + e.wifi_rssi + ' dBm (' + wifiStyrkeLabel(e.wifi_rssi) + ')</div>' : '');
+          '<div style="color:#aaa; font-size:10px; margin-top:2px; display:flex; align-items:center; gap:4px;">WiFi ' + wifiIkonHtml(e.wifi_rssi) + '</div>' : '');
       row.appendChild(info);
       info.querySelector('.enhedIdKopier').addEventListener('click', (ev) => {
         navigator.clipboard.writeText(ev.target.dataset.id);
@@ -909,6 +934,22 @@
       // Fejlfindings-konsol: IKKE en live terminal -- kommandoen hentes og koeres af
       // enhedens eget check-in-script ved naeste check-in (op til ca. et minut), og svaret
       // vises her et lille oejeblik efter. Koeres som den almindelige Termux-bruger.
+      // Skjult som standard (kun til fejlfinding) -- foldes ud via knappen herunder, saa
+      // den ikke fylder i den almindelige enheds-oversigt.
+      const konsolErAaben = konsolAabneEnheder.has(e.id);
+      const konsolToggle = document.createElement('button');
+      konsolToggle.textContent = konsolErAaben ? 'Skjul kommandolinje ▴' : 'Vis kommandolinje ▾';
+      konsolToggle.style.cssText = 'margin-top:6px; padding:3px 9px; font-size:11px; color:#666; background:#eee; border:1px solid #ddd; border-radius:4px; cursor:pointer;';
+      konsolToggle.addEventListener('click', () => {
+        if (konsolAabneEnheder.has(e.id)) konsolAabneEnheder.delete(e.id); else konsolAabneEnheder.add(e.id);
+        renderEnhederListe();
+      });
+      info.appendChild(konsolToggle);
+
+      const konsolBody = document.createElement('div');
+      konsolBody.style.display = konsolErAaben ? 'block' : 'none';
+      info.appendChild(konsolBody);
+
       const consoleWrap = document.createElement('div');
       consoleWrap.style.cssText = 'margin-top:6px; display:flex; gap:6px;';
       const cmdInput = document.createElement('input');
@@ -941,7 +982,7 @@
       consoleWrap.appendChild(cmdInput);
       consoleWrap.appendChild(sendCmdBtn);
       consoleWrap.appendChild(saveCmdBtn);
-      info.appendChild(consoleWrap);
+      konsolBody.appendChild(consoleWrap);
 
       // Hurtig-knapper: de faste (indbyggede) plus evt. selv-gemte -- ét klik sender den med
       // det samme, ingen indtastning noedvendig. Selv-gemte har en lille ✕ til at fjerne dem
@@ -973,11 +1014,19 @@
         pill.appendChild(fjernBtn);
         presetWrap.appendChild(pill);
       });
-      info.appendChild(presetWrap);
+      konsolBody.appendChild(presetWrap);
 
-      const svarErFriskere = e.custom_kommando_besvaret_at && e.custom_kommando_sat_at
+      const svarAlderMinutter = e.custom_kommando_besvaret_at
+        ? (Date.now() - new Date(e.custom_kommando_besvaret_at).getTime()) / 60000
+        : Infinity;
+      const erBesvaret = e.custom_kommando_besvaret_at && e.custom_kommando_sat_at
         && new Date(e.custom_kommando_besvaret_at) >= new Date(e.custom_kommando_sat_at);
-      if (e.custom_kommando_sat_at && !svarErFriskere) {
+      // Kun genuint "afventer" naar der slet ikke er kommet svar endnu -- ellers ville et
+      // svar der er blevet for gammelt (se KOMMANDO_SVAR_STALE_MINUTTER) fejlagtigt igen
+      // vise "afventer", selvom det rent faktisk blev besvaret for laengst.
+      const afventerSvar = e.custom_kommando_sat_at && !erBesvaret;
+      const svarErFriskere = erBesvaret && svarAlderMinutter < KOMMANDO_SVAR_STALE_MINUTTER;
+      if (afventerSvar) {
         const afventer = document.createElement('div');
         afventer.style.cssText = 'font-size:11px; color:#888; margin-top:4px;';
         afventer.textContent = '⏳ Afventer svar (køres ved næste check-in, op til et minuts tid)...';
@@ -1791,6 +1840,7 @@
         streg: { x: 10, y: 50, w: 80, h: 1, boxColor: '#ffffff' },
         ur: { x: 10, y: 10, w: 25, h: 15 },
         nyhedsbanner: { x: 0, y: 92, w: 100, h: 8 },
+        vejr: { x: 10, y: 10, w: 22, h: 25 },
       }[type];
       elements.push(Object.assign({ id: uid(), type }, defaults));
       renderCanvas();
@@ -2200,6 +2250,10 @@
       body.appendChild(buildUrNode(id => rotatorIntervals.push(id)));
     } else if (el.type === 'nyhedsbanner') {
       body.appendChild(buildNyhedsbannerNode(el, id => rotatorIntervals.push(id)));
+    } else if (el.type === 'vejr') {
+      // buildVejrNode regner selv sin skriftstoerrelse ud fra elementets egen rect, ligesom
+      // buildUrNode -- ingen ekstra editor-specifik korrektion noedvendig her.
+      body.appendChild(buildVejrNode(id => rotatorIntervals.push(id)));
     }
 
     if (el.type === 'streg') {

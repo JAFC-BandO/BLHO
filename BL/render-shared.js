@@ -172,6 +172,163 @@ function buildNyhedsbannerNode(el, registerInterval) {
   return node;
 }
 
+// Open-Meteo: gratis, ingen API-noegle noedvendig (bekraeftet virker uden auth). Geokodning
+// (byanavn -> koordinater) caches i hukommelsen -- en bys koordinater aendrer sig aldrig, saa
+// der er ingen grund til at slaa den samme by op igen for hvert vejr-genindlaesning.
+const VEJR_GEOKODE_CACHE = {};
+
+async function hentVejrKoordinater(by) {
+  const noegle = by.trim().toLowerCase();
+  if (VEJR_GEOKODE_CACHE[noegle]) return VEJR_GEOKODE_CACHE[noegle];
+  const url = 'https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(by) + '&count=5&language=da&format=json';
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.results || !data.results.length) throw new Error('Ingen geokodnings-resultater for "' + by + '"');
+    // Foretraek et dansk resultat, hvis byens navn ogsaa findes andre steder i verden --
+    // ellers risikerer man vejret for en helt anden by med samme navn.
+    const bedst = data.results.find(r => r.country_code === 'DK') || data.results[0];
+    const koord = { lat: bedst.latitude, lon: bedst.longitude };
+    VEJR_GEOKODE_CACHE[noegle] = koord;
+    return koord;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function fetchVejrData(by) {
+  const koord = await hentVejrKoordinater(by);
+  const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + koord.lat + '&longitude=' + koord.lon +
+    '&current_weather=true&timezone=auto';
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.current_weather) throw new Error('Intet current_weather i svaret');
+    return data.current_weather;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+// WMO vejrkoder (samme kodeliste som Open-Meteo bruger) mappet til korte danske beskrivelser.
+function vejrBeskrivelse(kode) {
+  const beskrivelser = {
+    0: 'Klart vejr', 1: 'Overvejende klart', 2: 'Delvist skyet', 3: 'Overskyet',
+    45: 'Tåge', 48: 'Tåge',
+    51: 'Let støvregn', 53: 'Støvregn', 55: 'Tæt støvregn', 56: 'Isslag', 57: 'Isslag',
+    61: 'Let regn', 63: 'Regn', 65: 'Kraftig regn', 66: 'Isslag', 67: 'Isslag',
+    71: 'Let sne', 73: 'Sne', 75: 'Kraftig sne', 77: 'Snekorn',
+    80: 'Regnbyger', 81: 'Regnbyger', 82: 'Kraftige byger', 85: 'Snebyger', 86: 'Snebyger',
+    95: 'Tordenvejr', 96: 'Tordenvejr', 99: 'Tordenvejr',
+  };
+  return beskrivelser[kode] || 'Vejr';
+}
+
+function vejrSolSvg(farve, cx, cy, radius) {
+  const straaler = [];
+  for (let i = 0; i < 8; i++) {
+    const vinkel = i * Math.PI / 4;
+    const x1 = cx + Math.cos(vinkel) * (radius * 1.35), y1 = cy + Math.sin(vinkel) * (radius * 1.35);
+    const x2 = cx + Math.cos(vinkel) * (radius * 1.9), y2 = cy + Math.sin(vinkel) * (radius * 1.9);
+    straaler.push('<line x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) + '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) + '" stroke="' + farve + '" stroke-width="1.6" stroke-linecap="round"/>');
+  }
+  return '<circle cx="' + cx + '" cy="' + cy + '" r="' + radius + '" fill="' + farve + '"/>' + straaler.join('');
+}
+
+function vejrSkySvg(farve, cx, cy, skala) {
+  return '<g transform="translate(' + cx + ',' + cy + ') scale(' + (skala || 1) + ')">' +
+    '<ellipse cx="0" cy="2" rx="7" ry="4.6" fill="' + farve + '"/>' +
+    '<ellipse cx="6.5" cy="3" rx="5.2" ry="3.8" fill="' + farve + '"/>' +
+    '<ellipse cx="-6" cy="3.4" rx="4.6" ry="3.4" fill="' + farve + '"/>' +
+    '</g>';
+}
+
+// Simple, letlaeselige ikoner (genkendelige paa afstand af en storskaerm) fremfor detaljerede
+// illustrationer -- bygget af faa grundformer i stedet for haandskrevne SVG-path'er.
+function vejrIkonHtml(kode) {
+  const graa = '#dfe3e9', moerkGraa = '#aeb6c2', gul = '#ffc233', blaa = '#5aa9e6', hvid = '#ffffff';
+  let indhold;
+  if (kode === 0) {
+    indhold = vejrSolSvg(gul, 18, 14, 6.5);
+  } else if (kode === 1 || kode === 2) {
+    indhold = vejrSolSvg(gul, 12, 9, 4.5) + vejrSkySvg(graa, 20, 17, 1.05);
+  } else if (kode === 45 || kode === 48) {
+    indhold = [0, 1, 2, 3].map(i =>
+      '<rect x="4" y="' + (8 + i * 5.5) + '" width="28" height="3" rx="1.5" fill="' + graa + '" opacity="' + (1 - i * 0.15).toFixed(2) + '"/>'
+    ).join('');
+  } else if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(kode)) {
+    indhold = vejrSkySvg(moerkGraa, 18, 11, 1.15) +
+      [0, 1, 2].map(i => '<line x1="' + (10 + i * 8) + '" y1="21" x2="' + (7 + i * 8) + '" y2="27" stroke="' + blaa + '" stroke-width="2" stroke-linecap="round"/>').join('');
+  } else if ([71, 73, 75, 77, 85, 86].includes(kode)) {
+    indhold = vejrSkySvg(moerkGraa, 18, 11, 1.15) +
+      [0, 1, 2].map(i => '<circle cx="' + (9 + i * 8) + '" cy="24" r="1.6" fill="' + hvid + '"/>').join('');
+  } else if ([95, 96, 99].includes(kode)) {
+    indhold = vejrSkySvg(moerkGraa, 18, 10, 1.15) + '<polygon points="19,16 14,24 18,24 15,30" fill="' + gul + '"/>';
+  } else {
+    indhold = vejrSkySvg(graa, 18, 14, 1.25);
+  }
+  return '<svg width="100%" height="100%" viewBox="0 0 36 30" preserveAspectRatio="xMidYMid meet">' + indhold + '</svg>';
+}
+
+function buildVejrNode(registerInterval) {
+  const wrap = document.createElement('div');
+  wrap.className = 'vejr-wrap';
+
+  const ikon = document.createElement('div');
+  ikon.className = 'vejr-ikon';
+  const temp = document.createElement('div');
+  temp.className = 'vejr-temp';
+  const by = document.createElement('div');
+  by.className = 'vejr-by';
+  wrap.appendChild(ikon);
+  wrap.appendChild(temp);
+  wrap.appendChild(by);
+
+  // Samme selv-maalende tilgang som buildUrNode: regnes ud fra elementets EGEN rect (begge
+  // akser), saa det passer paa alle skaermstoerrelser uden at blive for lille/stort.
+  const resize = () => {
+    const rect = wrap.getBoundingClientRect();
+    if (rect.width && rect.height) {
+      ikon.style.width = ikon.style.height = Math.min(rect.height * 0.38, rect.width * 0.5) + 'px';
+      temp.style.fontSize = Math.min(rect.height * 0.26, rect.width / 4) + 'px';
+      by.style.fontSize = Math.min(rect.height * 0.12, rect.width / 11) + 'px';
+    }
+  };
+
+  let harIndlaestFoerste = false;
+  const load = () => {
+    const navn = hentAktuelButikNavn();
+    if (!navn) return;
+    fetchVejrData(navn).then(data => {
+      ikon.innerHTML = vejrIkonHtml(data.weathercode);
+      ikon.title = vejrBeskrivelse(data.weathercode);
+      temp.textContent = Math.round(data.temperature) + '°';
+      by.textContent = navn;
+      harIndlaestFoerste = true;
+      resize();
+    }).catch(() => {
+      // Behold sidste kendte gode vejr ved en forbigaaende fejl (samme princip som
+      // nyhedsbanneret) -- vis kun en tom tilstand hvis vi ALDRIG har hentet noget endnu.
+      if (!harIndlaestFoerste) {
+        by.textContent = navn;
+      }
+    });
+  };
+  load();
+  requestAnimationFrame(resize);
+  // Vejret aendrer sig ikke fra minut til minut som et fejlfindings-svar -- hvert 15. minut
+  // er hyppigt nok til en "lige nu"-visning uden at overbelaste det gratis, noegle-frie API
+  // fra mange enheder samtidig.
+  registerInterval(setInterval(load, 15 * 60000));
+  return wrap;
+}
+
 function miljoeffektCardHtml(data) {
   return (
     '<div class="miljoeffekt-box1">' +
@@ -325,6 +482,8 @@ function buildElNode(el, registerInterval) {
     node.appendChild(buildUrNode(registerInterval));
   } else if (el.type === 'nyhedsbanner') {
     node.appendChild(buildNyhedsbannerNode(el, registerInterval));
+  } else if (el.type === 'vejr') {
+    node.appendChild(buildVejrNode(registerInterval));
   }
   return node;
 }
