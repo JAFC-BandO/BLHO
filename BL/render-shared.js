@@ -163,17 +163,8 @@ function buildNyhedsbannerNode(el, registerInterval) {
   const track = document.createElement('div');
   track.className = 'nyhedsbanner-track';
   track.style.fontSize = (el.fontSize || 1.4) + 'cqw';
-  track.style.animationDuration = (el.scrollSekunder || 90) + 's';
-  // Selve teksten sidder i et INDRE element -- IKKE direkte i "track" selv, som er den der
-  // reelt har CSS-animationen paa sig. Fundet noedvendigt efter gentagne rapporter om at
-  // banneret stille gaar i staa (teksten staar stille, ingen fejl) efter ca. 15-20 minutters
-  // koersel -- KUN paa Android, aldrig i en almindelig pc-browser. 15-20 min er ca. 3-4 gange
-  // det 5-minutters interval load() opdaterer nyhederne paa (se nedenfor), hvilket foer
-  // gjorde det ved at genskrive .innerHTML PAA "track" selv, det animerede element. Mistanken
-  // er at en genskrivning af indholdet paa netop det animerede element, paa noget Android-
-  // hardware/Chrome-udgaver, kan faa den kompositor-drevne animation til ikke at genoptage
-  // korrekt. At holde teksten i et barn og kun genskrive DET barns indhold roerer aldrig
-  // "track" selv, saa animationen aldrig behoever "genstarte" ved en nyheds-opdatering.
+  // Selve teksten sidder i et INDRE element, saa nyheds-opdateringer (se load() nedenfor)
+  // aldrig roerer "track" selv, som er det element der bliver flyttet (scroll).
   const trackContent = document.createElement('span');
   track.appendChild(trackContent);
   trackContent.textContent = 'Henter nyheder fra DR ...';
@@ -205,29 +196,24 @@ function buildNyhedsbannerNode(el, registerInterval) {
   load();
   registerInterval(setInterval(load, 5 * 60000));
 
-  // Selv-helbred: uanset praecis aarsag, opdager vi et reelt fastfrosset scroll ved at maale
-  // om transform-positionen aendrer sig over tid, og tvinger i saa fald en genstart -- samme
-  // "reager paa symptomet, ikke den gaettede aarsag"-tilgang som sidens egen frame-vagthund.
-  // Klasse-fjern/gentilfoej (med en tvunget reflow imellem) er den kendte, sikre maade at
-  // genstarte en CSS-keyframe-animation paa uden at forstyrre andre inline-stilarter
-  // (fontSize/animationDuration ovenfor er inline og roeres slet ikke af dette).
-  let sidstTransform = null;
-  let ubevaegetITraek = 0;
+  // Scroll-positionen udregnes her i JS ud fra reelt forloebet tid (performance.now()) i
+  // stedet for at laene sig op af CSS' egen @keyframes-animation. Foerste forsoeg brugte en
+  // ren CSS-animation (compositor-traad-drevet, for at vaere robust mod hovedtraad-jank -- se
+  // git-historik), men gentagne rapporter viste at banneret alligevel gik i staa ELLER koerte
+  // i tydelig slowmotion efter typisk 15-20 minutters drift, KUN paa Android, og UDEN at
+  // resten af siden (eller frame-vagthunden herunder, som IKKE reagerede) hakkede -- dvs.
+  // CSS-animationens interne tidslinje kunne afvige fra virkeligheden paa denne hardware,
+  // uafhaengigt af hovedtraadens egen sundhed. Ved selv at genudregne transform paa hvert
+  // tick er der intet internt animations-tilstand tilbage der kan drifte eller fryse -- kun
+  // hvis HOVEDTRAADEN selv gaar i staa vil dette ogsaa stoppe, og det opdager frame-vagthunden
+  // allerede (den er derfor IKKE duplikeret her).
+  const varighedMs = (el.scrollSekunder || 90) * 1000;
+  const scrollStart = performance.now();
   registerInterval(setInterval(() => {
-    const nuvaerendeTransform = getComputedStyle(track).transform;
-    if (nuvaerendeTransform === sidstTransform) {
-      ubevaegetITraek++;
-      if (ubevaegetITraek >= 2) {
-        track.classList.remove('nyhedsbanner-track');
-        void track.offsetWidth;
-        track.classList.add('nyhedsbanner-track');
-        ubevaegetITraek = 0;
-      }
-    } else {
-      ubevaegetITraek = 0;
-    }
-    sidstTransform = nuvaerendeTransform;
-  }, 20000));
+    const forloebet = (performance.now() - scrollStart) % varighedMs;
+    const procent = (forloebet / varighedMs) * 50;
+    track.style.transform = 'translateX(-' + procent.toFixed(3) + '%)';
+  }, 50));
 
   return node;
 }

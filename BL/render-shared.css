@@ -61,20 +61,18 @@
 .nyhedsbanner-viewport { flex: 1; overflow: hidden; display: flex; align-items: center; }
 .nyhedsbanner-track {
   display: inline-block; white-space: nowrap; font-weight: 700; font-size: 1.4cqw;
-  animation: nyhedsbanner-scroll 90s linear infinite;
   padding-left: 1cqw;
-  /* will-change: hint til browseren om at forfremme dette element til sit eget
-     GPU-komposit-lag PAA FORHAAND. En transform-only animation paa et forfremmet lag koeres
-     af compositor-tråden uafhaengigt af hovedtråden -- den bliver derfor langt mere robust
-     mod jank/pauser fra alt andet der sker paa siden (JS, layout, garbage collection), som er
-     netop den slags der ophobede sig paa den svage Android-hardware over tid. */
+  /* Scroll-positionen (transform: translateX) saettes af JS i render-shared.js, IKKE af en
+     CSS @keyframes-animation -- forsoegt foerst (compositor-traad-drevet, for at vaere
+     robust mod hovedtraad-jank), men gentagne rapporter viste banneret alligevel gik i staa
+     eller kørte i tydelig slowmotion efter 15-20 minutters drift, KUN paa Android, mens
+     resten af siden (og hovedtraaden/rAF) koerte fint -- dvs. CSS-animationens EGEN interne
+     tidslinje kunne afvige fra virkeligheden uafhaengigt af hovedtraaden. At udregne
+     transform paa hvert tick ud fra performance.now() fjerner den interne tilstand der kunne
+     afvige. will-change bevares stadig for at faa den samme kompositor-lag-forfremmelse. */
   will-change: transform;
 }
 .nyhedsbanner-track a { color: #ffffff; text-decoration: none; }
-@keyframes nyhedsbanner-scroll {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
-}
 
 /* Selv-staaende vejr+udsigt-panel (ligesom en storskaerms-nyhedsside-widget) -- cqmin-baseret
    (mindste af boksens bredde/hoejde), IKKE rect-maalt JS som uret. "container-type: size"
