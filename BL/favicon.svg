@@ -1,62 +1,80 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
-  <!-- Baggrund: Afrundet sort kvadrat (bevares, men minimeret ved at maksimere ikonet) -->
-  <rect width="512" height="512" rx="100" fill="#000000"/>
+  <!-- Rund sort baggrund -->
+  <circle cx="256" cy="256" r="250" fill="#000000"/>
   
-  <!-- Netværkslinjer - Skaleret op og centreret for at fylde pladsen -->
-  <g stroke="#00d8f6" stroke-width="12" opacity="0.95" stroke-linejoin="round" stroke-linecap="round">
-    <line x1="210" y1="180" x2="150" y2="230"/>
-    <line x1="150" y1="230" x2="110" y2="300"/>
-    <line x1="110" y1="300" x2="190" y2="320"/>
-    <line x1="190" y1="320" x2="210" y2="180"/>
-    <line x1="150" y1="230" x2="190" y2="320"/>
+  <!-- Professionel ydre cyan-ring -->
+  <circle cx="256" cy="256" r="236" fill="none" stroke="#00d8f6" stroke-width="10"/>
+
+  <!-- Organiske/Neural baggrundsdetaljer inde i kolben -->
+  <g opacity="0.35" stroke="#00d8f6" stroke-width="3" fill="none" stroke-linecap="round">
+    <path d="M 230 220 Q 210 240 200 270 T 180 320"/>
+    <path d="M 200 270 Q 230 290 240 330"/>
+    <path d="M 270 210 Q 290 240 320 280 T 340 330"/>
+    <path d="M 290 240 Q 260 270 270 320"/>
+    <path d="M 256 150 L 256 240 Q 240 270 250 310"/>
     
-    <line x1="210" y1="180" x2="302" y2="180"/>
-    <line x1="190" y1="320" x2="256" y2="290"/>
-    <line x1="256" y1="290" x2="322" y2="320"/>
-    
-    <line x1="302" y1="180" x2="362" y2="230"/>
-    <line x1="362" y1="230" x2="402" y2="300"/>
-    <line x1="402" y1="300" x2="322" y2="320"/>
-    <line x1="322" y1="320" x2="302" y2="180"/>
-    <line x1="362" y1="230" x2="322" y2="320"/>
+    <circle cx="200" cy="270" r="4" fill="#00d8f6"/>
+    <circle cx="290" cy="240" r="4" fill="#00d8f6"/>
+    <circle cx="240" cy="330" r="5" fill="#00d8f6"/>
+    <circle cx="270" cy="320" r="4" fill="#00d8f6"/>
   </g>
 
-  <!-- Kolbe (Beaker) kontur - Skaleret op og centreret -->
-  <path d="M 220 90 L 292 90 
-           M 236 90 L 236 170 L 150 330 C 135 360, 160 370, 180 370 L 332 370 C 352 370, 377 360, 362 330 L 276 170 L 276 90" 
-        fill="none" stroke="#00d8f6" stroke-width="24" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- Digitale Netværkslinjer -->
+  <g stroke="#00d8f6" stroke-width="10" stroke-linejoin="round" stroke-linecap="round">
+    <line x1="210" y1="190" x2="150" y2="240"/>
+    <line x1="150" y1="240" x2="110" y2="310"/>
+    <line x1="110" y1="310" x2="190" y2="330"/>
+    <line x1="190" y1="330" x2="210" y2="190"/>
+    <line x1="150" y1="240" x2="190" y2="330"/>
+    
+    <line x1="210" y1="190" x2="302" y2="190"/>
+    <line x1="190" y1="330" x2="256" y2="300"/>
+    <line x1="256" y1="300" x2="322" y2="330"/>
+    
+    <line x1="302" y1="190" x2="362" y2="240"/>
+    <line x1="362" y1="240" x2="402" y2="310"/>
+    <line x1="402" y1="310" x2="322" y2="330"/>
+    <line x1="322" y1="330" x2="302" y2="180"/>
+    <line x1="362" y1="240" x2="322" y2="330"/>
+  </g>
 
-  <!-- Netværksnoder - Skaleret op -->
+  <!-- Professionel Laboratoriekolbe Kontur -->
+  <path d="M 216 100 L 296 100 
+           M 236 100 L 236 175 L 148 335 C 135 360, 155 370, 180 370 L 332 370 C 357 370, 377 360, 364 335 L 276 175 L 276 100" 
+        fill="none" stroke="#00d8f6" stroke-width="20" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- Netværksnoder -->
   <g fill="#00d8f6">
-    <circle cx="210" cy="180" r="20"/>
-    <circle cx="150" cy="230" r="22"/>
-    <circle cx="110" cy="300" r="24"/>
-    <circle cx="190" cy="320" r="20"/>
-    <circle cx="256" cy="290" r="22"/>
-    <circle cx="302" cy="180" r="20"/>
-    <circle cx="362" cy="230" r="22"/>
-    <circle cx="402" cy="300" r="24"/>
-    <circle cx="322" cy="320" r="20"/>
+    <circle cx="210" cy="190" r="16"/>
+    <circle cx="150" cy="240" r="18"/>
+    <circle cx="110" cy="310" r="20"/>
+    <circle cx="190" cy="330" r="16"/>
+    <circle cx="256" cy="300" r="18"/>
+    <circle cx="302" cy="190" r="16"/>
+    <circle cx="362" cy="240" r="18"/>
+    <circle cx="402" cy="310" r="20"/>
+    <circle cx="322" cy="330" r="16"/>
   </g>
   
-  <!-- Hvide indre prikker for lys/glød effekt - Skaleret op -->
+  <!-- Hvide lysglimt i noderne -->
   <g fill="#ffffff">
-    <circle cx="150" cy="230" r="7"/>
-    <circle cx="256" cy="290" r="7"/>
-    <circle cx="362" cy="230" r="7"/>
-    <circle cx="110" cy="300" r="8"/>
-    <circle cx="402" cy="300" r="8"/>
+    <circle cx="150" cy="240" r="6"/>
+    <circle cx="256" cy="300" r="6"/>
+    <circle cx="362" cy="240" r="6"/>
+    <circle cx="110" cy="310" r="7"/>
+    <circle cx="402" cy="310" r="7"/>
   </g>
-  
-  <!-- Navnebanner: JFC LABS - Centreret og tydeligt, skaleret med ikonet -->
-  <path d="M 95 385 L 417 385 L 387 465 L 125 465 Z" 
-        fill="#ffffff" stroke="#00d8f6" stroke-width="12" stroke-linejoin="round"/>
-        
-  <text x="256" y="440" 
-        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
+
+  <!-- Stiliseret buet banner i bunden til navnet -->
+  <path d="M 115 370 C 180 395, 332 395, 397 370 L 365 440 C 310 465, 202 465, 147 440 Z" 
+        fill="#000000" stroke="#00d8f6" stroke-width="10" stroke-linejoin="round"/>
+
+  <!-- Tekst: JFC LABS -->
+  <text x="256" y="422" 
+        font-family="Arial, Helvetica, sans-serif" 
         font-weight="900" 
-        font-size="44" 
-        fill="#000000" 
-        letter-spacing="2" 
+        font-size="38" 
+        fill="#ffffff" 
+        letter-spacing="3" 
         text-anchor="middle">JFC LABS</text>
 </svg>

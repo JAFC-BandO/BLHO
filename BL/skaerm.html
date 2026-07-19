@@ -11,7 +11,7 @@
   // vaere netop DENNE butiks fulde URL inkl. ?email=&password=, ellers ville genvejen
   // logge ind som en forkert/ingen butik. Bygges derfor dynamisk ud fra location.href.
   (function () {
-    const ikonUrl = new URL('favicon.svg', location.href).href;
+    const ikonUrl = new URL('favicon.svg?v=2', location.href).href;
     const manifest = {
       name: 'Butik Skærm',
       display: 'fullscreen',
@@ -31,7 +31,7 @@
     document.head.appendChild(link);
   })();
 </script>
-<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
@@ -97,7 +97,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master21';
+  const SCRIPT_VERSION = '2026-07-19-master23';
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
@@ -156,6 +156,10 @@
   const params = new URLSearchParams(location.search);
   const email = params.get('email');
   const password = params.get('password');
+  // Sat af "Aabn jeres rigtige skaerm"-linket i butik-redigering, for at vise DEN butik man
+  // faktisk kigger paa der, ikke noedvendigvis den logget-ind konto (fx en superadmin) selv
+  // hoerer til -- se tilladelses-tjekket i findButik().
+  const onsketButikId = params.get('butik_id');
 
   let butikId = null;
   let sidstOpdateret = null;
@@ -220,7 +224,7 @@
     debugLog('auth.getUser() -> ' + (user ? user.id : 'INTET (ikke logget ind?)'));
     const { data, error } = await client
       .from('brugere')
-      .select('butik_id, butikker(navn)')
+      .select('butik_id, er_superadmin, butikker(navn)')
       .eq('id', user.id)
       .single();
 
@@ -229,9 +233,24 @@
       visFejl('Denne konto er ikke koblet til en butik.');
       return false;
     }
-    butikId = data.butik_id;
-    saetAktuelButikNavn(data.butikker ? data.butikker.navn : '');
-    debugLog('butik_id fundet: ' + butikId + ' | butik-navn (til {{butik}}-tag): ' + (data.butikker ? data.butikker.navn : '(ukendt)'));
+
+    // ?butik_id= (se onsketButikId ovenfor) bruges KUN hvis det rent faktisk er ens egen
+    // butik, eller man er superadmin (samme rettighed som "skift butik" i redigeringssiden)
+    // -- ellers ignoreres det stille, og man ser sin egen butik som normalt. Forhindrer en
+    // almindelig admin i at se en ANDEN butiks skaerm bare ved at aendre tallet i URL'en.
+    if (onsketButikId && (onsketButikId === data.butik_id || data.er_superadmin)) {
+      butikId = onsketButikId;
+      if (onsketButikId === data.butik_id) {
+        saetAktuelButikNavn(data.butikker ? data.butikker.navn : '');
+      } else {
+        const { data: andenButik } = await client.from('butikker').select('navn').eq('id', onsketButikId).maybeSingle();
+        saetAktuelButikNavn(andenButik ? andenButik.navn : '');
+      }
+    } else {
+      butikId = data.butik_id;
+      saetAktuelButikNavn(data.butikker ? data.butikker.navn : '');
+    }
+    debugLog('butik_id fundet: ' + butikId + ' | butik-navn (til {{butik}}-tag): ' + hentAktuelButikNavn());
     return true;
   }
 

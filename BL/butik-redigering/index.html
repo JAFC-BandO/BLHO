@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Butik Indhold - Redigering</title>
-<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
@@ -430,8 +430,11 @@
       <div id="liveViewBox" style="position:relative; width:100%; aspect-ratio:16/9; background:#0a0a0a; border-radius:8px; overflow:hidden; container-type:inline-size; margin-bottom:8px;"></div>
       <!-- Aabner den RIGTIGE skaerm-visning (skaerm.html) i en ny fane -- ikke et link med
            kredentialer bagt ind, man logger selv ind der med sin egen konto (se skaerm.html's
-           nye interaktive login) og ser saa automatisk netop sin egen butik. -->
-      <a href="../skaerm.html" target="_blank" rel="noopener" style="display:block; text-align:center; font-size:12px; color:#040DB1; margin-bottom:20px; text-decoration:none;">Åbn jeres rigtige skærm ↗</a>
+           nye interaktive login). href'et bliver sat dynamisk (se opdaterSkaermVisLink) til
+           at baere ?butik_id= for den butik man rent faktisk kigger paa lige nu -- ellers
+           ville en superadmin der har "skiftet butik" altid lande paa sin EGEN hjemme-butik i
+           stedet for den de faktisk redigerer, naar de har en eksisterende session. -->
+      <a id="skaermVisLink" href="../skaerm.html" target="_blank" rel="noopener" style="display:block; text-align:center; font-size:12px; color:#040DB1; margin-bottom:20px; text-decoration:none;">Åbn jeres rigtige skærm ↗</a>
 
       <h2>Tilføj element</h2>
       <div class="add-row">
@@ -605,7 +608,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master62';
+  const SCRIPT_VERSION = '2026-07-19-master64';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -790,6 +793,16 @@
     if (liveBox) liveBox.style.aspectRatio = forhold;
   }
 
+  // Saetter "Aabn jeres rigtige skaerm"-linket til at baere ?butik_id= for den butik man
+  // FAKTISK kigger paa lige nu -- uden dette landede en superadmin med "skift butik" altid
+  // paa sin egen hjemme-butik i skaerm.html (hvis de allerede havde en gemt session der fra
+  // tidligere), i stedet for den butik de rent faktisk sad og redigerede. skaerm.html tjekker
+  // selv at man har lov til at se den paagaeldende butik (egen butik_id, eller superadmin).
+  function opdaterSkaermVisLink() {
+    const link = document.getElementById('skaermVisLink');
+    if (link && currentButikId) link.href = '../skaerm.html?butik_id=' + currentButikId;
+  }
+
   // Indlaeser ALT butik-specifikt data (sabloner, faelles skabelon, content, media, canvas,
   // Live View) for én given butik_id. Udtrukket som sin egen funktion saa den kan genbruges
   // BAADE ved login OG naar en superadmin "skifter butik" (se skiftTilButik nedenfor) uden at
@@ -802,6 +815,7 @@
     saetAktuelButikNavn(butikNavn); // {{butik}}-tag i Live View skal matche den viste butik
     const skiftSelect = document.getElementById('skiftButikSelect');
     if (skiftSelect) skiftSelect.value = butikId;
+    opdaterSkaermVisLink();
 
     selectedElementId = null;
     armedElementId = null;
