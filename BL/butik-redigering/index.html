@@ -397,7 +397,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master33';
+  const SCRIPT_VERSION = '2026-07-19-master34';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -908,7 +908,7 @@
         '<div style="font-weight:600;">' + escapeHtml(e.navn) + ' <span style="color:#aaa; font-weight:400; font-size:11px;">(' + (e.type === 'android' ? 'Android' : 'Pi') + ')</span></div>' +
         '<div style="color:#888; font-size:11px;">' + escapeHtml(e.butikker ? e.butikker.navn : '?') + ' · ' +
           tidSiden(e.sidst_set_at) + (e.lokal_ip ? ' · ' + escapeHtml(e.lokal_ip) : '') +
-          (e.kommando ? ' · ⏳ ' + escapeHtml(e.kommando) + ' afventer' : '') + '</div>' +
+          (e.kommando ? ' · ⏳ ' + escapeHtml(kommandoLabel(e.kommando)) + ' afventer' : '') + '</div>' +
         '<div style="color:#aaa; font-size:10px; margin-top:2px;">ID (til check-in-scriptet): ' +
           '<code class="enhedIdKopier" data-id="' + e.id + '" style="cursor:pointer; background:#eee; padding:1px 5px; border-radius:3px;" title="Klik for at kopiere">' +
           e.id + '</code></div>' +
@@ -1055,6 +1055,16 @@
         row.appendChild(wifiBoks);
       }
 
+      // "Genstart skaerm" er en let, hurtig handling (force-stop + kiosk-vagten genaabner
+      // automatisk igen, se ANDROID-KIOSK-SETUP.md) -- svarer til en fuld browser-genindlaesning
+      // uden at genstarte hele Android-enheden. Braadt vist FOER den tungere "Genstart enhed".
+      const refreshBtn = document.createElement('button');
+      refreshBtn.textContent = 'Genstart skærm';
+      refreshBtn.title = 'Genindlæser visningen (force-stop + automatisk genåbning) uden at genstarte hele enheden';
+      refreshBtn.style.cssText = 'padding:6px 10px; font-size:12px;';
+      refreshBtn.addEventListener('click', () => saetKommando(e.id, 'genstart_kiosk'));
+      row.appendChild(refreshBtn);
+
       const rebootBtn = document.createElement('button');
       rebootBtn.textContent = 'Genstart enhed';
       rebootBtn.style.cssText = 'padding:6px 10px; font-size:12px;';
@@ -1082,6 +1092,13 @@
         restoreInput.setSelectionRange(bevaretSelStart, bevaretSelEnd);
       }
     }
+  }
+
+  // Pæne danske labels til de faste kommandoer (i stedet for de raa vaerdier de facto
+  // sendes som) -- vises baade i "afventer"-linjen og kunne genbruges andre steder.
+  function kommandoLabel(kommando) {
+    const labels = { reboot: 'Genstart enhed', genstart_kiosk: 'Genstart skærm' };
+    return labels[kommando] || kommando;
   }
 
   async function saetKommando(enhedId, kommando) {
