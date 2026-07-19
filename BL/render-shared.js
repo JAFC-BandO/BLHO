@@ -164,7 +164,19 @@ function buildNyhedsbannerNode(el, registerInterval) {
   track.className = 'nyhedsbanner-track';
   track.style.fontSize = (el.fontSize || 1.4) + 'cqw';
   track.style.animationDuration = (el.scrollSekunder || 90) + 's';
-  track.textContent = 'Henter nyheder fra DR ...';
+  // Selve teksten sidder i et INDRE element -- IKKE direkte i "track" selv, som er den der
+  // reelt har CSS-animationen paa sig. Fundet noedvendigt efter gentagne rapporter om at
+  // banneret stille gaar i staa (teksten staar stille, ingen fejl) efter ca. 15-20 minutters
+  // koersel -- KUN paa Android, aldrig i en almindelig pc-browser. 15-20 min er ca. 3-4 gange
+  // det 5-minutters interval load() opdaterer nyhederne paa (se nedenfor), hvilket foer
+  // gjorde det ved at genskrive .innerHTML PAA "track" selv, det animerede element. Mistanken
+  // er at en genskrivning af indholdet paa netop det animerede element, paa noget Android-
+  // hardware/Chrome-udgaver, kan faa den kompositor-drevne animation til ikke at genoptage
+  // korrekt. At holde teksten i et barn og kun genskrive DET barns indhold roerer aldrig
+  // "track" selv, saa animationen aldrig behoever "genstarte" ved en nyheds-opdatering.
+  const trackContent = document.createElement('span');
+  track.appendChild(trackContent);
+  trackContent.textContent = 'Henter nyheder fra DR ...';
   viewport.appendChild(track);
   node.appendChild(viewport);
 
@@ -175,7 +187,7 @@ function buildNyhedsbannerNode(el, registerInterval) {
       // saedeloest fra "midt i" den foerste kopi til "midt i" den anden -- ellers ville man
       // se et hak/spring hver gang den naar enden af listen.
       const tekst = overskrifter.map(t => escapeHtml(t)).join(' &nbsp;•&nbsp; ');
-      track.innerHTML = tekst + ' &nbsp;•&nbsp; ' + tekst + ' &nbsp;•&nbsp; ';
+      trackContent.innerHTML = tekst + ' &nbsp;•&nbsp; ' + tekst + ' &nbsp;•&nbsp; ';
       harIndlaestFoerste = true;
     }).catch(() => {
       // Behold sidste kendte gode indhold ved en FORBIGAAENDE fejl (rss2json nede,
@@ -186,12 +198,37 @@ function buildNyhedsbannerNode(el, registerInterval) {
       // kun tester kortvarigt og sjaeldent rammer en fejl). Vis kun fejlteksten hvis vi
       // ALDRIG har haft noget rigtigt indhold at falde tilbage paa.
       if (!harIndlaestFoerste) {
-        track.textContent = 'Kunne ikke hente nyheder fra DR lige nu.';
+        trackContent.textContent = 'Kunne ikke hente nyheder fra DR lige nu.';
       }
     });
   };
   load();
   registerInterval(setInterval(load, 5 * 60000));
+
+  // Selv-helbred: uanset praecis aarsag, opdager vi et reelt fastfrosset scroll ved at maale
+  // om transform-positionen aendrer sig over tid, og tvinger i saa fald en genstart -- samme
+  // "reager paa symptomet, ikke den gaettede aarsag"-tilgang som sidens egen frame-vagthund.
+  // Klasse-fjern/gentilfoej (med en tvunget reflow imellem) er den kendte, sikre maade at
+  // genstarte en CSS-keyframe-animation paa uden at forstyrre andre inline-stilarter
+  // (fontSize/animationDuration ovenfor er inline og roeres slet ikke af dette).
+  let sidstTransform = null;
+  let ubevaegetITraek = 0;
+  registerInterval(setInterval(() => {
+    const nuvaerendeTransform = getComputedStyle(track).transform;
+    if (nuvaerendeTransform === sidstTransform) {
+      ubevaegetITraek++;
+      if (ubevaegetITraek >= 2) {
+        track.classList.remove('nyhedsbanner-track');
+        void track.offsetWidth;
+        track.classList.add('nyhedsbanner-track');
+        ubevaegetITraek = 0;
+      }
+    } else {
+      ubevaegetITraek = 0;
+    }
+    sidstTransform = nuvaerendeTransform;
+  }, 20000));
+
   return node;
 }
 
