@@ -546,31 +546,35 @@ function buildElNode(el, registerInterval) {
     anvendIndholdsSkala(media, el);
   } else if (el.type === 'rotator' && Array.isArray(el.slides) && el.slides.length) {
     let idx = 0;
-    // Forudindlaeser NAESTE slides billede/video i baggrunden MENS den aktuelle slide
-    // stadig vises -- ellers starter en frisk henting FOERST i det oejeblik DOM'en er ryddet
-    // for at vise den, hvilket saas som et kort blink/sort flade indtil den er hentet og
-    // dekodet. "side"-slides (undersider med egne elementer) og YouTube-iframes kan ikke
-    // forudindlaeses meningsfuldt paa denne maade og springes derfor over -- de opfoerer sig
-    // som foer, kun de almindelige billede/video-slides bliver hurtigere.
-    const preloadedeUrls = new Set();
-    function preloadSlide(slide) {
-      if (!slide || !slide.url || preloadedeUrls.has(slide.url)) return;
-      if (slide.type === 'billede') {
-        preloadedeUrls.add(slide.url);
-        new Image().src = slide.url;
-      } else if (slide.type === 'video' && slide.kind !== 'youtube') {
-        preloadedeUrls.add(slide.url);
-        const forvarmer = document.createElement('video');
-        forvarmer.muted = true;
-        // "metadata", ikke "auto": "auto" beder browseren hente/buffer HELE videofilen
-        // straks i baggrunden, hvilket paa svag Android-hardware kan lægge et unødigt stort
-        // netvaerks-/hukommelses-/afkodningspres oven i det der allerede vises -- "metadata"
-        // varmer stadig forbindelsen/DNS/TLS op og henter nok til at starte hurtigere, uden
-        // den fulde fil-download.
-        forvarmer.preload = 'metadata';
-        forvarmer.src = slide.url;
+    // Forbereder den RIGTIGE afspilnings-node for naeste slide i baggrunden, mens den
+    // aktuelle slide stadig vises, og GENBRUGER den ved selve skiftet -- ikke bare en smidt-
+    // vaek "opvarmer" der kun fylder HTTP-cachen (det lod stadig et nybygget <video>-element
+    // starte forfra med at demuxe/afkode ved selve skiftet, som stadig kunne naa at vise et
+    // kort blink/sort flade). Video sat paa pause (ikke autoplay) mens den ligger klar, saa
+    // den ikke naar at spille et stykke af sig selv færdig i baggrunden foer den overhovedet
+    // vises -- currentTime nulstilles og play() kaldes foerst i selve showSlide. "side"-slides
+    // (undersider med egne elementer) og YouTube-iframes kan ikke forberedes paa samme maade
+    // og springes over -- de opfoerer sig som foer.
+    const forberedteSlides = new Map(); // slide (objekt-reference) -> allerede bygget node
+
+    function forberedSlide(slide) {
+      if (!slide || !slide.url || slide.kind === 'youtube' || forberedteSlides.has(slide)) return;
+      const media = buildMediaNode(slide);
+      if (media.tagName === 'VIDEO') {
+        // "auto", bevidst: kun "nok til at starte" (metadata) er ikke nok til et blink-frit
+        // skift -- her SKAL browseren faktisk have hentet og afkodet nok til at spille med
+        // det samme. OBS: dette er den samme eftertragtning der tidligere blev mistaenkt for
+        // at bidrage til en frame-vagthund-genindlaesningsstorm paa svag Android-hardware (se
+        // git-historik) -- den mistanke blev aldrig endeligt bekraeftet (den mere sandsynlige
+        // aarsag var rAF-pause fejlfortolket som et haeng), men hold øje med Aktivitetslog
+        // efter denne aendring, saerligt paa svage enheder med flere/store videoer i rotatorer.
+        media.preload = 'auto';
+        media.autoplay = false;
+        media.pause();
       }
+      forberedteSlides.set(slide, media);
     }
+
     const showSlide = () => {
       node.innerHTML = '';
       const slide = el.slides[idx];
@@ -587,14 +591,23 @@ function buildElNode(el, registerInterval) {
         node.appendChild(inner);
         anvendIndholdsSkala(inner, el);
       } else {
-        const media = buildMediaNode(slide);
+        let media = forberedteSlides.get(slide);
+        if (media) {
+          forberedteSlides.delete(slide);
+          if (media.tagName === 'VIDEO') {
+            media.currentTime = 0;
+            media.play().catch(() => {});
+          }
+        } else {
+          media = buildMediaNode(slide); // foerste visning nogensinde -- intet naaet at forberede
+        }
         node.appendChild(media);
         anvendIndholdsSkala(media, el);
       }
-      preloadSlide(el.slides[(idx + 1) % el.slides.length]);
+      forberedSlide(el.slides[(idx + 1) % el.slides.length]);
       idx = (idx + 1) % el.slides.length;
     };
-    preloadSlide(el.slides[(idx + 1) % el.slides.length]);
+    forberedSlide(el.slides[(idx + 1) % el.slides.length]);
     showSlide();
     if (el.slides.length > 1) {
       registerInterval(setInterval(showSlide, el.intervalMs || 30000));

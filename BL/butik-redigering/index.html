@@ -9,8 +9,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-16">
-<script src="../render-shared.js?v=2026-07-19-16"></script>
+<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-17">
+<script src="../render-shared.js?v=2026-07-19-17"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -241,6 +241,16 @@
   .feedback-type-btn:not(.active) { background: #f4f4f2; color: #666; }
   .feedback-type-btn.active { background: #eef0fd; color: #040DB1; }
   #feedbackBeskrivelse { margin-top: 6px; }
+
+  /* Guide-spotlight: en meget stor box-shadow uden blur fylder HELE resten af skaermen med
+     moerkt, saa kun selve maal-elementet (som faar sin egen z-index over resten) staar klart
+     -- en almindelig, billig CSS-teknik til "peg paa det rigtige element" i stedet for en
+     generisk centreret pop-up der ikke viser HVOR tingene reelt er. */
+  .guide-spotlight {
+    z-index: 3001;
+    box-shadow: 0 0 0 6px rgba(4,13,177,.9), 0 0 0 9999px rgba(0,0,0,.65);
+    border-radius: 10px;
+  }
 </style>
 </head>
 <body>
@@ -382,15 +392,18 @@
     </div>
   </div>
 
-  <div id="guideOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:3000; align-items:center; justify-content:center;">
-    <div style="background:white; border-radius:16px; padding:32px; width:min(440px, 92vw); text-align:center;">
-      <div id="guideIkon" style="font-size:40px; margin-bottom:10px;"></div>
-      <h1 id="guideTitel" style="margin:0 0 10px 0;"></h1>
-      <div id="guideBody" style="color:#555; font-size:14px; line-height:1.6; margin-bottom:22px;"></div>
-      <div id="guideDots" style="display:flex; justify-content:center; gap:6px; margin-bottom:22px;"></div>
-      <div style="display:flex; gap:8px;">
-        <button id="guideSkipBtn" style="flex:1; background:#f4f4f2; color:#666;">Spring over</button>
-        <button id="guideNextBtn" style="flex:1;">Næste</button>
+  <div id="guideOverlay" style="display:none; position:fixed; inset:0; z-index:3000;">
+    <div id="guideArrow" style="display:none; position:fixed; width:0; height:0; z-index:3002;"></div>
+    <div id="guideCard" style="position:fixed; background:white; border-radius:12px; padding:22px 24px; width:min(360px, 90vw); text-align:left; z-index:3002; box-shadow:0 12px 32px rgba(0,0,0,.28); transition:top .2s, left .2s;">
+      <div id="guideEyebrow" style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#040DB1; margin-bottom:6px;"></div>
+      <h1 id="guideTitel" style="margin:0 0 8px 0; font-size:17px;"></h1>
+      <div id="guideBody" style="color:#555; font-size:13px; line-height:1.55; margin-bottom:18px;"></div>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <span id="guideDots" style="display:flex; gap:5px;"></span>
+        <div style="display:flex; gap:8px;">
+          <button id="guideSkipBtn" style="padding:7px 12px; font-size:12px; background:#f4f4f2; color:#666;">Spring over</button>
+          <button id="guideNextBtn" style="padding:7px 14px; font-size:12px;">Næste</button>
+        </div>
       </div>
     </div>
   </div>
@@ -401,7 +414,11 @@
         <h2 style="margin:0;">Live nu på skærmen</h2>
         <span id="liveViewBadge" style="font-size:11px; color:#666;"></span>
       </div>
-      <div id="liveViewBox" style="position:relative; width:100%; aspect-ratio:16/9; background:#0a0a0a; border-radius:8px; overflow:hidden; container-type:inline-size; margin-bottom:20px;"></div>
+      <div id="liveViewBox" style="position:relative; width:100%; aspect-ratio:16/9; background:#0a0a0a; border-radius:8px; overflow:hidden; container-type:inline-size; margin-bottom:8px;"></div>
+      <!-- Aabner den RIGTIGE skaerm-visning (skaerm.html) i en ny fane -- ikke et link med
+           kredentialer bagt ind, man logger selv ind der med sin egen konto (se skaerm.html's
+           nye interaktive login) og ser saa automatisk netop sin egen butik. -->
+      <a href="../skaerm.html" target="_blank" rel="noopener" style="display:block; text-align:center; font-size:12px; color:#040DB1; margin-bottom:20px; text-decoration:none;">Åbn jeres rigtige skærm ↗</a>
 
       <h2>Tilføj element</h2>
       <div class="add-row">
@@ -575,7 +592,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master55';
+  const SCRIPT_VERSION = '2026-07-19-master57';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -625,6 +642,7 @@
   let mediaLibrary = [];
   let sabloner = [];
   let erSuperadmin = false;
+  let aktuelBrugerEmail = null;
   let armedElementId = null;
   let selectedElementId = null;
   let multiSelected = new Set();
@@ -871,6 +889,7 @@
     }
 
     erSuperadmin = !!brugerRow.er_superadmin;
+    aktuelBrugerEmail = user.email;
     console.log('[redigering-debug] Logget ind som', user.email, '| er_superadmin=', erSuperadmin, '| butik_id=', brugerRow.butik_id);
     document.getElementById('superadminBadge').style.display = erSuperadmin ? 'inline-block' : 'none';
     document.querySelectorAll('.superadmin-only').forEach(elNode => {
@@ -993,6 +1012,31 @@
     document.getElementById('feedbackOverlay').style.display = 'none';
   });
 
+  // Automatisk indfanget kontekst til en "Fejl"-indsendelse -- adskilt fra brugerens egen
+  // fritekst (se teknisk_info-kolonnen), saa vi kan se hvad der REELT var i gang uden at
+  // skulle spørge bagefter: hvilken side, hvilket element (hvis noget) var valgt, browser,
+  // skaerm-stoerrelse, app-version (saa en fejl rettet i en nyere version kan genkendes), og
+  // enhver JS-fejl der allerede er fanget i denne session (samme mekanisme som skaerm.html's
+  // logJsFejl, men her handler det kun om at BERIGE feedback -- ikke en separat DB-log).
+  function byggFeedbackTekniskInfo() {
+    const side = (sider.find(s => s.id === aktivSideId) || {}).navn || '(ukendt)';
+    const valgtEl = elements.find(e => e.id === selectedElementId);
+    const linjer = [
+      'Version: ' + SCRIPT_VERSION,
+      'Butik: ' + (document.getElementById('butikNavn').textContent || '(ukendt)'),
+      'Superadmin: ' + (erSuperadmin ? 'ja' : 'nej'),
+      'Redigerer fælles skabelon: ' + (masterEditMode ? 'ja' : 'nej'),
+      'Side: ' + side,
+      'Valgt element: ' + (valgtEl ? valgtEl.type + ' (' + valgtEl.id + ')' : 'intet'),
+      'Vinduesstørrelse: ' + window.innerWidth + 'x' + window.innerHeight,
+      'Browser: ' + navigator.userAgent,
+    ];
+    if (loggedeJsFejl.size) {
+      linjer.push('', 'JS-fejl set i denne session:', ...Array.from(loggedeJsFejl));
+    }
+    return linjer.join('\n');
+  }
+
   document.getElementById('feedbackSubmitBtn').addEventListener('click', async () => {
     const titel = document.getElementById('feedbackTitel').value.trim();
     const beskrivelse = document.getElementById('feedbackBeskrivelse').value.trim();
@@ -1009,6 +1053,7 @@
       p_titel: titel,
       p_beskrivelse: beskrivelse || null,
       p_hvor: feedbackType === 'fejl' ? (hvor || null) : null,
+      p_teknisk_info: byggFeedbackTekniskInfo(),
     });
     btn.disabled = false;
     if (error) {
@@ -1555,14 +1600,31 @@
       return '<div style="background:#f7f7fb; border-radius:8px; padding:12px 14px; font-size:13px;">' +
         '<div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">' +
         '<div><b>' + label + ' — ' + escapeHtml(row.titel) + '</b></div>' +
-        '<div style="color:#aaa; font-size:11px; white-space:nowrap;">' + tidSiden(row.oprettet_at) + '</div>' +
+        '<div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">' +
+        '<span style="color:#aaa; font-size:11px; white-space:nowrap;">' + tidSiden(row.oprettet_at) + '</span>' +
+        '<span class="feedback-del-btn" data-id="' + row.id + '" title="Slet" style="cursor:pointer; color:#c0392b; font-size:14px; line-height:1;">✕</span>' +
+        '</div>' +
         '</div>' +
         '<div style="color:#888; font-size:12px; margin-top:4px;">' + escapeHtml(row.butik_navn || '(ukendt butik)') + ' · ' + escapeHtml(row.bruger_email || '(ukendt bruger)') + '</div>' +
         (row.beskrivelse ? '<div style="margin-top:8px; white-space:pre-wrap;">' + escapeHtml(row.beskrivelse) + '</div>' : '') +
         (row.hvor ? '<div style="margin-top:6px; font-size:12px; color:#666;"><b>Hvor:</b> ' + escapeHtml(row.hvor) + '</div>' : '') +
+        (row.teknisk_info ? '<details style="margin-top:8px;"><summary style="cursor:pointer; color:#888; font-size:11px;">Teknisk info</summary>' +
+          '<div style="white-space:pre-wrap; font-family:monospace; font-size:11px; color:#666; margin-top:4px; max-height:160px; overflow-y:auto;">' + escapeHtml(row.teknisk_info) + '</div></details>' : '') +
         '</div>';
     }).join('');
   }
+
+  document.getElementById('feedbackAdminListe').addEventListener('click', async (e) => {
+    const delBtn = e.target.closest('.feedback-del-btn');
+    if (!delBtn) return;
+    if (!confirm('Slet denne feedback?')) return;
+    const { error } = await client.rpc('slet_feedback', { p_id: delBtn.dataset.id });
+    if (error) {
+      alert('Kunne ikke slette: ' + error.message);
+      return;
+    }
+    await loadFeedbackAdmin();
+  });
 
   document.getElementById('feedbackAdminBtn').addEventListener('click', async () => {
     document.getElementById('superadminMenu').style.display = 'none';
@@ -1581,36 +1643,160 @@
   document.getElementById('feedbackAdminTypeFilter').addEventListener('change', loadFeedbackAdmin);
 
   // ---------- Guide (vist automatisk foerste gang, ellers via "?"-knappen) ----------
+  // Hvert trin kan pege paa et RIGTIGT element paa siden (target, en funktion der finder det,
+  // saa vi altid faar det aktuelle DOM-element -- ikke et der er blevet erstattet siden sidst)
+  // -- kortet flytter sig hen til det, og en pil + spotlight (se .guide-spotlight) viser
+  // praecis hvad der menes, i stedet for en generisk pop-up midt paa skaermen der ikke viser
+  // HVOR tingene er.
 
   const GUIDE_TRIN = [
-    { ikon: '👋', titel: 'Velkommen til jeres skærm-styring', body: 'Her redigerer du indholdet på jeres butiksskærm. Guiden her tager under et minut — du kan altid åbne den igen senere via "?"-knappen øverst.' },
-    { ikon: '➕', titel: 'Tilføj indhold', body: 'Klik en af knapperne under "Tilføj element" i venstre side for at tilføje tekst, billeder, videoer, eller en rotator der selv skifter mellem flere ting.' },
-    { ikon: '✋', titel: 'Flyt og tilpas', body: 'Træk i et element for at flytte det, og i håndtaget nederst til højre for at ændre størrelsen. Klik på elementet for at se dets indstillinger til venstre under "Egenskaber".' },
-    { ikon: '💾', titel: 'Gem, og se det med det samme', body: '"Live nu på skærmen" øverst til venstre viser altid præcis hvad der kører på jeres rigtige skærm — og husk "Gem ændringer" øverst til højre, når du er tilfreds.' },
-    { ikon: '💬', titel: 'Noget der driller?', body: 'Brug "Feedback"-knappen nederst til højre til at sende os en fejl eller et ønske til en ændring — det lander direkte hos os. God fornøjelse!' },
+    {
+      titel: () => aktuelBrugerEmail ? 'Velkommen, ' + aktuelBrugerEmail : 'Velkommen',
+      body: 'Her redigerer du indholdet på jeres butiksskærm. Denne gennemgang tager under et minut, og du kan altid åbne den igen via "?"-knappen øverst.',
+      target: null,
+    },
+    {
+      titel: 'Tilføj indhold',
+      body: 'Klik en af knapperne her for at tilføje tekst, billeder, videoer, eller en rotator der selv skifter mellem flere ting.',
+      target: () => document.querySelector('.add-row'),
+    },
+    {
+      titel: 'Flyt og tilpas',
+      body: 'Træk i et element for at flytte det, og i håndtaget nederst til højre for at ændre størrelsen. Bokse med en stiplet lilla kant er "faste pladser" — nyt: deres placering er sat centralt af os og kan ikke flyttes, men indholdet i dem skifter I stadig helt selv.',
+      target: () => document.querySelector('.slot-element') || document.getElementById('canvas'),
+    },
+    {
+      titel: 'Gem, og se det med det samme',
+      body: '"Live nu på skærmen" til venstre viser altid præcis hvad der kører på jeres rigtige skærm. Husk at trykke her, når du er tilfreds med ændringerne.',
+      target: () => document.getElementById('saveBtn'),
+    },
+    {
+      titel: 'Vi er ikke færdige endnu',
+      body: 'Systemet er stadig nyt, og der kan gemme sig fejl vi ikke selv har fundet. Ser du noget der driller, eller mangler en funktion — brug denne knap. Det lander direkte hos os, ikke i et sort hul.',
+      target: () => document.getElementById('feedbackFloatBtn'),
+    },
   ];
   let guideTrinIdx = 0;
+  let guideSpotlightMaal = null;
+  // Rydder spotlighten paa det FORRIGE trins maal, foer vi (evt.) saetter en ny -- ellers ville
+  // et element fra et tidligere trin blive staaende oplyst resten af guiden.
+  function ryddGuideSpotlight() {
+    if (!guideSpotlightMaal) return;
+    guideSpotlightMaal.classList.remove('guide-spotlight');
+    if (guideSpotlightMaal.dataset.guidePositionOverride) {
+      guideSpotlightMaal.style.position = '';
+      delete guideSpotlightMaal.dataset.guidePositionOverride;
+    }
+    guideSpotlightMaal = null;
+    document.getElementById('guideArrow').style.display = 'none';
+  }
+
+  // z-index alene virker kun paa et POSITIONERET element -- de fleste maal (knapper, .add-row)
+  // er statisk positioneret som standard, saa vi laaner dem "position:relative" midlertidigt.
+  // Allerede-positionerede elementer (fx feedback-knappen, som er fixed) roeres ikke.
+  function saetGuideSpotlight(target) {
+    if (getComputedStyle(target).position === 'static') {
+      target.dataset.guidePositionOverride = '1';
+      target.style.position = 'relative';
+    }
+    target.classList.add('guide-spotlight');
+    guideSpotlightMaal = target;
+  }
+
+  // Placerer guide-kortet og pilen op til (eller ned til) maal-elementet, klemt til at blive
+  // inden for vinduet -- foretrækker at staa UNDER maalet, falder tilbage til OVER det hvis
+  // der ikke er plads (fx et maal helt nederst paa skaermen).
+  function positionerGuideVedMaal(target) {
+    const card = document.getElementById('guideCard');
+    const arrow = document.getElementById('guideArrow');
+    const t = target.getBoundingClientRect();
+    const c = card.getBoundingClientRect();
+    const margin = 18;
+    const arrowSize = 9;
+
+    let top, arrowRetning;
+    if (t.bottom + margin + c.height < window.innerHeight) {
+      top = t.bottom + margin;
+      arrowRetning = 'op'; // pilen peger OP mod maalet, kortet er UNDER
+    } else if (t.top - margin - c.height > 0) {
+      top = t.top - margin - c.height;
+      arrowRetning = 'ned'; // pilen peger NED mod maalet, kortet er OVER
+    } else {
+      top = Math.max(12, window.innerHeight / 2 - c.height / 2);
+      arrowRetning = null;
+    }
+    let left = t.left + t.width / 2 - c.width / 2;
+    left = Math.max(12, Math.min(left, window.innerWidth - c.width - 12));
+
+    card.style.transform = 'none';
+    card.style.top = top + 'px';
+    card.style.left = left + 'px';
+
+    if (arrowRetning) {
+      // Klemt til kortets NYE (lige nu satte) venstre-kant, ikke c.left/c.width -- de er
+      // maalt FOeR kortet blev flyttet, saa de peger stadig paa dets forrige placering.
+      const arrowLeft = Math.max(left, Math.min(t.left + t.width / 2, left + c.width)) - arrowSize;
+      arrow.style.display = 'block';
+      arrow.style.left = arrowLeft + 'px';
+      arrow.style.borderLeft = arrowSize + 'px solid transparent';
+      arrow.style.borderRight = arrowSize + 'px solid transparent';
+      if (arrowRetning === 'op') {
+        arrow.style.top = (top - arrowSize) + 'px';
+        arrow.style.borderBottom = arrowSize + 'px solid white';
+        arrow.style.borderTop = '';
+      } else {
+        arrow.style.top = (top + c.height) + 'px';
+        arrow.style.borderTop = arrowSize + 'px solid white';
+        arrow.style.borderBottom = '';
+      }
+    } else {
+      arrow.style.display = 'none';
+    }
+  }
 
   function renderGuideTrin() {
     const trin = GUIDE_TRIN[guideTrinIdx];
-    document.getElementById('guideIkon').textContent = trin.ikon;
-    document.getElementById('guideTitel').textContent = trin.titel;
+    ryddGuideSpotlight();
+
+    document.getElementById('guideEyebrow').textContent = 'Trin ' + (guideTrinIdx + 1) + ' af ' + GUIDE_TRIN.length;
+    document.getElementById('guideTitel').textContent = typeof trin.titel === 'function' ? trin.titel() : trin.titel;
     document.getElementById('guideBody').textContent = trin.body;
     document.getElementById('guideDots').innerHTML = GUIDE_TRIN.map((_, i) =>
-      '<span style="width:7px; height:7px; border-radius:50%; background:' + (i === guideTrinIdx ? '#040DB1' : '#ddd') + ';"></span>'
+      '<span style="width:6px; height:6px; border-radius:50%; background:' + (i === guideTrinIdx ? '#040DB1' : '#ddd') + ';"></span>'
     ).join('');
     const erSidsteTrin = guideTrinIdx === GUIDE_TRIN.length - 1;
     document.getElementById('guideNextBtn').textContent = erSidsteTrin ? 'Forstået!' : 'Næste';
     document.getElementById('guideSkipBtn').style.visibility = erSidsteTrin ? 'hidden' : 'visible';
+
+    const overlay = document.getElementById('guideOverlay');
+    const card = document.getElementById('guideCard');
+    const target = trin.target ? trin.target() : null;
+    if (target) {
+      overlay.style.background = 'transparent';
+      saetGuideSpotlight(target);
+      // requestAnimationFrame: kortets egen stoerrelse (brugt til at centrere det paa maalet)
+      // skal maales EFTER teksten for dette trin er sat, ellers bruges forrige trins hoejde.
+      requestAnimationFrame(() => positionerGuideVedMaal(target));
+    } else {
+      overlay.style.background = 'rgba(0,0,0,.6)';
+      document.getElementById('guideArrow').style.display = 'none';
+      card.style.top = '50%';
+      card.style.left = '50%';
+      card.style.transform = 'translate(-50%, -50%)';
+    }
   }
 
   function aabnGuide() {
     guideTrinIdx = 0;
+    // Vis overlay'et FOeR vi maaler/positionerer -- ellers er kortet stadig display:none et
+    // sted i DOM'en og getBoundingClientRect ville give 0x0 (samme faelde som #app/canvas ved
+    // login, se loadEverything).
+    document.getElementById('guideOverlay').style.display = 'block';
     renderGuideTrin();
-    document.getElementById('guideOverlay').style.display = 'flex';
   }
   function lukGuide() {
     localStorage.setItem('blho_guide_set', '1');
+    ryddGuideSpotlight();
     document.getElementById('guideOverlay').style.display = 'none';
   }
   document.getElementById('guideOpenBtn').addEventListener('click', aabnGuide);
@@ -1619,6 +1805,13 @@
     if (guideTrinIdx === GUIDE_TRIN.length - 1) { lukGuide(); return; }
     guideTrinIdx++;
     renderGuideTrin();
+  });
+  // Genberegn placeringen hvis vinduet skifter stoerrelse mens guiden er aaben (fx admin
+  // aabner DevTools, eller roterer en tablet).
+  window.addEventListener('resize', () => {
+    if (document.getElementById('guideOverlay').style.display === 'block' && guideSpotlightMaal) {
+      positionerGuideVedMaal(guideSpotlightMaal);
+    }
   });
 
   async function saveMasterTemplate() {
