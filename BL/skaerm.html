@@ -29,8 +29,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="render-shared.css?v=2026-07-19-11">
-<script src="render-shared.js?v=2026-07-19-11"></script>
+<link rel="stylesheet" href="render-shared.css?v=2026-07-19-14">
+<script src="render-shared.js?v=2026-07-19-14"></script>
 <style>
   * { box-sizing: border-box; }
   html, body {
@@ -75,7 +75,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master16';
+  const SCRIPT_VERSION = '2026-07-19-master17';
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
@@ -308,12 +308,25 @@
     let sidsteFrameTid = performance.now();
     let langsommeFramesITraek = 0;
 
+    // Browseren THROTTLER (i praksis stopper) requestAnimationFrame af sig selv naar siden
+    // ikke er synlig (skaermen gaar i sleep/dæmpes af Android, et system-dialogvindue stjæler
+    // fokus et øjeblik, osv.) -- det er FORVENTET, korrekt adfærd, ikke et hak/hæng. Uden
+    // dette tjek fortolkede vagthunden den normale pause som en fastfrosset side og
+    // genindlæste igen og igen, hver gang skærmen kom tilbage -- en falsk alarm-loop der intet
+    // havde med en reel fejl at gøre (bekræftet: ingen anden JS-fejl fulgte med i loggen).
+    function skaermErSynlig() {
+      return document.visibilityState !== 'hidden';
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (skaermErSynlig()) sidsteFrameTid = performance.now();
+    });
+
     function frameTick(nu) {
       const delta = nu - sidsteFrameTid;
       sidsteFrameTid = nu;
       // Et normalt frame er typisk 16-33ms (60/30Hz) -- over 500ms betyder reelt at siden
       // stod stille i et halvt sekund eller mere, hvilket aldrig skal ske under normal drift.
-      if (delta > 500) {
+      if (delta > 500 && skaermErSynlig()) {
         langsommeFramesITraek++;
         if (langsommeFramesITraek >= 3) {
           debugLog('Frame-vagthund: browseren hakker (frame-delta ' + Math.round(delta) + 'ms, ' + langsommeFramesITraek + ' gange i traek) -- genindlaeser for en frisk session.');
@@ -336,7 +349,7 @@
     // throttling-tilstand end blot langsomme frames), fanger frameTick det aldrig af sig selv
     // -- tjek derfor ogsaa periodisk via en helt separat timer-mekanisme.
     setInterval(() => {
-      if (performance.now() - sidsteFrameTid > 5000) {
+      if (performance.now() - sidsteFrameTid > 5000 && skaermErSynlig()) {
         debugLog('Frame-vagthund: intet frame modtaget i over 5 sekunder -- genindlaeser.');
         logJsFejl('Frame-vagthund: intet frame i over 5 sekunder -- genindlæste.');
         setTimeout(hardReload, 400);

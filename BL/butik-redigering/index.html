@@ -8,8 +8,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-11">
-<script src="../render-shared.js?v=2026-07-19-11"></script>
+<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-14">
+<script src="../render-shared.js?v=2026-07-19-14"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -375,7 +375,7 @@
         </div>
         <div id="propsContentScaleRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Indhold-størrelse (%)</label>
-          <input type="number" id="propContentScale" min="20" max="400" step="5" style="width:80px;">
+          <input type="number" id="propContentScale" min="20" max="200" step="5" style="width:80px;">
           <div style="font-size:11px; color:#888; margin-top:4px;">Gør ikoner/tekst/billede større eller mindre UDEN at ændre selve boksen -- går det ud over boksens kant, bliver det klippet der, ligesom alt andet indhold.</div>
         </div>
         <div id="propsFontSizeRow" style="margin-bottom:12px;">
@@ -477,7 +477,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master47';
+  const SCRIPT_VERSION = '2026-07-19-master50';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -2866,8 +2866,11 @@
   document.getElementById('propContentScale').addEventListener('input', (e) => {
     const el = elements.find(x => x.id === selectedElementId);
     if (!el) return;
-    const val = parseFloat(e.target.value);
-    if (!isNaN(val) && val > 0) { el.contentScale = val; renderCanvas(); }
+    // Klemt til samme 20-200-interval som input'ets min/max, ogsaa haandholdt (min/max paa
+    // et number-input forhindrer ikke et for stort/lille tal i at blive sat programmatisk) --
+    // en meget stor skala har vist sig at kunne goere svag Android-hardware alt for langsom.
+    const val = Math.min(200, Math.max(20, parseFloat(e.target.value)));
+    if (!isNaN(val)) { el.contentScale = val; renderCanvas(); }
   });
   document.getElementById('propFontSize').addEventListener('input', (e) => {
     const el = elements.find(x => x.id === selectedElementId);
