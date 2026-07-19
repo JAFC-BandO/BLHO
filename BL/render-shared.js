@@ -398,11 +398,37 @@ function miljoeffektCardHtml(data) {
 // sideName: navnet paa den side der reelt vises lige nu. Et laast element vises paa ALLE
 // sider som udgangspunkt (fx et ur/logo) -- MEDMINDRE det har sit eget kunPaaSide sat, i saa
 // fald vises det udelukkende naar sideName matcher praecis det navn.
+//
+// "Fast plads" (slotId): et laast element i skabelonen kan ALTERNATIVT markeres med et
+// slotId i stedet for at have fastfrosset indhold -- det beholder sin placering/stoerrelse
+// hos ALLE butikker (styret centralt, ligesom et helt normalt laast element), men selve
+// INDHOLDET (billede/video/rotator-slides osv.) er butikkens eget, matchet via samme
+// slotId i butikkens egne elementer. Har butikken intet lagt i den faste plads endnu, vises
+// skabelonens eget standard-indhold i stedet, saa en ny butik ikke starter med et tomt hul.
 function mergeMasterElements(storeElements, masterElements, sideName) {
-  const lockedMaster = (masterElements || []).filter(e => e.locked && (!e.kunPaaSide || e.kunPaaSide === sideName));
-  const lockedIds = new Set(lockedMaster.map(e => e.id));
-  const ownOnly = (storeElements || []).filter(e => !lockedIds.has(e.id));
-  return lockedMaster.concat(ownOnly);
+  const relevante = (masterElements || []).filter(e => !e.kunPaaSide || e.kunPaaSide === sideName);
+  const lockedFast = relevante.filter(e => e.locked && !e.slotId);
+  const slotDefs = relevante.filter(e => e.locked && e.slotId);
+  const lockedIds = new Set(lockedFast.map(e => e.id));
+  const slotIds = new Set(slotDefs.map(e => e.slotId));
+
+  const slotFyldt = slotDefs.map(slot => {
+    const eget = (storeElements || []).find(e => e.slotId === slot.slotId);
+    const kilde = eget || slot;
+    // Placering/stoerrelse kommer ALTID fra skabelonens egen slot-definition (centralt
+    // styret) -- kun selve indholdet (type, url, slides, tekst osv.) kommer fra butikkens
+    // egen version, hvis den findes.
+    return Object.assign({}, kilde, {
+      x: slot.x, y: slot.y, w: slot.w, h: slot.h,
+      id: eget ? eget.id : slot.id,
+      slotId: slot.slotId,
+      locked: false,
+      posLocked: true,
+    });
+  });
+
+  const ownOnly = (storeElements || []).filter(e => !lockedIds.has(e.id) && !slotIds.has(e.slotId));
+  return lockedFast.concat(slotFyldt).concat(ownOnly);
 }
 
 function buildMediaNode(spec) {

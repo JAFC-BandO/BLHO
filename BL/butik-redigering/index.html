@@ -8,8 +8,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-6">
-<script src="../render-shared.js?v=2026-07-19-6"></script>
+<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-7">
+<script src="../render-shared.js?v=2026-07-19-7"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -133,6 +133,10 @@
   .el.selected .streg-del { display: block; }
   .el.multi-selected { outline: 2px dashed #4d5bff; }
   .el.locked-element { outline: 1px dashed #ffb300; }
+  /* Fast plads (slotId): egen, tydeligt anderledes markering end almindeligt laast (ffb300)
+     -- position/stoerrelse er fast for alle butikker, men INDHOLDET er butikkens eget. */
+  .el.slot-element { outline: 1px dashed #6a5bd0; }
+  .el.slot-element .el-header .tag { color: #b3a8f5; }
   /* Header ligger som et OVERLAY OVENPAA boksens eget indhold (position:absolute inde i
      boksen, top:0) i stedet for en flex-soesken der spiser af el-body's hoejde -- saa
      el-body altid faar HELE boksens hoejde (100%), ogsaa for en tynd bar/streg helt oppe
@@ -378,6 +382,11 @@
             <datalist id="sideNavneListe"></datalist>
             <div style="font-size:11px; color:#888; margin-top:4px;">Skal matche navnet på siden præcis (som det står på sidefanen) — vælg fra listen for at undgå tastefejl. Blank = elementet vises på alle butikkers sider.</div>
           </div>
+          <div id="propSlotRow" style="display:none; margin-top:8px;">
+            <label style="margin-top:0;">Fast plads (valgfrit)</label>
+            <input type="text" id="propSlotId" placeholder="Blank = helt låst. Udfyld fx &quot;banner&quot; for en fast plads.">
+            <div style="font-size:11px; color:#888; margin-top:4px;">En "fast plads" beholder DENNE placering/størrelse hos alle butikker, men hver butik vælger selv sit eget indhold der (billede/video/rotator osv.) — modsat et almindeligt låst element, som viser det samme indhold overalt. Almindelige admins kan skifte indholdet, men ikke flytte/resize/slette pladsen.</div>
+          </div>
         </div>
       </div>
 
@@ -412,7 +421,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master40';
+  const SCRIPT_VERSION = '2026-07-19-master41';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1397,7 +1406,28 @@
   function displayElements() {
     if (masterEditMode) return elements;
     const aktivSide = sider.find(s => s.id === aktivSideId);
-    return mergeMasterElements(elements, masterTemplate ? masterTemplate.elements : [], aktivSide ? aktivSide.navn : null);
+    const merged = mergeMasterElements(elements, masterTemplate ? masterTemplate.elements : [], aktivSide ? aktivSide.navn : null);
+    // mergeMasterElements() er en ren funktion (bruges ogsaa read-only af skaerm.html/Live
+    // View) og bygger derfor et HELT NYT objekt for hver fast plads (slot) ved hvert kald --
+    // fint til visning, men redigerings-UI'et (Skift-knap, rotator-slides osv.) muterer
+    // elementet DIREKTE (el.url = ...), hvilket saa kun ville ramme den midlertidige kopi og
+    // forsvinde igen ved naeste gentegning. Her erstattes hvert slot-element derfor med den
+    // FAKTISKE, gemte version i "elements" -- findes den slet ikke endnu (foerste gang denne
+    // faste plads vises for butikken), "materialiseres" skabelonens standard-indhold ind i
+    // butikkens egne elementer een gang for alle, saa fremtidige redigeringer rent faktisk
+    // bliver gemt.
+    return merged.map(el => {
+      if (!el.posLocked || !el.slotId) return el;
+      let eget = elements.find(e => e.slotId === el.slotId);
+      if (!eget) {
+        eget = Object.assign({}, el, { id: uid() });
+        elements.push(eget);
+      } else {
+        eget.x = el.x; eget.y = el.y; eget.w = el.w; eget.h = el.h;
+        eget.posLocked = true;
+      }
+      return eget;
+    });
   }
 
   function renderSablonerGrid() {
@@ -2039,6 +2069,12 @@
     node.style.height = el.h + '%';
     if (el.boxColor) node.style.background = el.boxColor;
     const canEdit = masterEditMode || !el.locked;
+    // Fast plads (slotId): en almindelig admin maa gerne skifte INDHOLDET (billede/video/
+    // rotator-slides osv, styret af canEdit ovenfor), men ikke flytte/resize/slette selve
+    // pladsen -- kun superadmin kan det (matcher "vi som admins kan rykke rundt paa disse,
+    // men alle andre skal bare kunne aendre deres elementer").
+    const posLaast = !!el.posLocked && !erSuperadmin;
+    if (el.posLocked) node.classList.add('slot-element');
     if (el.locked && masterEditMode) node.classList.add('locked-element');
     if (el.locked && !masterEditMode) {
       // Skal se 100% ud som paa den rigtige skaerm -- ogsaa den translucente editor-kant/
@@ -2426,7 +2462,7 @@
       header.className = 'el-header';
       const tag = document.createElement('span');
       tag.className = 'tag';
-      tag.textContent = el.type + (el.locked ? ' [låst]' : '');
+      tag.textContent = el.type + (el.locked ? ' [låst]' : '') + (el.posLocked ? ' [fast plads]' : '');
       header.appendChild(tag);
 
       if (textDiv) {
@@ -2452,26 +2488,29 @@
         header.appendChild(fmtGroup);
       }
 
-      const del = document.createElement('span');
-      del.className = 'del';
-      del.textContent = '✕';
-      del.addEventListener('click', (e) => {
-        e.stopPropagation();
-        elements = elements.filter(x => x.id !== el.id);
-        if (armedElementId === el.id) { armedElementId = null; mediaBanner.classList.remove('active'); renderMediaGrid(); }
-        if (selectedElementId === el.id) { selectedElementId = null; renderPropsPanel(); }
-        renderCanvas();
-      });
-      header.appendChild(del);
-      header.addEventListener('pointerdown', (e) => {
-        if (e.target === header || e.target === tag) startDrag(e, el, node);
-      });
+      if (!posLaast) {
+        const del = document.createElement('span');
+        del.className = 'del';
+        del.textContent = '✕';
+        del.title = el.posLocked ? 'Nulstil til skabelonens standard-indhold' : '';
+        del.addEventListener('click', (e) => {
+          e.stopPropagation();
+          elements = elements.filter(x => x.id !== el.id);
+          if (armedElementId === el.id) { armedElementId = null; mediaBanner.classList.remove('active'); renderMediaGrid(); }
+          if (selectedElementId === el.id) { selectedElementId = null; renderPropsPanel(); }
+          renderCanvas();
+        });
+        header.appendChild(del);
+        header.addEventListener('pointerdown', (e) => {
+          if (e.target === header || e.target === tag) startDrag(e, el, node);
+        });
+      }
       node.appendChild(header);
     }
 
     node.appendChild(body);
 
-    if (canEdit) {
+    if (canEdit && !posLaast) {
       const resizeHandle = document.createElement('div');
       resizeHandle.className = 'resize-handle';
       resizeHandle.addEventListener('pointerdown', (e) => startResize(e, el, node));
@@ -2565,6 +2604,8 @@
     document.getElementById('propLockBtn').textContent = el.locked ? 'Lås op' : 'Lås element';
     document.getElementById('propKunPaaSideRow').style.display = (masterEditMode && el.locked) ? 'block' : 'none';
     document.getElementById('propKunPaaSide').value = el.kunPaaSide || '';
+    document.getElementById('propSlotRow').style.display = (masterEditMode && el.locked) ? 'block' : 'none';
+    document.getElementById('propSlotId').value = el.slotId || '';
     // sider (butikkens egne sidefaner) rammes ikke af master-edit-mode-swappet, saa vi kan
     // altid bruge dem her som forslag -- reducerer risikoen for en tastefejl der stille
     // ville betyde "matcher ingen side, vises derfor ingen steder".
@@ -2642,6 +2683,13 @@
     if (!el) return;
     const val = e.target.value.trim();
     if (val) el.kunPaaSide = val; else delete el.kunPaaSide;
+  });
+
+  document.getElementById('propSlotId').addEventListener('input', (e) => {
+    const el = elements.find(x => x.id === selectedElementId);
+    if (!el) return;
+    const val = e.target.value.trim();
+    if (val) el.slotId = val; else delete el.slotId;
   });
 
   document.getElementById('centerHBtn').addEventListener('click', () => {
