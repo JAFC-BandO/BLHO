@@ -412,7 +412,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master38';
+  const SCRIPT_VERSION = '2026-07-19-master40';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -543,6 +543,29 @@
 
   // ---------- Login / bootstrap ----------
 
+  // Saetter canvas/Live View til PRAECIS samme billedformat som butikkens fysiske skaerm
+  // rent faktisk har (rapporteret af enhedens check-in-script via `wm size`) -- i stedet for
+  // en fast antaget 16:9. Uden dette kunne elementer se rigtigt placerede ud i editoren, men
+  // ligge delvist uden for hvad den ægte skaerm har plads til at vise. Ingen kendt oploesning
+  // endnu (ny enhed, eller et aeldre check-in-script) -> falder tilbage til CSS'ens 16:9.
+  async function anvendSkaermFormat(butikId) {
+    const { data } = await client
+      .from('enheder')
+      .select('skaerm_bredde, skaerm_hoejde')
+      .eq('butik_id', butikId)
+      .not('skaerm_bredde', 'is', null)
+      .not('skaerm_hoejde', 'is', null)
+      .order('sidst_set_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const forhold = (data && data.skaerm_bredde && data.skaerm_hoejde)
+      ? (data.skaerm_bredde + ' / ' + data.skaerm_hoejde)
+      : '';
+    canvas.style.aspectRatio = forhold;
+    const liveBox = document.getElementById('liveViewBox');
+    if (liveBox) liveBox.style.aspectRatio = forhold;
+  }
+
   // Indlaeser ALT butik-specifikt data (sabloner, faelles skabelon, content, media, canvas,
   // Live View) for én given butik_id. Udtrukket som sin egen funktion saa den kan genbruges
   // BAADE ved login OG naar en superadmin "skifter butik" (se skiftTilButik nedenfor) uden at
@@ -616,6 +639,7 @@
     document.getElementById('bgColorInput').value = baggrundsfarve;
     document.getElementById('bgColorHex').value = baggrundsfarve;
     canvas.style.background = baggrundsfarve;
+    await anvendSkaermFormat(butikId);
     await loadMedia();
     renderSiderTabs();
     renderCanvas();
@@ -1876,26 +1900,67 @@
 
   // ---------- Canvas / elements ----------
 
+  // Beregner det "frie" indholds-omraade paa den AKTUELLE side -- hele canvas MINUS pladsen
+  // som laaste (faelles-skabelon) elementer som sidebar/banner/bund-bjaelke optager. Bruges
+  // til at give nye elementer en fornuftig standardplacering der matcher hvor siderne reelt
+  // har ledig plads (samme omraade som Main bruger til sit eget indhold), i stedet for en
+  // fast/generisk position der ofte endte under en laast sidebar eller banner.
+  function beregnFritOmraade() {
+    let left = 0, right = 100, top = 0, bottom = 100;
+    displayElements().filter(e => e.locked).forEach(e => {
+      const ex2 = e.x + e.w, ey2 = e.y + e.h;
+      if (e.x <= 0.5 && e.h >= 50) left = Math.max(left, ex2);
+      if (ex2 >= 99.5 && e.h >= 50) right = Math.min(right, e.x);
+      if (e.y <= 0.5 && e.w >= 50) top = Math.max(top, ey2);
+      if (ey2 >= 99.5 && e.w >= 50) bottom = Math.min(bottom, e.y);
+    });
+    // Sikkerhedsnet: hvis noget uventet gjorde omraadet for lille/negativt, brug hele canvas.
+    if (right - left < 10 || bottom - top < 10) return { x: 0, y: 0, w: 100, h: 100 };
+    return { x: left, y: top, w: right - left, h: bottom - top };
+  }
+
   document.querySelectorAll('[data-add]').forEach(btn => {
     btn.addEventListener('click', () => {
       const type = btn.getAttribute('data-add');
-      const defaults = {
-        titel:   { x: 5,  y: 5,  w: 55, h: 20, text: 'Ny titel' },
-        tekst:   { x: 5,  y: 28, w: 50, h: 20, text: 'Ny tekst' },
-        billede: { x: 55, y: 5,  w: 40, h: 45, url: null },
-        video:   { x: 5,  y: 50, w: 90, h: 40, url: null },
-        boks:    { x: 10, y: 10, w: 40, h: 30, boxColor: '#1a1a1a' },
-        rotator: { x: 10, y: 10, w: 50, h: 50, slides: [], intervalMs: 30000 },
-        miljoeffekt: { x: 10, y: 10, w: 50, h: 30 },
-        streg: { x: 10, y: 50, w: 80, h: 1, boxColor: '#ffffff' },
-        ur: { x: 10, y: 10, w: 25, h: 15 },
-        nyhedsbanner: { x: 0, y: 92, w: 100, h: 8 },
+
+      // nyhedsbanner er altid en fuld-bredde bund-bjaelke UDENFOR selve indholds-omraadet
+      // (ligesom naar den er laast i faelles skabelonen) -- skal ikke klemmes ind i det frie
+      // omraade som alt andet.
+      if (type === 'nyhedsbanner') {
+        elements.push({ id: uid(), type, x: 0, y: 92, w: 100, h: 8 });
+        renderCanvas();
+        return;
+      }
+
+      const fri = beregnFritOmraade();
+      // "Indholds"-typer fylder HELE det frie omraade -- det er dem der reelt bruges som en
+      // sides hovedindhold (rotator/billede/video/boks/miljoeffekt), og skal matche Main 1:1
+      // uden manuel fin-justering hver gang. De oevrige (mindre, supplerende) typer faar
+      // deres hidtidige standardstoerrelse, men CENTRERET i det frie omraade i stedet for en
+      // fast, generisk position der ofte endte under en laast sidebar/banner.
+      const fylderHele = { rotator: 1, billede: 1, video: 1, boks: 1, miljoeffekt: 1 };
+      const storrelser = {
+        titel:   { w: 55, h: 20, text: 'Ny titel' },
+        tekst:   { w: 50, h: 20, text: 'Ny tekst' },
+        billede: { w: 40, h: 45, url: null },
+        video:   { w: 90, h: 40, url: null },
+        boks:    { w: 40, h: 30, boxColor: '#1a1a1a' },
+        rotator: { w: 50, h: 50, slides: [], intervalMs: 30000 },
+        miljoeffekt: { w: 50, h: 30 },
+        streg: { w: 80, h: 1, boxColor: '#ffffff' },
+        ur: { w: 25, h: 15 },
         // Vejr-panelet viser overskrift + "nu" + 3 dages udsigt -- en for lav boks klipper
         // udsigts-raekkerne vaek (overflow:hidden), saa standardstoerrelsen skal vaere hoej
         // nok til at rumme det hele fra start (admin kan altid goere den mindre bagefter).
-        vejr: { x: 10, y: 10, w: 20, h: 55 },
+        vejr: { w: 20, h: 55 },
       }[type];
-      elements.push(Object.assign({ id: uid(), type }, defaults));
+
+      const { w: onskeW, h: onskeH, ...ekstra } = storrelser;
+      const w = fylderHele[type] ? fri.w : Math.min(onskeW, fri.w);
+      const h = fylderHele[type] ? fri.h : Math.min(onskeH, fri.h);
+      const x = fylderHele[type] ? fri.x : clamp(fri.x + (fri.w - w) / 2, 0, 100 - w);
+      const y = fylderHele[type] ? fri.y : clamp(fri.y + (fri.h - h) / 2, 0, 100 - h);
+      elements.push(Object.assign({ id: uid(), type, x, y, w, h }, ekstra));
       renderCanvas();
     });
   });
