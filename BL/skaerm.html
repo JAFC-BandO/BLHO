@@ -11,14 +11,18 @@
   // vaere netop DENNE butiks fulde URL inkl. ?email=&password=, ellers ville genvejen
   // logge ind som en forkert/ingen butik. Bygges derfor dynamisk ud fra location.href.
   (function () {
-    const ikonUrl = new URL('favicon.png', location.href).href;
+    const ikonUrl = new URL('favicon.svg', location.href).href;
     const manifest = {
       name: 'Butik Skærm',
       display: 'fullscreen',
       start_url: location.href,
       background_color: '#0a0a0a',
       theme_color: '#0a0a0a',
-      icons: [{ src: ikonUrl, sizes: '512x512', type: 'image/png' }],
+      // "any" (ikke en fast pixel-stoerrelse) er det korrekte "sizes"-hint for et SVG-ikon --
+      // det er opløsnings-uafhaengigt. De fleste nyere Android/Chrome-launchere haandterer
+      // SVG-manifest-ikoner fint, men er nogen enheder paa en aeldre/anderledes launcher der
+      // viser et blankt hjemmeskaerm-ikon efter dette, er det den mest sandsynlige aarsag.
+      icons: [{ src: ikonUrl, sizes: 'any', type: 'image/svg+xml' }],
     };
     const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
     const link = document.createElement('link');
@@ -27,13 +31,13 @@
     document.head.appendChild(link);
   })();
 </script>
-<link rel="icon" type="image/png" href="favicon.png">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="render-shared.css?v=2026-07-19-18">
-<script src="render-shared.js?v=2026-07-19-18"></script>
+<link rel="stylesheet" href="render-shared.css?v=2026-07-19-19">
+<script src="render-shared.js?v=2026-07-19-19"></script>
 <style>
   * { box-sizing: border-box; }
   html, body {
@@ -93,7 +97,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master20';
+  const SCRIPT_VERSION = '2026-07-19-master21';
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
