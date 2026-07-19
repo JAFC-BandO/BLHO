@@ -462,7 +462,7 @@
               <input type="number" id="propHeight" min="1" max="100" step="0.5" style="width:70px;">
             </div>
           </div>
-          <div style="font-size:11px; color:#888; margin-top:4px;">Skriv et tal for at gøre elementet større/mindre, uden at skulle trække i det.</div>
+          <div id="propsSizeHint" style="font-size:11px; color:#888; margin-top:4px;">Skriv et tal for at gøre elementet større/mindre, uden at skulle trække i det.</div>
         </div>
         <div id="propsContentScaleRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Indhold-størrelse (%)</label>
@@ -605,7 +605,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master61';
+  const SCRIPT_VERSION = '2026-07-19-master62';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -3235,9 +3235,22 @@
     panel.style.display = 'block';
     // Størrelse ved at skrive et tal i stedet for at trække i haandtaget -- samme gating som
     // selve resize-haandtaget (buildElementNode's posLaast): en "fast plads" er 100% fast for
-    // ALLE, saa her er der intet at skrive et tal ind i.
+    // ALMINDELIGE admins, saa her er der intet at skrive et tal ind i.
+    //
+    // Undtagelse: superadmin, MENS de redigerer selve den fælles skabelon (masterEditMode),
+    // faar feltet vist alligevel for netop de raa slot-definerende elementer -- det er her
+    // en "fast plads"s reelle bredde/hoejde bliver sat for ALLE butikker. Uden for master-
+    // edit-mode ville det vaere meningsloest at vise det (mergeMasterElements overskriver
+    // altid en butiks egen w/h med skabelonens, saa en aendring der ville forsvinde igen ved
+    // naeste indlaesning). Erstatter det at skulle traekke med musen (som forårsagede den
+    // overlap-fejl mellem banner/hoved tidligere) med et praecist, ufarligt tal-felt --
+    // stadig 100% fast for alle andre end superadmin.
     const posLaast = !!el.posLocked || !!el.slotId;
-    document.getElementById('propsSizeRow').style.display = posLaast ? 'none' : 'block';
+    const superadminKanJustereFastPlads = posLaast && erSuperadmin && masterEditMode;
+    document.getElementById('propsSizeRow').style.display = (!posLaast || superadminKanJustereFastPlads) ? 'block' : 'none';
+    document.getElementById('propsSizeHint').textContent = superadminKanJustereFastPlads
+      ? 'Kun du kan se dette (superadmin): sætter den faste plads' + (el.slotId ? ' "' + el.slotId + '"' : '') + 's reelle størrelse for ALLE butikker.'
+      : 'Skriv et tal for at gøre elementet større/mindre, uden at skulle trække i det.';
     document.getElementById('propWidth').value = Math.round(el.w * 10) / 10;
     document.getElementById('propHeight').value = Math.round(el.h * 10) / 10;
     // Indhold-skala: uafhaengig af posLaast (den maa gerne bruges paa en fast plads' INDHOLD,
