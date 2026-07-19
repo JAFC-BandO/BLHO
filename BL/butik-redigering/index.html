@@ -8,8 +8,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-10">
-<script src="../render-shared.js?v=2026-07-19-10"></script>
+<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-11">
+<script src="../render-shared.js?v=2026-07-19-11"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -373,6 +373,11 @@
           </div>
           <div style="font-size:11px; color:#888; margin-top:4px;">Skriv et tal for at gøre elementet større/mindre, uden at skulle trække i det.</div>
         </div>
+        <div id="propsContentScaleRow" style="margin-bottom:12px;">
+          <label style="margin-top:0;">Indhold-størrelse (%)</label>
+          <input type="number" id="propContentScale" min="20" max="400" step="5" style="width:80px;">
+          <div style="font-size:11px; color:#888; margin-top:4px;">Gør ikoner/tekst/billede større eller mindre UDEN at ændre selve boksen -- går det ud over boksens kant, bliver det klippet der, ligesom alt andet indhold.</div>
+        </div>
         <div id="propsFontSizeRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Skriftstørrelse (vw)</label>
           <input type="number" id="propFontSize" min="0.5" max="20" step="0.1" style="width:80px;">
@@ -472,7 +477,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master46';
+  const SCRIPT_VERSION = '2026-07-19-master47';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -2293,6 +2298,7 @@
       if (el.textColor) textDiv.style.color = el.textColor;
       textDiv.addEventListener('input', () => { el.html = stripInlineFontSize(textDiv.innerHTML); });
       body.appendChild(textDiv);
+      anvendIndholdsSkala(textDiv, el);
     } else if (el.type === 'billede' || el.type === 'video') {
       if (el.url) {
         let media;
@@ -2310,6 +2316,7 @@
         }
         media.className = 'el-media-fill';
         body.appendChild(media);
+        anvendIndholdsSkala(media, el);
 
         if (canEdit) {
           const change = document.createElement('div');
@@ -2390,6 +2397,7 @@
             badge.style.cssText = 'width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#aaa; font-size:11px; text-align:center; padding:6px; background:' + (slide.background || '#0a0a0a') + ';';
             badge.textContent = 'Side (' + (slide.elements || []).length + ' elementer)';
             preview.appendChild(badge);
+            anvendIndholdsSkala(badge, el);
             idx = (idx + 1) % el.slides.length;
             return;
           }
@@ -2414,6 +2422,7 @@
           media.style.objectFit = 'fill';
           media.style.display = 'block';
           preview.appendChild(media);
+          anvendIndholdsSkala(media, el);
           idx = (idx + 1) % el.slides.length;
         };
         showSlide();
@@ -2577,6 +2586,7 @@
       card.className = 'miljoeffekt-card';
       card.textContent = 'Henter live data...';
       body.appendChild(card);
+      anvendIndholdsSkala(card, el);
 
       function applyFontSizes() {
         card.querySelectorAll('.miljoeffekt-h4').forEach(n => { n.style.fontSize = elementFontSizePx(card, 8.5); });
@@ -2595,13 +2605,19 @@
     } else if (el.type === 'ur') {
       // buildUrNode regner selv sin skriftstoerrelse ud fra elementets egen rect (bredde OG
       // hoejde) hvert sekund -- ingen ekstra editor-specifik korrektion noedvendig her.
-      body.appendChild(buildUrNode(id => rotatorIntervals.push(id)));
+      const ur = buildUrNode(id => rotatorIntervals.push(id));
+      body.appendChild(ur);
+      anvendIndholdsSkala(ur, el);
     } else if (el.type === 'nyhedsbanner') {
-      body.appendChild(buildNyhedsbannerNode(el, id => rotatorIntervals.push(id)));
+      const banner = buildNyhedsbannerNode(el, id => rotatorIntervals.push(id));
+      body.appendChild(banner);
+      anvendIndholdsSkala(banner, el);
     } else if (el.type === 'vejr') {
       // buildVejrNode regner selv sin skriftstoerrelse ud fra elementets egen rect, ligesom
       // buildUrNode -- ingen ekstra editor-specifik korrektion noedvendig her.
-      body.appendChild(buildVejrNode(id => rotatorIntervals.push(id)));
+      const vejr = buildVejrNode(id => rotatorIntervals.push(id));
+      body.appendChild(vejr);
+      anvendIndholdsSkala(vejr, el);
     }
 
     if (el.type === 'streg') {
@@ -2775,6 +2791,12 @@
     document.getElementById('propsSizeRow').style.display = posLaast ? 'none' : 'block';
     document.getElementById('propWidth').value = Math.round(el.w * 10) / 10;
     document.getElementById('propHeight').value = Math.round(el.h * 10) / 10;
+    // Indhold-skala: uafhaengig af posLaast (den maa gerne bruges paa en fast plads' INDHOLD,
+    // selvom selve pladsens position/stoerrelse er laast) -- kun skjult for typer der slet
+    // ikke har noget visuelt indhold at skalere (en ren farvet boks, en streg).
+    const harSkalerbartIndhold = el.type !== 'boks' && el.type !== 'streg';
+    document.getElementById('propsContentScaleRow').style.display = harSkalerbartIndhold ? 'block' : 'none';
+    document.getElementById('propContentScale').value = el.contentScale || 100;
     const isText = el.type === 'titel' || el.type === 'tekst';
     const isNyhedsbanner = el.type === 'nyhedsbanner';
     document.getElementById('propsFontSizeRow').style.display = (isText || isNyhedsbanner) ? 'block' : 'none';
@@ -2840,6 +2862,12 @@
     if (!el) return;
     const val = parseFloat(e.target.value);
     if (!isNaN(val) && val > 0) { el.h = val; renderCanvas(); }
+  });
+  document.getElementById('propContentScale').addEventListener('input', (e) => {
+    const el = elements.find(x => x.id === selectedElementId);
+    if (!el) return;
+    const val = parseFloat(e.target.value);
+    if (!isNaN(val) && val > 0) { el.contentScale = val; renderCanvas(); }
   });
   document.getElementById('propFontSize').addEventListener('input', (e) => {
     const el = elements.find(x => x.id === selectedElementId);
