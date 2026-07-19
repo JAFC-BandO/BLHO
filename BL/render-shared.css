@@ -19,7 +19,7 @@
 .el-text li { margin: 2px 0; }
 .el[data-type="titel"] .el-text { font-size: 3.2cqw; font-weight: 700; color: #ffffff; }
 .el[data-type="tekst"] .el-text { font-size: 1.8cqw; color: #d0d0d0; }
-.el-media { width: 100%; height: 100%; object-fit: cover; display: block; }
+.el-media { width: 100%; height: 100%; object-fit: fill; display: block; }
 
 .miljoeffekt-card {
   width: 100%; height: 100%; background: #fff; color: #000; box-sizing: border-box;

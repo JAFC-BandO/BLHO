@@ -441,12 +441,12 @@ function buildMediaNode(spec) {
   } else if (spec.type === 'billede') {
     media = document.createElement('img');
     media.src = spec.url;
-    // contain (ikke cover) -- cover fylder boksen helt ud, men BESKÆRER billedet for at
-    // goere det, saa dele af det (fx bunden af et hoejt/langt billede) simpelthen ikke er
-    // synlige. Billeder maa ALDRIG beskaeres her -- hele billedet skal altid kunne ses,
-    // uanset hvilken boks-facon det lander i. En evt. tom kant er et langt mindre problem
-    // end at skjule en del af selve billedet.
-    media.style.objectFit = 'contain';
+    // fill (stretch) -- indhold skal ALTID udfylde HELE boksen, uanset boks-facon, uden
+    // tomme kanter (contain) og uden at beskaere/skjule dele af billedet (cover). Med de
+    // nu faste "slots" (se mergeMasterElements) styrer en superadmin boks-formatet centralt
+    // ét sted, saa en let strækning er et fint (og forventet) tradeoff for altid at fylde
+    // hele pladsen ud.
+    media.style.objectFit = 'fill';
   } else {
     media = document.createElement('video');
     media.src = spec.url;
@@ -454,7 +454,7 @@ function buildMediaNode(spec) {
     media.autoplay = true;
     media.loop = true;
     media.playsInline = true;
-    media.style.objectFit = 'cover';
+    media.style.objectFit = 'fill';
   }
   media.className = 'el-media';
   return media;

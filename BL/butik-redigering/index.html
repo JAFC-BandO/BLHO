@@ -8,8 +8,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-7">
-<script src="../render-shared.js?v=2026-07-19-7"></script>
+<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-8">
+<script src="../render-shared.js?v=2026-07-19-8"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -194,7 +194,7 @@
   .el[data-type="titel"] .el-text { font-weight: 700; }
   .el-text ul, .el-text ol { margin: 0; padding-left: 1.2em; }
   .el-text li { margin: 2px 0; }
-  .el-media-fill { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .el-media-fill { width: 100%; height: 100%; object-fit: fill; display: block; }
   .el-placeholder {
     width: 100%; height: 100%; display: flex; flex-direction: column; gap: 6px;
     align-items: center; justify-content: center; color: #888; font-size: 11px; padding: 6px;
@@ -400,6 +400,14 @@
             <button id="propMoveFront" style="padding:6px 10px; font-size:12px; flex:1;">Send forrest ▶</button>
           </div>
         </div>
+        <div id="propAdopterSlotRow" style="display:none; margin-bottom:12px; background:#eef2ff; border-radius:8px; padding:10px;">
+          <label style="margin-top:0;">Brug som fast plads</label>
+          <div style="display:flex; gap:8px;">
+            <select id="propAdopterSlotSelect" style="flex:1; padding:6px;"></select>
+            <button id="propAdopterSlotBtn" style="padding:6px 10px; font-size:12px;">Anvend</button>
+          </div>
+          <div style="font-size:11px; color:#888; margin-top:4px;">Gør dette element til indholdet i en af skabelonens faste pladser — det snapper til pladsens position/størrelse med det samme, så det passer 100% på tværs af alle butikker.</div>
+        </div>
         <div id="propsLockRow" style="display:none;">
           <label style="margin-top:0;">Lås i fælles skabelon</label>
           <button id="propLockBtn" style="padding:6px 10px; font-size:12px; width:100%;">Lås element</button>
@@ -449,7 +457,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master42';
+  const SCRIPT_VERSION = '2026-07-19-master43';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -2018,6 +2026,19 @@
 
   // ---------- Canvas / elements ----------
 
+  // Alle slotId'er der er defineret som en "fast plads" i faelles skabelonen -- bruges til
+  // at tilbyde "adoptér som fast plads" i Egenskaber-panelet, saa enhver butik selv kan
+  // tilslutte sit eget, allerede-eksisterende indhold uden at kraeve SQL fra en udvikler.
+  function tilgaengeligeSlotIds() {
+    const master = masterTemplate ? masterTemplate.elements : [];
+    const alle = Array.from(new Set(master.filter(e => e.locked && e.slotId).map(e => e.slotId)));
+    // Udelad slots der allerede er "optaget" af et andet element paa DENNE side -- ellers
+    // ville en admin kunne adoptere et element ind i en plads der allerede har indhold,
+    // hvilket blot faar det ene af dem til at forsvinde stille (kun første match vises).
+    const optagede = new Set(elements.filter(e => e.slotId).map(e => e.slotId));
+    return alle.filter(id => !optagede.has(id));
+  }
+
   // Beregner det "frie" indholds-omraade paa den AKTUELLE side -- hele canvas MINUS pladsen
   // som laaste (faelles-skabelon) elementer som sidebar/banner/bund-bjaelke optager. Bruges
   // til at give nye elementer en fornuftig standardplacering der matcher hvor siderne reelt
@@ -2213,10 +2234,8 @@
           media.setAttribute('allow', 'autoplay; encrypted-media');
         } else if (el.type === 'billede') {
           media = Object.assign(document.createElement('img'), { src: el.url });
-          // .el-media-fill saetter cover som standard (godt til video) -- billeder skal
-          // derimod ALDRIG beskaeres (cover ville skjule fx bunden af et hoejt billede),
-          // saa contain overstyres her specifikt for billeder.
-          media.style.objectFit = 'contain';
+          // .el-media-fill saetter object-fit:fill (stretch) som standard -- intet
+          // inline-override her, billeder og video skal begge altid udfylde hele boksen.
         } else {
           media = Object.assign(document.createElement('video'), { src: el.url, muted: true, loop: true, autoplay: true, playsInline: true });
         }
@@ -2314,7 +2333,6 @@
           } else if (slide.type === 'billede') {
             media = document.createElement('img');
             media.src = slide.url;
-            media.style.objectFit = 'contain';
           } else {
             media = document.createElement('video');
             media.src = slide.url;
@@ -2324,6 +2342,7 @@
           }
           media.style.width = '100%';
           media.style.height = '100%';
+          media.style.objectFit = 'fill';
           media.style.display = 'block';
           preview.appendChild(media);
           idx = (idx + 1) % el.slides.length;
@@ -2694,6 +2713,19 @@
     document.getElementById('propKunPaaSide').value = el.kunPaaSide || '';
     document.getElementById('propSlotRow').style.display = (masterEditMode && el.locked) ? 'block' : 'none';
     document.getElementById('propSlotId').value = el.slotId || '';
+
+    // Selvbetjent "adoptér som fast plads": lader ENHVER admin (ikke kun superadmin) tage
+    // et element de allerede har liggende løst og gøre det til indholdet i en af skabelonens
+    // faste pladser -- uden det kræver SQL per butik. Kun relevant for et almindeligt,
+    // ulåst, endnu ikke-slot-tilknyttet element, og kun hvis skabelonen overhovedet har
+    // nogen faste pladser defineret endnu.
+    const ledigeSlotIds = tilgaengeligeSlotIds();
+    const kanAdoptere = !masterEditMode && !el.locked && !el.slotId && ledigeSlotIds.length > 0;
+    document.getElementById('propAdopterSlotRow').style.display = kanAdoptere ? 'block' : 'none';
+    if (kanAdoptere) {
+      document.getElementById('propAdopterSlotSelect').innerHTML =
+        ledigeSlotIds.map(id => '<option value="' + escapeHtml(id) + '">' + escapeHtml(id) + '</option>').join('');
+    }
     // sider (butikkens egne sidefaner) rammes ikke af master-edit-mode-swappet, saa vi kan
     // altid bruge dem her som forslag -- reducerer risikoen for en tastefejl der stille
     // ville betyde "matcher ingen side, vises derfor ingen steder".
@@ -2778,6 +2810,17 @@
     if (!el) return;
     const val = e.target.value.trim();
     if (val) el.slotId = val; else delete el.slotId;
+  });
+
+  document.getElementById('propAdopterSlotBtn').addEventListener('click', () => {
+    const el = elements.find(x => x.id === selectedElementId);
+    if (!el) return;
+    const slotId = document.getElementById('propAdopterSlotSelect').value;
+    if (!slotId) return;
+    if (!confirm('Gør dette element til indholdet i den faste plads "' + slotId + '"?\n\nDet overtager pladsens placering/størrelse med det samme.')) return;
+    el.slotId = slotId;
+    renderPropsPanel();
+    renderCanvas();
   });
 
   document.getElementById('centerHBtn').addEventListener('click', () => {
