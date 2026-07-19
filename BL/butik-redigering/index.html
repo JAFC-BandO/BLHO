@@ -400,7 +400,12 @@
     </div>
   </div>
 
-  <div id="guideOverlay" style="display:none; position:fixed; inset:0; z-index:3000;">
+  <!-- z-index HOEJERE end .guide-spotlight's 3001 (ikke lavere, som foer) -- ellers skaber
+       denne overlay sin egen stacking-context, og saa var det ligegyldigt hvilken z-index
+       kortet/pilen indeni fik: HELE overlayen (inkl. kortet med tekst) laa stadig under det
+       spotlightede maal i den overordnede stacking-context, saa maalets egen 9999px-moerke
+       skygge malede henover kortet i stedet for omvendt. -->
+  <div id="guideOverlay" style="display:none; position:fixed; inset:0; z-index:3010;">
     <div id="guideArrow" style="display:none; position:fixed; width:0; height:0; z-index:3002;"></div>
     <div id="guideCard" style="position:fixed; background:white; border-radius:12px; padding:22px 24px; width:min(360px, 90vw); text-align:left; z-index:3002; box-shadow:0 12px 32px rgba(0,0,0,.28); transition:top .2s, left .2s;">
       <div id="guideEyebrow" style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#040DB1; margin-bottom:6px;"></div>
@@ -600,7 +605,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master60';
+  const SCRIPT_VERSION = '2026-07-19-master61';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
