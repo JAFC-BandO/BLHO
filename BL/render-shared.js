@@ -415,10 +415,12 @@ function buildMediaNode(spec) {
   } else if (spec.type === 'billede') {
     media = document.createElement('img');
     media.src = spec.url;
-    // cover (ikke contain) -- ellers udfylder billedet ikke hele sin boks, men "svaever"
-    // formindsket midt i den med tomme bjaelker paa siderne naar boksens format ikke
-    // praecis matcher billedets eget (samme adfaerd som video allerede har).
-    media.style.objectFit = 'cover';
+    // contain (ikke cover) -- cover fylder boksen helt ud, men BESKÆRER billedet for at
+    // goere det, saa dele af det (fx bunden af et hoejt/langt billede) simpelthen ikke er
+    // synlige. Billeder maa ALDRIG beskaeres her -- hele billedet skal altid kunne ses,
+    // uanset hvilken boks-facon det lander i. En evt. tom kant er et langt mindre problem
+    // end at skjule en del af selve billedet.
+    media.style.objectFit = 'contain';
   } else {
     media = document.createElement('video');
     media.src = spec.url;
