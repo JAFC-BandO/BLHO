@@ -9,8 +9,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-17">
-<script src="../render-shared.js?v=2026-07-19-17"></script>
+<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-18">
+<script src="../render-shared.js?v=2026-07-19-18"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -245,10 +245,18 @@
   /* Guide-spotlight: en meget stor box-shadow uden blur fylder HELE resten af skaermen med
      moerkt, saa kun selve maal-elementet (som faar sin egen z-index over resten) staar klart
      -- en almindelig, billig CSS-teknik til "peg paa det rigtige element" i stedet for en
-     generisk centreret pop-up der ikke viser HVOR tingene reelt er. */
+     generisk centreret pop-up der ikke viser HVOR tingene reelt er.
+     Selve RINGEN er bevidst hvid+blaa+bloed gloed (ikke bare én tynd blaa kant) -- et maal
+     der i forvejen er moerkt (fx selve canvas'et, som altid har en moerk baggrund) saa ellers
+     ikke synligt "oplyst" ud, kun overskygget ligesom resten -- den kraftige hvide kant giver
+     kontrast uanset hvad maalet selv har af farve indeni. */
   .guide-spotlight {
     z-index: 3001;
-    box-shadow: 0 0 0 6px rgba(4,13,177,.9), 0 0 0 9999px rgba(0,0,0,.65);
+    box-shadow:
+      0 0 0 3px #fff,
+      0 0 0 7px #040DB1,
+      0 0 22px 7px rgba(4,13,177,.55),
+      0 0 0 9999px rgba(0,0,0,.6);
     border-radius: 10px;
   }
 </style>
@@ -592,7 +600,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master57';
+  const SCRIPT_VERSION = '2026-07-19-master59';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -643,6 +651,7 @@
   let sabloner = [];
   let erSuperadmin = false;
   let aktuelBrugerEmail = null;
+  let aktuelBrugerNavn = null;
   let armedElementId = null;
   let selectedElementId = null;
   let multiSelected = new Set();
@@ -879,7 +888,7 @@
 
     const { data: brugerRow, error: brugerErr } = await client
       .from('brugere')
-      .select('butik_id, er_superadmin, butikker(navn)')
+      .select('butik_id, er_superadmin, navn, butikker(navn)')
       .eq('id', user.id)
       .single();
 
@@ -890,6 +899,10 @@
 
     erSuperadmin = !!brugerRow.er_superadmin;
     aktuelBrugerEmail = user.email;
+    // brugere.navn er ofte gemt med rolle/butik i parentes til internt brug (fx "JC (admin,
+    // Horsens)") -- det er ikke det man vil hilse nogen med, saa den del klippes af og kun
+    // det rene navn foran bruges. Falder tilbage til email hvis navnet mangler helt.
+    aktuelBrugerNavn = (brugerRow.navn || '').replace(/\s*\(.*\)\s*$/, '').trim() || null;
     console.log('[redigering-debug] Logget ind som', user.email, '| er_superadmin=', erSuperadmin, '| butik_id=', brugerRow.butik_id);
     document.getElementById('superadminBadge').style.display = erSuperadmin ? 'inline-block' : 'none';
     document.querySelectorAll('.superadmin-only').forEach(elNode => {
@@ -1651,7 +1664,7 @@
 
   const GUIDE_TRIN = [
     {
-      titel: () => aktuelBrugerEmail ? 'Velkommen, ' + aktuelBrugerEmail : 'Velkommen',
+      titel: () => (aktuelBrugerNavn || aktuelBrugerEmail) ? 'Velkommen, ' + (aktuelBrugerNavn || aktuelBrugerEmail) : 'Velkommen',
       body: 'Her redigerer du indholdet på jeres butiksskærm. Denne gennemgang tager under et minut, og du kan altid åbne den igen via "?"-knappen øverst.',
       target: null,
     },
