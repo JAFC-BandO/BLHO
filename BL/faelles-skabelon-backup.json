@@ -1,0 +1,136 @@
+{
+  "_readme": "Backup af den delte \"Fælles skabelon\" (sabloner.id=1ef2f064-3a1f-4af0-8aed-91bca2db8c77, butik_id=675b2292-00c6-4da8-b76d-c24e23a2b63c) -- den skabelon alle butikker faar deres laaste elementer fra. Eksporteret 2026-07-19 via Supabase REST, efter et spoergsmaal om admin-visningen saa anderledes ud end det der reelt vises live. Genskab ved noed: kør i Supabase SQL Editor: update sabloner set data = '<indholdet af data-noeglen herunder>'::jsonb where id = '1ef2f064-3a1f-4af0-8aed-91bca2db8c77'; OBS: data indeholder pt. et ULAAST rotator-element (id 7f5faaca-a407-426c-95b2-a57f8cd6530d) der overlapper banner-rotatoren -- det vises ALDRIG live (kun laaste elementer flettes ind i butikkernes egne sider), saa det er rent clutter i redigeringsvisningen af \"Rediger fælles skabelon\". Kan roligt slettes der.",
+  "eksporteret_at": "2026-07-19T12:00:00+02:00",
+  "sabloner_id": "1ef2f064-3a1f-4af0-8aed-91bca2db8c77",
+  "butik_id": "675b2292-00c6-4da8-b76d-c24e23a2b63c",
+  "navn": "Fælles skabelon",
+  "data": {
+    "elements": [
+      {
+        "h": 91.83574879227052,
+        "w": 29.583333333333332,
+        "x": 0,
+        "y": 0,
+        "id": "2fa2dfbe-4a20-4c4a-bde0-8e1be41b34d9",
+        "type": "boks",
+        "locked": true,
+        "boxColor": "#df1e62"
+      },
+      {
+        "h": 16.457326892109503,
+        "w": 24.02173913043478,
+        "x": 2.78,
+        "y": 26.54,
+        "id": "45001635-916b-474b-9e6b-7dfdd3063d1d",
+        "html": "<div style=\"text-align: center;\"><span style=\"background-color: transparent;\">Børneloppen {{butik}}</span></div>",
+        "text": "Ny titel",
+        "type": "titel",
+        "locked": true,
+        "fontSize": 1.9
+      },
+      {
+        "h": 25.98557411029203,
+        "w": 24.351963291710547,
+        "x": 2.78,
+        "y": 1,
+        "id": "4c254280-edbf-4883-8f5d-a33520fbed78",
+        "url": "https://irijatnmgvutrqngwpaa.supabase.co/storage/v1/object/public/media/675b2292-00c6-4da8-b76d-c24e23a2b63c/d7c47996-a933-4e41-9b6a-8fa36ee27d69-ny-bl_logo_rgb_payoff_white_new-poppins-vector.svg",
+        "type": "billede",
+        "locked": true
+      },
+      {
+        "h": 13.55072463768116,
+        "w": 29.34782608695652,
+        "x": 0,
+        "y": 76.26,
+        "id": "2299dbf0-a672-442f-ab05-5692b9f63518",
+        "type": "ur",
+        "locked": true
+      },
+      {
+        "h": 8,
+        "w": 100,
+        "x": 0,
+        "y": 91.83574879227052,
+        "id": "c590ab1c-6ff1-433f-a235-9b596ffb5bc3",
+        "type": "nyhedsbanner",
+        "locked": true
+      },
+      {
+        "h": 44.92485238862051,
+        "w": 29.342995169082126,
+        "x": 0,
+        "y": 31.07,
+        "id": "342d1d78-f4cc-47e6-bd35-b18dbf33fdb2",
+        "type": "vejr",
+        "locked": true
+      },
+      {
+        "h": 18.051529790660226,
+        "w": 70.65217391304348,
+        "x": 29.34782608695652,
+        "y": 0,
+        "id": "5db08399-8460-4f1b-8361-8f6285b2c1c3",
+        "type": "rotator",
+        "locked": true,
+        "slides": [
+          {
+            "url": "https://irijatnmgvutrqngwpaa.supabase.co/storage/v1/object/public/media/675b2292-00c6-4da8-b76d-c24e23a2b63c/4de09aa6-8fef-422f-a654-2fcabc939b66-aabnet-alle-ugens-dage-.png",
+            "type": "billede"
+          },
+          {
+            "url": "https://irijatnmgvutrqngwpaa.supabase.co/storage/v1/object/public/media/675b2292-00c6-4da8-b76d-c24e23a2b63c/da95c0fe-a082-4e5f-b837-2a837e6e0b51-Tak-fordi-du-stoetter.png",
+            "type": "billede"
+          }
+        ],
+        "intervalMs": 15000
+      },
+      {
+        "h": 75.95168710659408,
+        "w": 70.69,
+        "x": 29.31,
+        "y": 15.44,
+        "id": "7f5faaca-a407-426c-95b2-a57f8cd6530d",
+        "type": "rotator",
+        "slides": [
+          {
+            "url": "https://www.boerneloppen.dk/uploads/drommende-fortaelling--1-.mp4",
+            "kind": "direct",
+            "type": "video"
+          },
+          {
+            "type": "side",
+            "elements": [
+              {
+                "h": 91.5378421900161,
+                "w": 70.09057971014492,
+                "x": 29.909420289855078,
+                "y": 0,
+                "id": "53a0de24-b381-4040-abd6-d633be676375",
+                "url": "https://irijatnmgvutrqngwpaa.supabase.co/storage/v1/object/public/media/675b2292-00c6-4da8-b76d-c24e23a2b63c/2f782299-b5b7-4528-873a-7b414933b170-662663215_122311096322231901_4443982980418939071_n.jpg",
+                "type": "billede"
+              }
+            ],
+            "background": "#000000"
+          },
+          {
+            "type": "side",
+            "elements": [
+              {
+                "h": 80.40257648953302,
+                "w": 28.894927536231886,
+                "x": 50,
+                "y": 5.491143317230274,
+                "id": "64660eb0-f25e-4dcd-8c70-06abcf2a9a7d",
+                "type": "miljoeffekt"
+              }
+            ],
+            "background": "#000000"
+          }
+        ],
+        "intervalMs": 15000
+      }
+    ],
+    "background": "#000000"
+  }
+}
