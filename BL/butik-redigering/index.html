@@ -8,8 +8,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="../render-shared.css?v=2026-07-18-15">
-<script src="../render-shared.js?v=2026-07-18-15"></script>
+<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-1">
+<script src="../render-shared.js?v=2026-07-19-1"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -396,7 +396,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-18-master30';
+  const SCRIPT_VERSION = '2026-07-19-master31';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -784,6 +784,23 @@
   // og igen ved fejlfinding af Android-enhederne.
   const HURTIG_KOMMANDOER = ['tailscaled-start', 'tailscale-cli ip', 'tailscale-test', 'df -h', 'ps aux'];
 
+  // Selv-gemte hurtig-kommandoer (lokalt i browseren, per-admin) -- ud over de faste
+  // ovenfor, saa man kan tilfoeje sine egne ofte-brugte fejlfindings-kommandoer som knapper.
+  function hentGemteKommandoer() {
+    try { return JSON.parse(localStorage.getItem('blho_gemte_kommandoer') || '[]'); }
+    catch (e) { return []; }
+  }
+  function gemKommando(cmd) {
+    const gemte = hentGemteKommandoer();
+    if (!gemte.includes(cmd)) {
+      gemte.push(cmd);
+      localStorage.setItem('blho_gemte_kommandoer', JSON.stringify(gemte));
+    }
+  }
+  function fjernGemtKommando(cmd) {
+    localStorage.setItem('blho_gemte_kommandoer', JSON.stringify(hentGemteKommandoer().filter(k => k !== cmd)));
+  }
+
   function tidSiden(iso) {
     if (!iso) return 'Aldrig';
     const sekunder = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -801,6 +818,15 @@
     if (minutter < 3) return '#1a9b4b';
     if (minutter < 15) return '#c98a1b';
     return '#c0392b';
+  }
+
+  // Standard RSSI-tommelfingerregler (dBm, taettere paa 0 = staerkere signal).
+  function wifiStyrkeLabel(dBm) {
+    if (dBm >= -50) return 'fremragende';
+    if (dBm >= -60) return 'godt';
+    if (dBm >= -70) return 'middel';
+    if (dBm >= -80) return 'svagt';
+    return 'meget svagt';
   }
 
   async function loadEnheder() {
@@ -862,7 +888,9 @@
         (e.tailscale_ip ?
           '<div style="color:#aaa; font-size:10px; margin-top:2px;">Tailscale-IP (SSH herfra uanset netvaerk): ' +
           '<code class="enhedTailscaleKopier" data-ip="' + escapeHtml(e.tailscale_ip) + '" style="cursor:pointer; background:#eee; padding:1px 5px; border-radius:3px;" title="Klik for at kopiere">' +
-          escapeHtml(e.tailscale_ip) + '</code></div>' : '');
+          escapeHtml(e.tailscale_ip) + '</code></div>' : '') +
+        (typeof e.wifi_rssi === 'number' ?
+          '<div style="color:#aaa; font-size:10px; margin-top:2px;">WiFi: ' + e.wifi_rssi + ' dBm (' + wifiStyrkeLabel(e.wifi_rssi) + ')</div>' : '');
       row.appendChild(info);
       info.querySelector('.enhedIdKopier').addEventListener('click', (ev) => {
         navigator.clipboard.writeText(ev.target.dataset.id);
@@ -900,12 +928,24 @@
       };
       sendCmdBtn.addEventListener('click', sendCmd);
       cmdInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') sendCmd(); });
+      const saveCmdBtn = document.createElement('button');
+      saveCmdBtn.textContent = 'Gem som knap';
+      saveCmdBtn.title = 'Gem denne kommando som en hurtig-knap til senere (kun i denne browser)';
+      saveCmdBtn.style.cssText = 'padding:5px 8px; font-size:11px; color:#666;';
+      saveCmdBtn.addEventListener('click', () => {
+        const cmd = cmdInput.value.trim();
+        if (!cmd) return;
+        gemKommando(cmd);
+        renderEnhederListe();
+      });
       consoleWrap.appendChild(cmdInput);
       consoleWrap.appendChild(sendCmdBtn);
+      consoleWrap.appendChild(saveCmdBtn);
       info.appendChild(consoleWrap);
 
-      // Hurtig-knapper: de kommandoer vi rent faktisk er endt med at bruge igen og igen ved
-      // fejlfinding -- ét klik sender den med det samme, ingen indtastning noedvendig.
+      // Hurtig-knapper: de faste (indbyggede) plus evt. selv-gemte -- ét klik sender den med
+      // det samme, ingen indtastning noedvendig. Selv-gemte har en lille ✕ til at fjerne dem
+      // igen; de faste indbyggede kan ikke fjernes.
       const presetWrap = document.createElement('div');
       presetWrap.style.cssText = 'margin-top:4px; display:flex; gap:4px; flex-wrap:wrap;';
       HURTIG_KOMMANDOER.forEach(preset => {
@@ -915,6 +955,23 @@
         presetBtn.style.cssText = 'padding:3px 8px; font-size:11px; color:#555; background:#eee; border:1px solid #ddd; border-radius:12px; cursor:pointer;';
         presetBtn.addEventListener('click', () => sendCustomKommando(e.id, preset));
         presetWrap.appendChild(presetBtn);
+      });
+      hentGemteKommandoer().forEach(preset => {
+        const pill = document.createElement('span');
+        pill.style.cssText = 'display:inline-flex; align-items:center; gap:4px; padding:3px 4px 3px 8px; font-size:11px; color:#555; background:#eef2ff; border:1px solid #dde3f7; border-radius:12px;';
+        const presetBtn = document.createElement('button');
+        presetBtn.textContent = preset;
+        presetBtn.title = preset;
+        presetBtn.style.cssText = 'padding:0; font-size:11px; color:#555; background:none; border:none; cursor:pointer;';
+        presetBtn.addEventListener('click', () => sendCustomKommando(e.id, preset));
+        const fjernBtn = document.createElement('span');
+        fjernBtn.textContent = '✕';
+        fjernBtn.title = 'Fjern denne hurtig-knap';
+        fjernBtn.style.cssText = 'cursor:pointer; color:#999; padding:0 2px;';
+        fjernBtn.addEventListener('click', () => { fjernGemtKommando(preset); renderEnhederListe(); });
+        pill.appendChild(presetBtn);
+        pill.appendChild(fjernBtn);
+        presetWrap.appendChild(pill);
       });
       info.appendChild(presetWrap);
 
@@ -994,9 +1051,18 @@
     if (enhederPollHandle) clearInterval(enhederPollHandle);
     enhederPollHandle = setInterval(loadEnheder, 15000);
   });
-  document.getElementById('enhederCloseBtn').addEventListener('click', () => {
+  document.getElementById('enhederCloseBtn').addEventListener('click', async () => {
     document.getElementById('enhederOverlay').style.display = 'none';
     if (enhederPollHandle) { clearInterval(enhederPollHandle); enhederPollHandle = null; }
+    // Ryd et evt. vist fejlfindings-svar naar man lukker panelet, saa et gammelt svar fra
+    // sidste besoeg ikke dukker forvirrende op igen (som om det lige var sket) naeste gang
+    // panelet aabnes -- uden dette blev svaret staaende i databasen for evigt.
+    const harSvar = alleEnheder.filter(e => e.custom_kommando_svar != null);
+    if (harSvar.length) {
+      await Promise.all(harSvar.map(e =>
+        client.from('enheder').update({ custom_kommando_svar: null, custom_kommando_besvaret_at: null }).eq('id', e.id)
+      ));
+    }
   });
 
   document.getElementById('nyEnhedGemBtn').addEventListener('click', async () => {

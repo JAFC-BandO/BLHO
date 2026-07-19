@@ -48,6 +48,9 @@ function formatDanskTal(n) {
 }
 
 function buildUrNode(registerInterval) {
+  const wrap = document.createElement('div');
+  wrap.className = 'ur-wrap';
+
   const el = document.createElement('div');
   el.className = 'ur-display';
   const hh = document.createElement('span');
@@ -58,16 +61,24 @@ function buildUrNode(registerInterval) {
   el.appendChild(hh);
   el.appendChild(colon);
   el.appendChild(mm);
+  wrap.appendChild(el);
+
+  const dato = document.createElement('div');
+  dato.className = 'ur-dato';
+  wrap.appendChild(dato);
 
   // cqw alene passer kun til boksens BREDDE, ikke hoejden -- en streg-tynd eller kvadratisk
   // boks ville faa en tekst der enten er alt for stor (klippes af overflow:hidden) eller alt
   // for lille. Genberegn i stedet ud fra elementets egen, rent faktiske rect (begge akser),
   // virker uanset kontekst (skaerm, Live View, redigerings-canvas) da den ikke er afhaengig
-  // af container-type/cqw at regne rigtigt.
+  // af container-type/cqw at regne rigtigt. Uret selv faar det meste af hoejden, dato-linjen
+  // under en mindre del -- 0.55/0.16 er en fordeling der stadig ligner et digitalt ur med en
+  // dato-undertekst i stedet for to lige store linjer.
   const resize = () => {
-    const rect = el.getBoundingClientRect();
+    const rect = wrap.getBoundingClientRect();
     if (rect.width && rect.height) {
-      el.style.fontSize = Math.min(rect.height * 0.7, rect.width / 3) + 'px';
+      el.style.fontSize = Math.min(rect.height * 0.55, rect.width / 3) + 'px';
+      dato.style.fontSize = Math.min(rect.height * 0.16, rect.width / 14) + 'px';
     }
   };
   const tick = () => {
@@ -75,6 +86,8 @@ function buildUrNode(registerInterval) {
     hh.textContent = String(d.getHours()).padStart(2, '0');
     mm.textContent = String(d.getMinutes()).padStart(2, '0');
     colon.style.opacity = d.getSeconds() % 2 === 0 ? '1' : '0';
+    const datoTekst = d.toLocaleDateString('da-DK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    dato.textContent = datoTekst.charAt(0).toUpperCase() + datoTekst.slice(1);
     resize();
   };
   tick();
@@ -85,7 +98,7 @@ function buildUrNode(registerInterval) {
   // stoerrelse naar at blive sat FOER noget overhovedet naar at blive tegnet paa skaermen.
   requestAnimationFrame(resize);
   registerInterval(setInterval(tick, 1000));
-  return el;
+  return wrap;
 }
 
 async function fetchMiljoeffektData() {
