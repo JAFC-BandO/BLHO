@@ -8,8 +8,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-14">
-<script src="../render-shared.js?v=2026-07-19-14"></script>
+<link rel="stylesheet" href="../render-shared.css?v=2026-07-19-15">
+<script src="../render-shared.js?v=2026-07-19-15"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -477,7 +477,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master50';
+  const SCRIPT_VERSION = '2026-07-19-master52';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1457,7 +1457,12 @@
   function renderMediaGrid() {
     mediaGrid.innerHTML = '';
     const armedEl = elements.find(e => e.id === armedElementId);
-    const filtered = armedEl ? mediaLibrary.filter(m => m.type === armedEl.type) : mediaLibrary;
+    // En rotator har intet enkelt "type" at matche imod (den kan indeholde BAADE billeder og
+    // videoer som slides) -- vis derfor hele biblioteket uden type-filter naar det er en
+    // rotator der er armet, i stedet for det almindelige "kun samme type som elementet".
+    const filtered = !armedEl ? mediaLibrary
+      : armedEl.type === 'rotator' ? mediaLibrary
+      : mediaLibrary.filter(m => m.type === armedEl.type);
 
     filtered.forEach(m => {
       const item = document.createElement('div');
@@ -1483,7 +1488,7 @@
 
       item.addEventListener('click', () => {
         if (!armedEl) return;
-        armedEl.url = m.url;
+        anvendMediePaaMaal(armedEl, m.type, m.url);
         armedElementId = null;
         mediaBanner.classList.remove('active');
         renderCanvas();
@@ -1753,6 +1758,16 @@
       .replace(/-+/g, '-');
   }
 
+  // Saetter det uploadede/genbrugte medie ind paa maalelementet -- en rotator har ikke ét
+  // .url-felt men en .slides-liste, saa den faar en ny slide tilfoejet i stedet.
+  function anvendMediePaaMaal(el, type, url) {
+    if (el.type === 'rotator') {
+      el.slides.push({ type, url });
+    } else {
+      el.url = url;
+    }
+  }
+
   async function uploadFile(file, targetElementId) {
     const existing = findExistingMedia(file.name);
     if (existing) {
@@ -1763,7 +1778,7 @@
       if (brugEksisterende) {
         if (targetElementId) {
           const el = elements.find(e => e.id === targetElementId);
-          if (el) el.url = existing.url;
+          if (el) anvendMediePaaMaal(el, existing.type, existing.url);
           renderCanvas();
         }
         return;
@@ -1795,50 +1810,9 @@
 
     if (targetElementId) {
       const el = elements.find(e => e.id === targetElementId);
-      if (el) el.url = mediaRow.url;
+      if (el) anvendMediePaaMaal(el, mediaRow.type, mediaRow.url);
       renderCanvas();
     }
-    renderMediaGrid();
-  }
-
-  async function uploadFileToRotator(file, rotatorEl) {
-    const existing = findExistingMedia(file.name);
-    if (existing) {
-      const brugEksisterende = confirm(
-        '"' + file.name + '" findes allerede i medie-biblioteket.\n\n' +
-        'Tryk OK for at bruge den eksisterende fil, eller Annuller for at uploade en ny kopi alligevel.'
-      );
-      if (brugEksisterende) {
-        rotatorEl.slides.push({ type: existing.type, url: existing.url });
-        renderCanvas();
-        return;
-      }
-    }
-
-    const type = file.type.startsWith('video') ? 'video' : 'billede';
-    const path = currentButikId + '/' + uid() + '-' + sikkerStoragesti(file.name);
-
-    const { error: uploadErr } = await client.storage.from('media').upload(path, file);
-    if (uploadErr) {
-      alert('Upload fejlede: ' + uploadErr.message);
-      return;
-    }
-    const { data: pub } = client.storage.from('media').getPublicUrl(path);
-
-    const { data: mediaRow, error: insertErr } = await client
-      .from('media')
-      .insert({ butik_id: currentButikId, type, url: pub.publicUrl, filnavn: file.name })
-      .select()
-      .single();
-
-    if (insertErr) {
-      alert('Kunne ikke gemme media i biblioteket: ' + insertErr.message);
-      return;
-    }
-
-    mediaLibrary.unshift(mediaRow);
-    rotatorEl.slides.push({ type, url: mediaRow.url });
-    renderCanvas();
     renderMediaGrid();
   }
 
@@ -2480,20 +2454,16 @@
         manageBar.appendChild(thumb);
       });
 
-      const addLabel = document.createElement('label');
-      addLabel.textContent = '+';
-      addLabel.style.cssText = 'flex-shrink:0; width:56px; height:56px; display:flex; align-items:center; justify-content:center; background:#2a2a2a; color:#ddd; border-radius:4px; cursor:pointer; font-size:20px;';
-      const addInput = document.createElement('input');
-      addInput.type = 'file';
-      addInput.accept = 'image/*,video/*';
-      addInput.style.display = 'none';
-      addInput.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (file) await uploadFileToRotator(file, el);
-        e.target.value = '';
-      });
-      addLabel.appendChild(addInput);
-      manageBar.appendChild(addLabel);
+      // "+" armer elementet og aabner medie-biblioteket i sidebaren (samme mekanisme som
+      // billede/video-elementers "Vælg fra bibliotek") -- man kan enten klikke et EKSISTERENDE
+      // medie der, eller bruge sidebarens egen "Upload nyt billede/video" lige nedenunder, som
+      // (via armedElementId) automatisk lander som en ny slide her. Tidligere aabnede "+"
+      // direkte en OS-fil-dialog og sprang biblioteket helt over.
+      const addBtn = document.createElement('button');
+      addBtn.textContent = '+';
+      addBtn.style.cssText = 'flex-shrink:0; width:56px; height:56px; display:flex; align-items:center; justify-content:center; background:#2a2a2a; color:#ddd; border-radius:4px; cursor:pointer; font-size:20px;';
+      addBtn.addEventListener('click', () => armForSelection(el));
+      manageBar.appendChild(addBtn);
 
       const linkInput = document.createElement('input');
       linkInput.type = 'text';

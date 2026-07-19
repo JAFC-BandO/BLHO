@@ -76,33 +76,38 @@
   100% { transform: translateX(-50%); }
 }
 
-/* Selv-staaende vejr+udsigt-panel (ligesom en storskaerms-nyhedsside-widget) -- cqw-baseret
-   ligesom .miljoeffekt-card, IKKE rect-maalt JS som uret. Egen container-type:inline-size
-   (ligesom miljoeffekt-card) er noedvendig, saa cqw'erne herunder regnes relativt til DENNE
-   boks' egen bredde -- ELLERS ville de (ligesom nyhedsbanneret) falde tilbage til at vaere
-   relative til HELE skaermens bredde fra .screen, hvilket fik teksten til at vaere alt for
-   stor og overflyde en normalt-smal vejr-boks. Boksen skal vaere hoej nok til at rumme alle
-   raekker (overskrift + nu + 3 dages udsigt) -- for lav en boks klipper resten via
-   overflow:hidden, ligesom ethvert andet element her. */
+/* Selv-staaende vejr+udsigt-panel (ligesom en storskaerms-nyhedsside-widget) -- cqmin-baseret
+   (mindste af boksens bredde/hoejde), IKKE rect-maalt JS som uret. "container-type: size"
+   (begge akser, IKKE kun "inline-size"/bredde som foer) + cqmin i stedet for cqw betyder
+   indholdet automatisk regner sig selv relativt til den MEST BEGRAENSENDE led af boksens
+   facon -- en bred-men-lav boks skalerer efter hoejden, en smal-men-hoej boks efter bredden.
+   Foer (kun cqw/bredde) kunne en admin goere boksen bredere for at faa stoerre tekst/ikoner,
+   men hoejden fulgte ikke automatisk med, saa indholdet endte med at overflyde bunden af
+   boksen og blive klippet af overflow:hidden -- det saa ud som om det "forsvandt ud af sin
+   kasse". Med cqmin er widgeten altid garanteret at fylde PRAECIS saa meget som boksen har
+   plads til i begge retninger -- for stoerre ikoner/tekst goeres selve boksen stoerre
+   (Bredde/Hoejde i Egenskaber), IKKE "Indhold-stoerrelse" (som kun strækker det allerede
+   beregnede resultat og derfor stadig kan klippe). Lidt strammere padding/margin/gap end foer
+   ("komprimeret vindue") giver ogsaa mere plads til selve indholdet. */
 .vejr-wrap {
-  width: 100%; height: 100%; box-sizing: border-box; padding: 5%;
+  width: 100%; height: 100%; box-sizing: border-box; padding: 4%;
   display: flex; flex-direction: column; color: #ffffff; overflow: hidden;
-  container-type: inline-size;
+  container-type: size;
 }
-.vejr-heading { font-weight: 700; font-size: 4.2cqw; }
-.vejr-hr { border: none; border-top: 1px solid rgba(255, 255, 255, 0.35); margin: 3% 0; width: 100%; flex-shrink: 0; }
-.vejr-nu-row { display: flex; align-items: center; justify-content: space-between; gap: 4%; }
-.vejr-nu-ikon { width: 22cqw; height: 18cqw; flex-shrink: 0; }
+.vejr-heading { font-weight: 700; font-size: 4.2cqmin; }
+.vejr-hr { border: none; border-top: 1px solid rgba(255, 255, 255, 0.35); margin: 2% 0; width: 100%; flex-shrink: 0; }
+.vejr-nu-row { display: flex; align-items: center; justify-content: space-between; gap: 3%; }
+.vejr-nu-ikon { width: 22cqmin; height: 18cqmin; flex-shrink: 0; }
 .vejr-nu-ikon svg { display: block; width: 100%; height: 100%; }
 .vejr-nu-info { display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
-.vejr-temp { font-weight: 800; font-size: 9cqw; font-variant-numeric: tabular-nums; }
-.vejr-beskrivelse { font-size: 3.4cqw; color: #f0f0f0; }
+.vejr-temp { font-weight: 800; font-size: 9cqmin; font-variant-numeric: tabular-nums; }
+.vejr-beskrivelse { font-size: 3.4cqmin; color: #f0f0f0; }
 .vejr-forecast-wrap { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
-.vejr-forecast-row { display: flex; align-items: center; gap: 3%; }
-.vejr-forecast-dag { font-size: 3.4cqw; flex: 1; }
-.vejr-forecast-ikon { width: 10cqw; height: 8cqw; flex-shrink: 0; }
+.vejr-forecast-row { display: flex; align-items: center; gap: 2%; }
+.vejr-forecast-dag { font-size: 3.4cqmin; flex: 1; }
+.vejr-forecast-ikon { width: 10cqmin; height: 8cqmin; flex-shrink: 0; }
 .vejr-forecast-ikon svg { display: block; width: 100%; height: 100%; }
-.vejr-forecast-temp { font-size: 3.4cqw; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; flex-shrink: 0; }
+.vejr-forecast-temp { font-size: 3.4cqmin; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; flex-shrink: 0; }
 /* Bevidst INGEN prefers-reduced-motion-respekt her: dette er en ubemandet butiksskærm, ikke
    en personlig enhed -- der er ingen menneske der "bruger" skærmen hvis bevaegelsesfoelsomhed
    skal respekteres. Android-signage-bokse saetter ofte prefers-reduced-motion: reduce som en
