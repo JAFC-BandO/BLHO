@@ -400,6 +400,23 @@
     </div>
   </div>
 
+  <!-- Vises naar en butik-admin tilfoejer et "fylder-hele"-element (billede/video/rotator/
+       boks/miljoeffekt) mens skabelonen har ledige faste pladser -- ét klik her erstatter det
+       gamle "tilfoej loesrevet element, gaa saa ind i Egenskaber og adoptér en fast plads"-
+       forloeb, og garanterer at det snapper 100% til pladsens placering med det samme. -->
+  <div id="slotVaelgerOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:2000; align-items:center; justify-content:center;">
+    <div style="background:white; border-radius:10px; padding:24px; width:min(420px, 92vw);">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+        <h2 style="margin:0;">Hvilken plads skal dette ind i?</h2>
+        <span id="slotVaelgerCloseBtn" style="cursor:pointer; font-size:20px; color:#888; line-height:1;">✕</span>
+      </div>
+      <div style="font-size:12px; color:#888; margin-bottom:16px;">
+        Dette element passer bedst ind i ét af skabelonens faste vinduer, så det altid rammer placeringen 100% rigtigt uden at du selv skal finjustere det bagefter.
+      </div>
+      <div id="slotVaelgerListe" style="display:flex; flex-direction:column; gap:8px;"></div>
+    </div>
+  </div>
+
   <!-- z-index HOEJERE end .guide-spotlight's 3001 (ikke lavere, som foer) -- ellers skaber
        denne overlay sin egen stacking-context, og saa var det ligegyldigt hvilken z-index
        kortet/pilen indeni fik: HELE overlayen (inkl. kortet med tekst) laa stadig under det
@@ -536,6 +553,11 @@
             <label style="margin-top:0;">Fast plads (valgfrit)</label>
             <input type="text" id="propSlotId" placeholder="Blank = helt låst. Udfyld fx &quot;banner&quot; for en fast plads.">
             <div style="font-size:11px; color:#888; margin-top:4px;">En "fast plads" beholder DENNE placering/størrelse hos alle butikker, men hver butik vælger selv sit eget indhold der (billede/video/rotator osv.) — modsat et almindeligt låst element, som viser det samme indhold overalt. Almindelige admins kan skifte indholdet, men ikke flytte/resize/slette pladsen.</div>
+            <label style="display:flex; align-items:center; gap:6px; margin-top:10px;">
+              <input type="checkbox" id="propAutoFyldRest" style="margin:0;">
+              Fyld automatisk resten af pladsen
+            </label>
+            <div style="font-size:11px; color:#888; margin-top:4px;">Størrelse/placering udregnes automatisk til "alt der er tilbage" efter de andre låste bjælker (fx banner/sidebar) — opdateres live, hver gang du flytter/ændrer noget andet låst, så denne plads ALDRIG kan komme ud af trit igen. Kun én plads bør have dette slået til ad gangen (typisk hovedindholds-vinduet/rotatoren).</div>
           </div>
         </div>
       </div>
@@ -608,7 +630,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-19-master64';
+  const SCRIPT_VERSION = '2026-07-20-master65';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -2596,57 +2618,150 @@
     return { x: left, y: top, w: right - left, h: bottom - top };
   }
 
+  // Standard-felter pr. type ved oprettelse -- delt mellem det almindelige (frie) tilfoej-
+  // forloeb og slot-vaelgeren (som kun bruger "ekstra", da x/y/w/h der alligevel bliver
+  // overskrevet af pladsens egen placering).
+  function standardElementFelter(type) {
+    const storrelser = {
+      titel:   { w: 55, h: 20, text: 'Ny titel' },
+      tekst:   { w: 50, h: 20, text: 'Ny tekst' },
+      billede: { w: 40, h: 45, url: null },
+      video:   { w: 90, h: 40, url: null },
+      boks:    { w: 40, h: 30, boxColor: '#1a1a1a' },
+      rotator: { w: 50, h: 50, slides: [], intervalMs: 30000 },
+      miljoeffekt: { w: 50, h: 30 },
+      streg: { w: 80, h: 1, boxColor: '#ffffff' },
+      ur: { w: 25, h: 15 },
+      // Vejr-panelet viser overskrift + "nu" + 3 dages udsigt -- en for lav boks klipper
+      // udsigts-raekkerne vaek (overflow:hidden), saa standardstoerrelsen skal vaere hoej
+      // nok til at rumme det hele fra start (admin kan altid goere den mindre bagefter).
+      vejr: { w: 20, h: 55 },
+    }[type];
+    const { w, h, ...ekstra } = storrelser;
+    return { w, h, ekstra };
+  }
+
+  // "Indholds"-typer fylder HELE det frie omraade -- det er dem der reelt bruges som en
+  // sides hovedindhold (rotator/billede/video/boks/miljoeffekt). Naar en butik tilfoejer en
+  // af disse, er det ALTID fordi de vil laegge indhold i et af skabelonens faste vinduer
+  // (fx "rotator" eller "banner") -- IKKE for at faa endnu en loesreven boks der saa skal
+  // finjusteres paa plads bagefter. Findes der ledige faste pladser, spoerger vi derfor
+  // hvilken af dem elementet skal ind i (se aabnSlotVaelger), i stedet for at gaette en
+  // standardposition.
+  const FYLDER_HELE = { rotator: 1, billede: 1, video: 1, boks: 1, miljoeffekt: 1 };
+
   document.querySelectorAll('[data-add]').forEach(btn => {
     btn.addEventListener('click', () => {
       const type = btn.getAttribute('data-add');
 
       // nyhedsbanner er altid en fuld-bredde bund-bjaelke UDENFOR selve indholds-omraadet
       // (ligesom naar den er laast i faelles skabelonen) -- skal ikke klemmes ind i det frie
-      // omraade som alt andet.
+      // omraade som alt andet. Kun superadmin ser overhovedet denne knap, og kun for at
+      // DEFINERE selve pladsen i faelles skabelonen -- ikke for at fylde en eksisterende.
       if (type === 'nyhedsbanner') {
         elements.push({ id: uid(), type, x: 0, y: 92, w: 100, h: 8 });
         renderCanvas();
         return;
       }
 
-      const fri = beregnFritOmraade();
-      // "Indholds"-typer fylder HELE det frie omraade -- det er dem der reelt bruges som en
-      // sides hovedindhold (rotator/billede/video/boks/miljoeffekt), og skal matche Main 1:1
-      // uden manuel fin-justering hver gang. De oevrige (mindre, supplerende) typer faar
-      // deres hidtidige standardstoerrelse, men CENTRERET i det frie omraade i stedet for en
-      // fast, generisk position der ofte endte under en laast sidebar/banner.
-      const fylderHele = { rotator: 1, billede: 1, video: 1, boks: 1, miljoeffekt: 1 };
-      const storrelser = {
-        titel:   { w: 55, h: 20, text: 'Ny titel' },
-        tekst:   { w: 50, h: 20, text: 'Ny tekst' },
-        billede: { w: 40, h: 45, url: null },
-        video:   { w: 90, h: 40, url: null },
-        boks:    { w: 40, h: 30, boxColor: '#1a1a1a' },
-        rotator: { w: 50, h: 50, slides: [], intervalMs: 30000 },
-        miljoeffekt: { w: 50, h: 30 },
-        streg: { w: 80, h: 1, boxColor: '#ffffff' },
-        ur: { w: 25, h: 15 },
-        // Vejr-panelet viser overskrift + "nu" + 3 dages udsigt -- en for lav boks klipper
-        // udsigts-raekkerne vaek (overflow:hidden), saa standardstoerrelsen skal vaere hoej
-        // nok til at rumme det hele fra start (admin kan altid goere den mindre bagefter).
-        vejr: { w: 20, h: 55 },
-      }[type];
+      // Uden for selve skabelon-redigeringen: findes der ledige faste pladser, skal det nye
+      // element ind i EN af dem -- ikke ende som et loesrevet element, der senere skal
+      // finjusteres i forhold til banner-/rotator-vinduet.
+      if (FYLDER_HELE[type] && !masterEditMode) {
+        const ledige = tilgaengeligeSlotIds();
+        if (ledige.length > 0) {
+          aabnSlotVaelger(type, ledige);
+          return;
+        }
+      }
 
-      const { w: onskeW, h: onskeH, ...ekstra } = storrelser;
-      const w = fylderHele[type] ? fri.w : Math.min(onskeW, fri.w);
-      const h = fylderHele[type] ? fri.h : Math.min(onskeH, fri.h);
-      const x = fylderHele[type] ? fri.x : clamp(fri.x + (fri.w - w) / 2, 0, 100 - w);
-      const y = fylderHele[type] ? fri.y : clamp(fri.y + (fri.h - h) / 2, 0, 100 - h);
-      elements.push(Object.assign({ id: uid(), type, x, y, w, h }, ekstra));
-      renderCanvas();
+      tilfoejFritElement(type);
     });
   });
 
+  function tilfoejFritElement(type) {
+    const fri = beregnFritOmraade();
+    const { w: onskeW, h: onskeH, ekstra } = standardElementFelter(type);
+    // De oevrige (mindre, supplerende) typer faar deres hidtidige standardstoerrelse, men
+    // CENTRERET i det frie omraade i stedet for en fast, generisk position der ofte endte
+    // under en laast sidebar/banner.
+    const w = FYLDER_HELE[type] ? fri.w : Math.min(onskeW, fri.w);
+    const h = FYLDER_HELE[type] ? fri.h : Math.min(onskeH, fri.h);
+    const x = FYLDER_HELE[type] ? fri.x : clamp(fri.x + (fri.w - w) / 2, 0, 100 - w);
+    const y = FYLDER_HELE[type] ? fri.y : clamp(fri.y + (fri.h - h) / 2, 0, 100 - h);
+    elements.push(Object.assign({ id: uid(), type, x, y, w, h }, ekstra));
+    renderCanvas();
+  }
+
+  // Slot-vaelger: naar en butik tilfoejer et "fylder-hele"-element mens der er ledige faste
+  // pladser, vaelger de her PRAECIS hvilken plads (fx "rotator" eller "banner") det nye
+  // element skal fylde. Samler det tidligere to-trins forloeb ("tilfoej loesrevet element,
+  // gaa saa ind i Egenskaber og adoptér en fast plads") til ét trin -- resultatet er 100%
+  // det samme som "Brug som fast plads" i Egenskaber-panelet (samme el.slotId-mekanisme).
+  let slotVaelgerType = null;
+  function aabnSlotVaelger(type, ledigeSlotIds) {
+    slotVaelgerType = type;
+    const liste = document.getElementById('slotVaelgerListe');
+    liste.innerHTML = '';
+    ledigeSlotIds.forEach(slotId => {
+      const knap = document.createElement('button');
+      knap.textContent = slotId;
+      knap.style.cssText = 'padding:10px; font-size:13px; text-align:left; border-radius:6px; border:1px solid #ddd; background:white; cursor:pointer;';
+      knap.addEventListener('click', () => vaelgSlot(slotId));
+      liste.appendChild(knap);
+    });
+    document.getElementById('slotVaelgerOverlay').style.display = 'flex';
+  }
+  function lukSlotVaelger() {
+    document.getElementById('slotVaelgerOverlay').style.display = 'none';
+    slotVaelgerType = null;
+  }
+  document.getElementById('slotVaelgerCloseBtn').addEventListener('click', lukSlotVaelger);
+  function vaelgSlot(slotId) {
+    const type = slotVaelgerType;
+    lukSlotVaelger();
+    const { ekstra } = standardElementFelter(type);
+    // x/y/w/h herunder er ligegyldige placeholder-tal -- displayElements() overskriver dem
+    // altid med selve pladsens placering fra faelles skabelonen, saa snart elementet har et
+    // slotId (samme mekanisme som naar man adopterer et allerede-eksisterende element).
+    elements.push(Object.assign({ id: uid(), type, x: 0, y: 0, w: 10, h: 10, slotId }, ekstra));
+    renderCanvas();
+  }
+
   function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+  // autoFyldRest (se Egenskaber-panelets "Fyld automatisk resten af pladsen"): udregner det
+  // markerede elements eget rektangel som "alt der er tilbage" naar man traekker de ANDRE
+  // laaste bjaelkers plads fra hele canvas -- samme geometri-logik som beregnFritOmraade(),
+  // men her ANVENDT direkte paa selve fast-plads-rektanglet i stedet for blot at foreslaa en
+  // startposition én gang. Koeres live ved hver gentegning i master-redigering (se
+  // renderCanvas), saa denne plads ALDRIG kan komme ud af trit med de andre, uanset hvordan
+  // de justeres (tal-felt eller traek). Kun ment til ÉT element ad gangen (typisk
+  // hovedindholds-vinduet/rotatoren) -- flere samtidig ville alle udregne mod samme grundlag.
+  function anvendAutoFyldRest(liste) {
+    const skalAutoFyldes = liste.filter(e => e.autoFyldRest);
+    if (!skalAutoFyldes.length) return;
+    // Samme "kun laaste bjaelker taeller som en vaeg"-regel som beregnFritOmraade() -- ellers
+    // ville et endnu ulaast kladde-element ved en kant fejlagtigt blive regnet med.
+    const andre = liste.filter(e => e.locked && !e.autoFyldRest);
+    let left = 0, right = 100, top = 0, bottom = 100;
+    andre.forEach(e => {
+      const ex2 = e.x + e.w, ey2 = e.y + e.h;
+      if (e.x <= 0.5 && e.h >= 50) left = Math.max(left, ex2);
+      if (ex2 >= 99.5 && e.h >= 50) right = Math.min(right, e.x);
+      if (e.y <= 0.5 && e.w >= 50) top = Math.max(top, ey2);
+      if (ey2 >= 99.5 && e.w >= 50) bottom = Math.min(bottom, e.y);
+    });
+    if (right - left < 10 || bottom - top < 10) { left = 0; right = 100; top = 0; bottom = 100; }
+    skalAutoFyldes.forEach(e => {
+      e.x = left; e.y = top; e.w = right - left; e.h = bottom - top;
+    });
+  }
 
   function renderCanvas() {
     rotatorIntervals.forEach(id => clearInterval(id));
     rotatorIntervals = [];
+    if (masterEditMode) anvendAutoFyldRest(elements);
     canvas.innerHTML = '';
     displayElements().forEach(el => canvas.appendChild(buildElementNode(el)));
   }
@@ -3260,7 +3375,10 @@
     // overlap-fejl mellem banner/hoved tidligere) med et praecist, ufarligt tal-felt --
     // stadig 100% fast for alle andre end superadmin.
     const posLaast = !!el.posLocked || !!el.slotId;
-    const superadminKanJustereFastPlads = posLaast && erSuperadmin && masterEditMode;
+    // autoFyldRest: stoerrelsen udregnes automatisk (se anvendAutoFyldRest) -- et manuelt tal
+    // her ville blive overskrevet igen ved naeste gentegning alligevel, saa feltet skjules
+    // helt i stedet for at vise et tal der ikke reelt betyder noget.
+    const superadminKanJustereFastPlads = posLaast && erSuperadmin && masterEditMode && !el.autoFyldRest;
     document.getElementById('propsSizeRow').style.display = (!posLaast || superadminKanJustereFastPlads) ? 'block' : 'none';
     document.getElementById('propsSizeHint').textContent = superadminKanJustereFastPlads
       ? 'Kun du kan se dette (superadmin): sætter den faste plads' + (el.slotId ? ' "' + el.slotId + '"' : '') + 's reelle størrelse for ALLE butikker.'
@@ -3302,6 +3420,7 @@
     document.getElementById('propKunPaaSide').value = el.kunPaaSide || '';
     document.getElementById('propSlotRow').style.display = (masterEditMode && el.locked) ? 'block' : 'none';
     document.getElementById('propSlotId').value = el.slotId || '';
+    document.getElementById('propAutoFyldRest').checked = !!el.autoFyldRest;
 
     // Selvbetjent "adoptér som fast plads": lader ENHVER admin (ikke kun superadmin) tage
     // et element de allerede har liggende løst og gøre det til indholdet i en af skabelonens
@@ -3420,6 +3539,14 @@
     if (!el) return;
     const val = e.target.value.trim();
     if (val) el.slotId = val; else delete el.slotId;
+  });
+
+  document.getElementById('propAutoFyldRest').addEventListener('change', (e) => {
+    const el = elements.find(x => x.id === selectedElementId);
+    if (!el) return;
+    if (e.target.checked) el.autoFyldRest = true; else delete el.autoFyldRest;
+    renderPropsPanel();
+    renderCanvas();
   });
 
   document.getElementById('propAdopterSlotBtn').addEventListener('click', () => {
@@ -3543,6 +3670,10 @@
       clearGuides();
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp);
+      // Traekker man en laast bjaelke (banner/sidebar) i master-redigering, skal en evt.
+      // "fyld automatisk resten"-plads snappe til den nye placering med det samme -- ellers
+      // ville den foerst rette sig efter naeste, ubeslaegtede gentegning.
+      if (masterEditMode) renderCanvas();
     }
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
@@ -3571,6 +3702,8 @@
     function onUp() {
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp);
+      // Se tilsvarende kommentar i startDrag's onUp.
+      if (masterEditMode) renderCanvas();
     }
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
