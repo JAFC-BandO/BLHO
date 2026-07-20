@@ -547,6 +547,11 @@
             <button id="centerVBtn" style="padding:6px 10px; font-size:12px; flex:1;">Lodret</button>
           </div>
         </div>
+        <div id="propErstatRow" style="display:none; margin-bottom:12px; background:#fff4e5; border-radius:8px; padding:10px;">
+          <label style="margin-top:0;">Erstat med</label>
+          <div id="propErstatKnapper" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;"></div>
+          <div style="font-size:11px; color:#888; margin-top:6px;">Skifter selve typen og indholdet -- beholder præcis samme placering/størrelse (og fast plads, hvis elementet har én). Det gamle indhold forsvinder.</div>
+        </div>
         <div style="margin-bottom:12px;">
           <label style="margin-top:0;">Lag (ræsækkefølge)</label>
           <div style="display:flex; gap:8px;">
@@ -648,7 +653,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master68';
+  const SCRIPT_VERSION = '2026-07-20-master69';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -2667,6 +2672,23 @@
   // hvilken af dem elementet skal ind i (se aabnSlotVaelger), i stedet for at gaette en
   // standardposition.
   const FYLDER_HELE = { rotator: 1, billede: 1, video: 1, boks: 1, miljoeffekt: 1 };
+  const ERSTAT_TYPE_NAVN = { rotator: 'Rotator', billede: 'Billede', video: 'Video', boks: 'Boks', miljoeffekt: 'Miljøeffekt' };
+
+  // Erstat med (se propErstatRow i renderPropsPanel): skifter selve TYPEN og indholdet paa et
+  // allerede-eksisterende element, men beholder dets placering/stoerrelse (og en evt. fast
+  // plads via slotId) 100% uaendret -- til forskel fra "Skift"-knappen (som kun erstatter
+  // INDHOLDET af en billede/video, ikke selve typen). Rydder alle type-specifikke felter fra
+  // den GAMLE type (url/kind/slides/intervalMs), saa der ikke haenger foraeldede felter
+  // tilbage, og saetter saa standardfelterne for den NYE type.
+  function erstatElement(el, nytType) {
+    if (!confirm('Erstat dette element med "' + ERSTAT_TYPE_NAVN[nytType] + '"? Det nuværende indhold forsvinder, men placering/størrelse bevares.')) return;
+    delete el.url; delete el.kind; delete el.slides; delete el.intervalMs;
+    el.type = nytType;
+    const { ekstra } = standardElementFelter(nytType);
+    Object.assign(el, ekstra);
+    renderPropsPanel();
+    renderCanvas();
+  }
 
   document.querySelectorAll('[data-add]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -3428,6 +3450,31 @@
     // overlap-fejl mellem banner/hoved tidligere) med et praecist, ufarligt tal-felt --
     // stadig 100% fast for alle andre end superadmin.
     const posLaast = !!el.posLocked || !!el.slotId;
+    // Kan bruges baade her og til at deaktivere kontroller nederst i funktionen -- flyttet
+    // helt op, saa den kan bruges af "Erstat med" nedenfor uden en separat udregning.
+    const canEditSelected = masterEditMode || !el.locked;
+    // Erstat med: skifter selve TYPEN og indholdet, men beholder placering/stoerrelse (og en
+    // evt. fast plads) -- til forskel fra "Skift" (som kun erstatter INDHOLDET af en
+    // billede/video, ikke selve typen). Kun for "fylder-hele"-typerne (samme kategori som
+    // slot-vaelgeren bruger) -- det giver ikke mening at "erstatte" en titel/tekst/ur/streg
+    // med en video paa den maade. Tilgaengelig for BAADE admin og superadmin, uanset om
+    // elementet er en fast plads eller ej -- kun styret af canEditSelected (kan jeg redigere
+    // dette element overhovedet).
+    const kanErstatte = canEditSelected && !!FYLDER_HELE[el.type];
+    document.getElementById('propErstatRow').style.display = kanErstatte ? 'block' : 'none';
+    if (kanErstatte) {
+      const knapContainer = document.getElementById('propErstatKnapper');
+      knapContainer.innerHTML = '';
+      Object.keys(ERSTAT_TYPE_NAVN).forEach(type => {
+        if (type === el.type) return;
+        const knap = document.createElement('button');
+        knap.className = 'add-btn';
+        knap.style.fontSize = '12px';
+        knap.textContent = ERSTAT_TYPE_NAVN[type];
+        knap.addEventListener('click', () => erstatElement(el, type));
+        knapContainer.appendChild(knap);
+      });
+    }
     // autoFyldRest: stoerrelsen udregnes automatisk (se anvendAutoFyldRest) -- et manuelt tal
     // her ville blive overskrevet igen ved naeste gentegning alligevel, saa feltet skjules
     // helt i stedet for at vise et tal der ikke reelt betyder noget.
@@ -3502,7 +3549,6 @@
     // ville betyde "matcher ingen side, vises derfor ingen steder".
     document.getElementById('sideNavneListe').innerHTML = sider.map(s => '<option value="' + escapeHtml(s.navn) + '">').join('');
 
-    const canEditSelected = masterEditMode || !el.locked;
     panel.querySelectorAll('input, button').forEach(ctrl => {
       if (ctrl.id === 'propLockBtn') return;
       ctrl.disabled = !canEditSelected;
