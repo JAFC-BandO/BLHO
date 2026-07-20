@@ -1742,14 +1742,24 @@
       target: null,
     },
     {
-      titel: 'Tilføj indhold',
-      body: 'Klik en af knapperne her for at tilføje tekst, billeder, videoer, eller en rotator der selv skifter mellem flere ting.',
+      titel: 'Jeres to indholds-vinduer',
+      body: 'Skærmens ramme (logo, ur, vejr, nyheder) er fast og ens for alle butikker. Det I selv bestemmer over, er de to vinduer med stiplet lilla kant: banneret øverst og det store vindue under det. Klik på et af dem for at vælge det — så kan du se og ændre hvad der vises der.',
+      target: () => document.querySelector('.slot-element') || document.getElementById('canvas'),
+    },
+    {
+      titel: 'Skift hvad et vindue viser',
+      body: 'Vælg først et af de to vinduer, og klik derefter en af knapperne her — så bliver vinduets indhold erstattet med det nye (billede, video eller rotator), på præcis samme plads. Vil du bare skifte selve billedet/videoen og beholde typen, så brug "Skift"-knappen direkte på vinduet.',
       target: () => document.querySelector('.add-row'),
     },
     {
-      titel: 'Flyt og tilpas',
-      body: 'Træk i et element for at flytte det, og i håndtaget nederst til højre for at ændre størrelsen. Bokse med en stiplet lilla kant er "faste pladser" — nyt: deres placering er sat centralt af os og kan ikke flyttes, men indholdet i dem skifter I stadig helt selv.',
-      target: () => document.querySelector('.slot-element') || document.getElementById('canvas'),
+      titel: 'Flere sider — og den røde prik',
+      body: 'I kan have flere sider som kladder og arbejde på dem i ro og mag — kun ÉN vises på skærmen. Den røde prik viser hvilken: klik på prikken ud for en anden side og tryk Gem, så er det den der vises. At redigere en side ændrer aldrig i sig selv hvad skærmen viser.',
+      target: () => document.getElementById('siderTabs'),
+    },
+    {
+      titel: 'Rotatoren kan vise hele sider',
+      body: 'Vælg rotator-vinduet: i baren nederst i det tilføjer du slides — billeder, videoer, eller via "+ Side..." en hel af jeres egne sider, som så vises inde i rotationen. En side-slide følger altid sidens aktuelle indhold: retter du siden, opdaterer rotatoren automatisk med.',
+      target: () => document.querySelector('.el[data-type="rotator"]') || document.querySelector('.slot-element') || document.getElementById('canvas'),
     },
     {
       titel: 'Gem, og se det med det samme',
