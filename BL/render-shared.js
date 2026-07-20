@@ -250,19 +250,35 @@ function buildNyhedsbannerNode(el, registerInterval) {
   // ren CSS-animation (compositor-traad-drevet, for at vaere robust mod hovedtraad-jank -- se
   // git-historik), men gentagne rapporter viste at banneret alligevel gik i staa ELLER koerte
   // i tydelig slowmotion efter typisk 15-20 minutters drift, KUN paa Android, og UDEN at
-  // resten af siden (eller frame-vagthunden herunder, som IKKE reagerede) hakkede -- dvs.
-  // CSS-animationens interne tidslinje kunne afvige fra virkeligheden paa denne hardware,
+  // resten af siden (eller frame-vagthunden, som IKKE reagerede) hakkede -- dvs. CSS-
+  // animationens interne tidslinje kunne afvige fra virkeligheden paa denne hardware,
   // uafhaengigt af hovedtraadens egen sundhed. Ved selv at genudregne transform paa hvert
-  // tick er der intet internt animations-tilstand tilbage der kan drifte eller fryse -- kun
-  // hvis HOVEDTRAADEN selv gaar i staa vil dette ogsaa stoppe, og det opdager frame-vagthunden
-  // allerede (den er derfor IKKE duplikeret her).
+  // tick er der intet internt animations-tilstand tilbage der kan drifte eller fryse.
+  //
+  // requestAnimationFrame (IKKE setInterval): andet forsoeg opdaterede positionen paa en fast
+  // 50ms-timer, dvs. kun 20 billeder/sekund -- og en timer rammer oveni skaevt naar hoved-
+  // traaden har travlt (rotator-skift, poll, gentegninger), hvilket saas som smaa-hak i
+  // scrollen "engang imellem". rAF fyrer i stedet praecis i takt med skaermens egen
+  // opdatering (typisk 60 gange/sekund), og da positionen altid udregnes fra forloebet tid,
+  // giver et enkelt forsinket frame kun et mikroskopisk spring -- aldrig ophobet drift.
+  // Loekken stopper sig selv naar banneret fjernes fra DOM'en (gentegning/side-skift), saa
+  // den ikke koerer videre som "spoegelses-loop" for kasserede elementer -- registerInterval
+  // kan kun rydde setInterval-id'er, ikke rAF, saa oprydningen sker via isConnected-tjekket.
   const varighedMs = (el.scrollSekunder || 90) * 1000;
   const scrollStart = performance.now();
-  registerInterval(setInterval(() => {
-    const forloebet = (performance.now() - scrollStart) % varighedMs;
+  let harVaeretIDom = false;
+  function scrollTick(nu) {
+    if (track.isConnected) {
+      harVaeretIDom = true;
+    } else if (harVaeretIDom) {
+      return; // fjernet ved gentegning -- stop loekken helt
+    }
+    const forloebet = (nu - scrollStart) % varighedMs;
     const procent = (forloebet / varighedMs) * 50;
     track.style.transform = 'translateX(-' + procent.toFixed(3) + '%)';
-  }, 50));
+    requestAnimationFrame(scrollTick);
+  }
+  requestAnimationFrame(scrollTick);
 
   return node;
 }
@@ -595,6 +611,34 @@ function hentAktuelButikNavn() {
   return AKTUEL_BUTIK_NAVN;
 }
 
+// Butikkens sider (samme liste som layout.sider) -- saettes FOER en rendering, praecis som
+// saetAktuelButikNavn ovenfor. Bruges af rotator-slides af typen 'side' med et sideId:
+// sliden slaar sidens AKTUELLE elementer op her ved hver visning, i stedet for at vise den
+// fastfrosne kopi der blev gemt da sliden blev tilfoejet. Foer dette var en side-slide et
+// oejebliksbillede: redigerede man siden bagefter, blev rotator-sliden staaende paa den
+// gamle udgave uden nogen forklaring -- praecis den slags "hvorfor opdaterer den ikke?"-
+// forvirring der ikke maa vaere. Kopien gemmes stadig som fallback (bruges hvis siden er
+// slettet, eller paa aeldre slides fra foer sideId fandtes).
+let AKTUELLE_SIDER = [];
+function saetAktuelleSider(sider) {
+  AKTUELLE_SIDER = Array.isArray(sider) ? sider : [];
+}
+// Rekursions-vaern: peger en side-slide (direkte eller via mellemled) tilbage paa en side
+// der allerede er ved at blive tegnet, ville live-opslaget koere i ring for evigt (siden
+// indeholder rotatoren indeholder siden ...). Den gamle fastfrosne kopi terminerede af sig
+// selv (endelig JSON) -- her falder vi i stedet eksplicit tilbage til netop den kopi, naar
+// en cyklus opdages. SIDE_SLIDE_STACK vedligeholdes af buildElNode omkring tegningen af en
+// side-slides boern (synkront, saa et Set raekker).
+const SIDE_SLIDE_STACK = new Set();
+function opslaaSideSlide(slide) {
+  const kanBrugeLive = slide.sideId && !SIDE_SLIDE_STACK.has(slide.sideId);
+  const liveSide = kanBrugeLive ? AKTUELLE_SIDER.find(s => s.id === slide.sideId) : null;
+  return {
+    elements: liveSide ? (liveSide.elements || []) : (slide.elements || []),
+    background: liveSide ? (liveSide.background || slide.background) : slide.background,
+  };
+}
+
 function buildElNode(el, registerInterval) {
   const node = document.createElement('div');
   node.className = 'el';
@@ -697,15 +741,23 @@ function buildElNode(el, registerInterval) {
 
       let nyNode;
       if (slide.type === 'side') {
+        // Live opslag via sideId (se opslaaSideSlide): sliden viser sidens AKTUELLE indhold,
+        // ikke et fastfrosset oejebliksbillede fra dengang den blev tilfoejet.
+        const sideData = opslaaSideSlide(slide);
         nyNode = document.createElement('div');
         nyNode.style.cssText = 'position:absolute; inset:0; width:100%; height:100%; overflow:hidden; container-type:inline-size;';
-        if (slide.background) nyNode.style.background = slide.background;
+        if (sideData.background) nyNode.style.background = sideData.background;
         // En "side" tilfoejet som slide har elementer med koordinater relative til HELE
         // skaermen (saadan som siden ser ud naar den vises for sig selv) -- men rotatoren
         // selv fylder typisk kun en del af skaermen (f.eks. fordi der er en laast sidebar).
         // Uden dette skift bliver koordinaterne genfortolket relativt til rotatorens eget,
         // mindre og forskudte omraade, saa indholdet ser forskudt/forkert skaleret ud.
-        (slide.elements || []).forEach(subEl => nyNode.appendChild(buildElNode(remapElementIntoRotator(subEl, el), registerInterval)));
+        if (slide.sideId) SIDE_SLIDE_STACK.add(slide.sideId);
+        try {
+          sideData.elements.forEach(subEl => nyNode.appendChild(buildElNode(remapElementIntoRotator(subEl, el), registerInterval)));
+        } finally {
+          if (slide.sideId) SIDE_SLIDE_STACK.delete(slide.sideId);
+        }
         node.appendChild(nyNode);
         anvendIndholdsSkala(nyNode, el);
       } else if (!slide.url || slide.kind === 'youtube') {

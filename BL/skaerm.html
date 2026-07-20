@@ -34,8 +34,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="render-shared.css?v=2026-07-20-28">
-<script src="render-shared.js?v=2026-07-20-28"></script>
+<link rel="stylesheet" href="render-shared.css?v=2026-07-20-29">
+<script src="render-shared.js?v=2026-07-20-29"></script>
 <style>
   * { box-sizing: border-box; }
   html, body {
@@ -95,7 +95,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master25';
+  const SCRIPT_VERSION = '2026-07-20-master26';
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
@@ -316,6 +316,9 @@
     try {
       if (data.layout && Array.isArray(data.layout.elements) && data.layout.elements.length) {
         const sider = Array.isArray(data.layout.sider) ? data.layout.sider : [];
+        // Skal saettes FOER visLayout: rotator-slides af typen 'side' slaar sidens AKTUELLE
+        // indhold op her (via sideId) ved hver visning -- se opslaaSideSlide i render-shared.
+        saetAktuelleSider(sider);
         const aktivSide = sider.find(s => s.id === data.layout.aktivSideId);
         debugLog('Gemte sider i DB: ' + sider.map(s => s.navn + ': ' + s.elements.map(e => e.type).join(',')).join(' | '));
         debugLog('Top-niveau elements (det der reelt vises): ' + data.layout.elements.map(e => e.type).join(','));
