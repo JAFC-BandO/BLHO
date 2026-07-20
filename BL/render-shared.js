@@ -652,6 +652,14 @@ function buildElNode(el, registerInterval) {
     // stadig hver gang.
     const slideNoder = new Map(); // slide (objekt-reference) -> permanent, vedhaeftet node
 
+    // Blød overgang (crossfade/dissolve) mellem slides i stedet for et haardt spring. Alle
+    // slides ligger oven paa hinanden (position:absolute, inset:0), saa naar den nye toner IND
+    // (opacity 0->1) samtidig med at den gamle toner UD (opacity 1->0), smelter de sammen.
+    // Skaleret ned for meget korte intervaller, saa selve overgangen aldrig fylder mere end en
+    // tredjedel af den tid en slide vises (ellers ville et 1-sekunds-interval vaere én lang,
+    // konstant fade).
+    const FADE_MS = Math.min(600, Math.round((el.intervalMs || 30000) / 3));
+
     function byggSlideNode(slide) {
       const media = buildMediaNode(slide);
       if (media.tagName === 'VIDEO') {
@@ -663,6 +671,7 @@ function buildElNode(el, registerInterval) {
       media.style.position = 'absolute';
       media.style.inset = '0';
       media.style.opacity = '0';
+      media.style.transition = 'opacity ' + FADE_MS + 'ms ease';
       media.style.pointerEvents = 'none';
       node.appendChild(media);
       anvendIndholdsSkala(media, el);
@@ -710,16 +719,26 @@ function buildElNode(el, registerInterval) {
         if (nyNode.tagName === 'VIDEO' && nyNode.paused) nyNode.play().catch(() => {});
       }
 
-      // Afsloer den NYE FOER den gamle skjules -- saa der aldrig er et enkelt frame uden noget
-      // synligt (som ville se sort ud).
+      // Crossfade-forberedelse: sørg for at nyNode har opacity-overgangen og starter paa 0,
+      // saa den kan tone blødt IND. En frisk-bygget "side"/YouTube-node har ingen af delene
+      // endnu; en cachet billede/video-node har dem allerede fra byggSlideNode. En tvunget
+      // reflow bagefter faar browseren til at registrere 0 som overgangens START-tilstand, saa
+      // det efterfoelgende skift til 1 rent faktisk animerer i stedet for at hoppe.
+      nyNode.style.transition = 'opacity ' + FADE_MS + 'ms ease';
+      nyNode.style.opacity = '0';
+      void nyNode.offsetWidth;
+
+      // Toner den NYE ind. Den gamle toner samtidig UD (begge synlige undervejs -> ingen sort
+      // mellemtilstand). En ikke-cachet gammel node (side/youtube) fjernes FOERST naar dens
+      // udtoning er faerdig, saa den ikke forsvinder brat midt i overgangen.
       nyNode.style.opacity = '1';
       nyNode.style.pointerEvents = '';
       if (forrigeNode && forrigeNode !== nyNode) {
-        if (forrigeVarCachet) {
-          forrigeNode.style.opacity = '0';
-          forrigeNode.style.pointerEvents = 'none';
-        } else {
-          forrigeNode.remove();
+        forrigeNode.style.opacity = '0';
+        forrigeNode.style.pointerEvents = 'none';
+        if (!forrigeVarCachet) {
+          const udgaaende = forrigeNode;
+          setTimeout(() => { if (udgaaende.parentNode) udgaaende.remove(); }, FADE_MS + 80);
         }
       }
       synligNode = nyNode;
