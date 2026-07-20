@@ -34,8 +34,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="render-shared.css?v=2026-07-20-26">
-<script src="render-shared.js?v=2026-07-20-26"></script>
+<link rel="stylesheet" href="render-shared.css?v=2026-07-20-27">
+<script src="render-shared.js?v=2026-07-20-27"></script>
 <style>
   * { box-sizing: border-box; }
   html, body {
@@ -95,7 +95,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master24';
+  const SCRIPT_VERSION = '2026-07-20-master25';
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
@@ -341,10 +341,19 @@
     }
   }
 
-  const RELOAD_MS = 10 * 60 * 1000; // genindlæs siden hvert 10. minut for altid at hente frisk kode
-  function scheduleAutoReload() {
-    setTimeout(forbeeredGenindlaesning, RELOAD_MS);
-  }
+  // BEVIDST INGEN fast periodisk genindlaesning laengere. Tidligere genindlaeste skaermen sig
+  // selv HVERT 10. minut uanset om noget var aendret -- udelukkende for at hente evt. frisk
+  // kode. Men det betoed at en skaerm der viste PRAECIS det samme indhold i timevis alligevel
+  // "gik sort" og skulle bygge sig selv op igen hvert 10. minut (det sorte glimt man saa).
+  // Nu genindlaeser skaermen KUN naar der reelt er noget nyt at vise:
+  //   1. En opdaget indholds-/skabelon-aendring (hentContent's combinedKey-tjek) -- dvs. naar
+  //      nogen faktisk har trykket Gem.
+  //   2. Den natlige genstant kl 02:00 (pg_cron -> kommando=reboot) henter frisk kode én gang
+  //      i doegnet, saa nye kode-udrulninger stadig kommer ud uden manuel handling.
+  //   3. Frame-vagthunden nedenfor, hvis browseren rent faktisk haenger.
+  // Skal en ny kode-udrulning ud MED DET SAMME (ikke vente til natten), kan man trykke
+  // "Genstart enhed" i Enheder-panelet -- men til daglig drift skal skaermen bare koere
+  // uforstyrret videre med det samme indhold, praecis som oensket.
 
   // I stedet for at hoppe direkte til en ny navigation (som altid viser et kort BLANKT/sort
   // glimt, mens browseren henter og koerer siden helt forfra), forbereder vi foerst den NYE
@@ -357,11 +366,10 @@
   // aldrig til selv at blive vist eller genbruges, saa vi undgaar at ophobe et uendeligt
   // antal ekstra skjulte sider i hukommelsen over uger/maaneder med skaermen taendt.
   //
-  // Bruges KUN til de to "alt er sundt, vi skal bare have frisk kode/indhold"-tilfaelde
-  // (den faste 10-minutters cyklus, og en opdaget indholds-aendring) -- IKKE af frame-
-  // vagthunden nedenfor, som reagerer paa at browseren allerede hakker/haenger lige nu; der
-  // vil det vaere forkert at give den ENDNU en baggrunds-opgave at vente paa og i stedet
-  // blot genindlaese med det samme, som foer.
+  // Bruges KUN naar en indholds-aendring er opdaget (se ovenfor) -- IKKE af frame-vagthunden
+  // nedenfor, som reagerer paa at browseren allerede hakker/haenger lige nu; der vil det
+  // vaere forkert at give den ENDNU en baggrunds-opgave at vente paa og i stedet blot
+  // genindlaese med det samme, som foer.
   function forbeeredGenindlaesning() {
     const url = new URL(location.href);
     url.searchParams.set('_cb', Date.now());
@@ -411,8 +419,6 @@
   }
 
   async function start() {
-    scheduleAutoReload();
-
     if (email && password) {
       // Kiosk-enhedens egen, uaendrede flow: login via URL-parametre bagt ind i genvejen.
       const loggedIn = await login();
