@@ -622,11 +622,36 @@ function buildElNode(el, registerInterval) {
       const slide = el.slides[idx];
       // Var den FORRIGE synlige node en permanent cachet slide-node? Saa skal den kun
       // skjules (ikke fjernes) -- en frisk-bygget "side"/YouTube-node skal derimod fjernes
-      // helt, den genbruges alligevel ikke.
-      const forrigeVarCachet = synligNode && Array.from(slideNoder.values()).includes(synligNode);
-      let nyNode;
+      // helt, den genbruges alligevel ikke. Fanget FOER selve skiftet, saa den stadig er
+      // korrekt selv naar skiftet (for en video) foerst fuldfoeres lidt senere.
+      const forrigeNode = synligNode;
+      const forrigeVarCachet = forrigeNode && Array.from(slideNoder.values()).includes(forrigeNode);
+
+      // Selve ombytningen (goer nyNode synlig, skjuler/fjerner den forrige) -- udskilt i sin
+      // egen funktion, fordi en video FOERST skal kalde denne naar den bekraefter at spille
+      // (se 'playing'-lytteren nedenfor), IKKE med det samme. Uden det ventede vi kun paa at
+      // browseren havde BUFFERET nok (preload=auto), ikke at den reelt havde AFKODET og
+      // malet et rigtigt foerste billede -- paa svagere Android-hardware kunne der stadig gaa
+      // et kort, mærkbart sort øjeblik EFTER at videoen blev gjort synlig, foer det foerste
+      // billede naaede at komme paa skaermen. Ved at blive ved med at vise den GAMLE slide
+      // indtil den NYE video bekraefter reel afspilning, er der aldrig et tomt/sort mellemrum.
+      function fuldfoerSkift(nu) {
+        nu.style.opacity = '1';
+        nu.style.pointerEvents = '';
+        if (forrigeNode && forrigeNode !== nu) {
+          if (forrigeVarCachet) {
+            forrigeNode.style.opacity = '0';
+            forrigeNode.style.pointerEvents = 'none';
+            if (forrigeNode.tagName === 'VIDEO') forrigeNode.pause();
+          } else {
+            forrigeNode.remove();
+          }
+        }
+        synligNode = nu;
+      }
+
       if (slide.type === 'side') {
-        nyNode = document.createElement('div');
+        const nyNode = document.createElement('div');
         nyNode.style.cssText = 'position:absolute; inset:0; width:100%; height:100%; overflow:hidden; container-type:inline-size;';
         if (slide.background) nyNode.style.background = slide.background;
         // En "side" tilfoejet som slide har elementer med koordinater relative til HELE
@@ -637,30 +662,36 @@ function buildElNode(el, registerInterval) {
         (slide.elements || []).forEach(subEl => nyNode.appendChild(buildElNode(remapElementIntoRotator(subEl, el), registerInterval)));
         node.appendChild(nyNode);
         anvendIndholdsSkala(nyNode, el);
+        fuldfoerSkift(nyNode);
       } else if (!slide.url || slide.kind === 'youtube') {
-        nyNode = buildMediaNode(slide); // YouTube/uden url -- kan ikke genbruges, bygges hver gang
+        const nyNode = buildMediaNode(slide); // YouTube/uden url -- kan ikke genbruges, bygges hver gang
         node.appendChild(nyNode);
         anvendIndholdsSkala(nyNode, el);
+        fuldfoerSkift(nyNode);
       } else {
         forberedSlide(slide); // ingen effekt hvis allerede bygget (se guard i forberedSlide)
-        nyNode = slideNoder.get(slide);
+        const nyNode = slideNoder.get(slide);
         if (nyNode.tagName === 'VIDEO') {
+          let skiftetAlleredeUd = false;
+          const skiftEngangKun = () => {
+            if (skiftetAlleredeUd) return;
+            skiftetAlleredeUd = true;
+            nyNode.removeEventListener('playing', paaPlaying);
+            fuldfoerSkift(nyNode);
+          };
+          const paaPlaying = () => skiftEngangKun();
+          nyNode.addEventListener('playing', paaPlaying);
+          // Sikkerhedsnet: fyrer 'playing' aldrig (netvaerks-hik, en sjaelden browser-
+          // saerhed), skift alligevel efter kort tid -- hellere et muligt kort glimt end at
+          // haenge fast paa den GAMLE slide for evigt.
+          setTimeout(skiftEngangKun, 1500);
           nyNode.currentTime = 0;
-          nyNode.play().catch(() => {});
-        }
-        nyNode.style.opacity = '1';
-        nyNode.style.pointerEvents = '';
-      }
-      if (synligNode && synligNode !== nyNode) {
-        if (forrigeVarCachet) {
-          synligNode.style.opacity = '0';
-          synligNode.style.pointerEvents = 'none';
-          if (synligNode.tagName === 'VIDEO') synligNode.pause();
+          nyNode.play().catch(skiftEngangKun);
         } else {
-          synligNode.remove();
+          fuldfoerSkift(nyNode); // billede -- ingen afkodnings-forsinkelse at vente paa
         }
       }
-      synligNode = nyNode;
+
       forberedSlide(el.slides[(idx + 1) % el.slides.length]);
       idx = (idx + 1) % el.slides.length;
     };
