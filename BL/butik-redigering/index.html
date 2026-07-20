@@ -653,7 +653,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master77';
+  const SCRIPT_VERSION = '2026-07-20-master78';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1226,7 +1226,20 @@
   const KOMMANDO_SVAR_STALE_MINUTTER = 20;
   // Hurtig-knapper i fejlfindings-konsollen -- de kommandoer der rent faktisk er brugt igen
   // og igen ved fejlfinding af Android-enhederne.
-  const HURTIG_KOMMANDOER = ['tailscaled-start', 'tailscale-cli ip', 'tailscale-test', 'tail -30 ~/tailscale-selfheal.log', 'pgrep -f tailscaled', 'df -h', 'ps aux'];
+  // OBS: kommandoer her koerer via check-in-loopets "sh -c" -- et IKKE-interaktivt miljoe
+  // uden brugerens login-profil. Aliaser som "tailscale-cli" findes derfor IKKE her (fundet
+  // paa den haarde maade: sundhedstjekket fejlede med "not found" 1200+ gange i traek, mens
+  // det virkede fint i en interaktiv SSH-session). Brug altid fulde kommandoer med eksplicit
+  // socket-sti. tailscaled styres af termux-services (runsv), saa genstart sker med "sv".
+  const HURTIG_KOMMANDOER = [
+    'tailscale --socket=$HOME/.tailscale/tailscaled.sock ip',
+    'sv restart tailscaled',
+    'sv status tailscaled',
+    'tail -30 ~/tailscale-selfheal.log',
+    'pgrep -af tailscaled',
+    'df -h',
+    'ps aux',
+  ];
 
   // Selv-gemte hurtig-kommandoer (lokalt i browseren, per-admin) -- ud over de faste
   // ovenfor, saa man kan tilfoeje sine egne ofte-brugte fejlfindings-kommandoer som knapper.
