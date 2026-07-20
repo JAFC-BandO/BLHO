@@ -272,6 +272,22 @@
       0 0 0 9999px rgba(0,0,0,.6);
     border-radius: 10px;
   }
+
+  /* --- Telefon/smal skaerm --- .main var et FAST 260px-sidebar + fluid grid, som paa en
+     telefon (typisk 360-430px bred) klemte canvas-kolonnen ned i en ubrugelig smal stribe
+     ved siden af sidebaren. Under 760px stables sidebar og canvas i stedet oveni hinanden
+     (én kolonne), saa canvas altid faar fuld skaermbredde at skalere sit 16:9-format ud fra.
+     Topbaren faar lov at bryde om paa flere linjer i stedet for at klemme "Gem ændringer"/
+     "Log ud" ud over kanten, og admin-dropdownen klemmes til at blive inden for skaermen i
+     stedet for en fast 280px der kan raekke ud over en meget smal telefon. */
+  @media (max-width: 760px) {
+    .main { grid-template-columns: 1fr; padding: 10px; gap: 12px; }
+    .topbar { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+    .topbar-actions { flex-wrap: wrap; gap: 8px; }
+    #superadminMenu { width: min(280px, calc(100vw - 32px)); }
+    .sidebar, .canvas-outer { padding: 12px; }
+    .add-btn { padding: 9px 12px; font-size: 13px; }
+  }
 </style>
 </head>
 <body>
@@ -427,7 +443,11 @@
         Dette element passer bedst ind i ét af skabelonens faste vinduer, så det altid rammer placeringen 100% rigtigt uden at du selv skal finjustere det bagefter.
       </div>
       <div id="slotVaelgerListe" style="display:flex; flex-direction:column; gap:8px;"></div>
-      <button id="slotVaelgerFritBtn" style="margin-top:12px; padding:10px; font-size:13px; text-align:left; border-radius:6px; border:1px dashed #ccc; background:none; cursor:pointer; color:#666; width:100%;">Nej tak, tilføj som et almindeligt, frit element i stedet</button>
+      <!-- Kun superadmin kan slippe forbi slot-vaelgeren til et loesrevet, frit element --
+           almindelige admins maa KUN fylde et af de 2 faste vinduer, saa for dem er de eneste
+           to knapper i "Tilføj element" i forvejen FYLDER_HELE-typer, og skal ALTID ende i et
+           af vinduerne (se opdaterTilfoejHint + klik-haandteringen for [data-add]). -->
+      <button id="slotVaelgerFritBtn" class="superadmin-only" style="display:none; margin-top:12px; padding:10px; font-size:13px; text-align:left; border-radius:6px; border:1px dashed #ccc; background:none; cursor:pointer; color:#666; width:100%;">Nej tak, tilføj som et almindeligt, frit element i stedet</button>
     </div>
   </div>
 
@@ -468,9 +488,19 @@
       <a id="skaermVisLink" href="../skaerm.html" target="_blank" rel="noopener" style="display:block; text-align:center; font-size:12px; color:#040DB1; margin-bottom:20px; text-decoration:none;">Åbn jeres rigtige skærm ↗</a>
 
       <h2>Tilføj element</h2>
+      <!-- id="tilfoejElementHint" -- teksten herunder saettes af JS (se opdaterTilfoejHint) alt
+           efter om man er superadmin (frit layout) eller almindelig admin (KUN de 2 faste
+           vinduer: banner + hoved). -->
+      <div id="tilfoejElementHint" style="font-size:11px; color:#888; margin-bottom:8px;"></div>
       <div class="add-row">
-        <button class="add-btn" data-add="titel"><svg width="18" height="18" viewBox="0 0 20 20"><path d="M4 5h12M10 5v10" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>Titel</button>
-        <button class="add-btn" data-add="tekst"><svg width="18" height="18" viewBox="0 0 20 20"><path d="M4 6h12M4 10h12M4 14h8" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>Tekst</button>
+        <!-- Titel/tekst er loesrevne, "frie" elementer -- de fylder ALDRIG et helt vindue og
+             kan derfor ikke bruges til at erstatte banner/hoved. En almindelig admin maa KUN
+             tilfoeje indhold i de 2 faste vinduer (se FYLDER_HELE + slot-flowet nedenfor), saa
+             disse to knapper er superadmin-only ligesom miljoeffekt/streg/ur/vejr -- IKKE for
+             at begraense superadmins frie layout, men for at almindelige admins aldrig ser en
+             knap der fører til et loesrevet element de ikke selv kan placere fornuftigt. -->
+        <button class="add-btn superadmin-only" data-add="titel" style="display:none;"><svg width="18" height="18" viewBox="0 0 20 20"><path d="M4 5h12M10 5v10" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>Titel</button>
+        <button class="add-btn superadmin-only" data-add="tekst" style="display:none;"><svg width="18" height="18" viewBox="0 0 20 20"><path d="M4 6h12M4 10h12M4 14h8" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>Tekst</button>
         <button class="add-btn" data-add="billede"><svg width="18" height="18" viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><circle cx="7.3" cy="8" r="1.3" fill="currentColor"/><path d="M4 14.5l4-4 3 3 2-2 4 3.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Billede</button>
         <button class="add-btn" data-add="video"><svg width="18" height="18" viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M8 7.3v5.4l5-2.7z" fill="currentColor"/></svg>Video</button>
         <button class="add-btn" data-add="boks"><svg width="18" height="18" viewBox="0 0 20 20"><rect x="3.5" y="4.5" width="13" height="11" rx="1.5" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>Boks</button>
@@ -654,7 +684,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master81';
+  const SCRIPT_VERSION = '2026-07-20-master82';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -982,6 +1012,12 @@
     document.querySelectorAll('.superadmin-only').forEach(elNode => {
       elNode.style.display = erSuperadmin ? '' : 'none';
     });
+    // Almindelige admins skal KUN kunne fylde de 2 faste vinduer (banner + hoved) -- ingen
+    // losrevne elementer. Forklarer det direkte under overskriften i stedet for at de selv
+    // skal gaette sig frem til hvorfor der pludselig er faerre knapper end foer.
+    document.getElementById('tilfoejElementHint').textContent = erSuperadmin
+      ? ''
+      : 'I har 2 faste vinduer på siden (banner og hoved). Vælg det vindue du vil ændre, og klik så på den type indhold det skal vise.';
 
     if (erSuperadmin) await loadAlleButikkerListe();
 
@@ -2788,6 +2824,15 @@
         const ledige = tilgaengeligeSlotIds();
         if (ledige.length > 0) {
           aabnSlotVaelger(type, ledige);
+          return;
+        }
+        // Begge faste vinduer er allerede i brug, og intet af dem er valgt lige nu. En
+        // almindelig admin har ingen "frit element"-flugtvej (den knap er superadmin-only,
+        // se slotVaelgerFritBtn) -- de skal KUN kunne erstatte et af de 2 vinduer, saa i
+        // stedet for at stille tavshed skabe et losrevet tredje element, forklarer vi hvad
+        // de skal goere i stedet.
+        if (!erSuperadmin) {
+          alert('I har kun de 2 vinduer (banner og hoved). Klik først på det vindue på siden du vil ændre, og tryk så på denne knap for at erstatte dets indhold.');
           return;
         }
       }
