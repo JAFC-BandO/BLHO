@@ -12,6 +12,7 @@ supabase/migration_admin_log_v2.sql
 supabase/migration_feedback.sql
 supabase/migration_tailscale_status.sql
 supabase/migration_nightly_reboot.sql
+supabase/migration_nightly_backup.sql
 media/
 SUPABASE.md
 ANDROID-KIOSK-SETUP.md
