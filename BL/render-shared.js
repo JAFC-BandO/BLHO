@@ -577,19 +577,24 @@ function buildElNode(el, registerInterval) {
     anvendIndholdsSkala(media, el);
   } else if (el.type === 'rotator' && Array.isArray(el.slides) && el.slides.length) {
     let idx = 0;
-    // Forbereder den RIGTIGE afspilnings-node for naeste slide i baggrunden, mens den
-    // aktuelle slide stadig vises, og GENBRUGER den ved selve skiftet -- ikke bare en smidt-
-    // vaek "opvarmer" der kun fylder HTTP-cachen (det lod stadig et nybygget <video>-element
-    // starte forfra med at demuxe/afkode ved selve skiftet, som stadig kunne naa at vise et
-    // kort blink/sort flade). Video sat paa pause (ikke autoplay) mens den ligger klar, saa
-    // den ikke naar at spille et stykke af sig selv færdig i baggrunden foer den overhovedet
-    // vises -- currentTime nulstilles og play() kaldes foerst i selve showSlide. "side"-slides
-    // (undersider med egne elementer) og YouTube-iframes kan ikke forberedes paa samme maade
-    // og springes over -- de opfoerer sig som foer.
-    const forberedteSlides = new Map(); // slide (objekt-reference) -> allerede bygget node
+    // Billede/video-slides bygges og forbliver VEDHAEFTET DOM'en (skjult via opacity:0 naar
+    // ikke aktiv) for HELE rotatorens levetid -- de bliver ALDRIG fjernet eller bygget
+    // forfra efter foerste visning. Det foerste forsoeg paa denne fix (se git-historik)
+    // genbrugte kun den forberedte node VED SELVE SKIFTET, men fjernede den bagefter saa
+    // snart en anden slide blev vist -- naeste gang rotationen kom tilbage til den, skulle
+    // et helt NYT <video>-element bygges og demuxe/afkode fra bunden af igen, hvilket gav et
+    // glimt/kortvarigt "loading" HVER eneste gang rotationen ramte en video-slide, uanset
+    // hvor laenge skaermen havde koert. Ved at bygge hver slide ÉN gang og udelukkende
+    // toggle dens synlighed (opacity + pause/play) resten af tiden, skal intet nogensinde
+    // hentes/afkodes to gange -- kun til gengaeld holder rotatoren alle sine slides i
+    // hukommelsen samtidig (i praksis et par billeder/videoer, et fint tradeoff for en
+    // skaerm der koerer i uger ad gangen uden reload). "side"-slides (undersider med egne
+    // elementer) og YouTube-iframes kan ikke genbruges paa samme maade og bygges/fjernes
+    // stadig hver gang -- de opfoerer sig som foer.
+    const slideNoder = new Map(); // slide (objekt-reference) -> permanent, vedhaeftet node
 
     function forberedSlide(slide) {
-      if (!slide || !slide.url || slide.kind === 'youtube' || forberedteSlides.has(slide)) return;
+      if (!slide || !slide.url || slide.kind === 'youtube' || slideNoder.has(slide)) return;
       const media = buildMediaNode(slide);
       if (media.tagName === 'VIDEO') {
         // "auto", bevidst: kun "nok til at starte" (metadata) er ikke nok til et blink-frit
@@ -603,38 +608,59 @@ function buildElNode(el, registerInterval) {
         media.autoplay = false;
         media.pause();
       }
-      forberedteSlides.set(slide, media);
+      media.style.position = 'absolute';
+      media.style.inset = '0';
+      media.style.opacity = '0';
+      media.style.pointerEvents = 'none';
+      node.appendChild(media);
+      anvendIndholdsSkala(media, el);
+      slideNoder.set(slide, media);
     }
 
+    let synligNode = null;
     const showSlide = () => {
-      node.innerHTML = '';
       const slide = el.slides[idx];
+      // Var den FORRIGE synlige node en permanent cachet slide-node? Saa skal den kun
+      // skjules (ikke fjernes) -- en frisk-bygget "side"/YouTube-node skal derimod fjernes
+      // helt, den genbruges alligevel ikke.
+      const forrigeVarCachet = synligNode && Array.from(slideNoder.values()).includes(synligNode);
+      let nyNode;
       if (slide.type === 'side') {
-        const inner = document.createElement('div');
-        inner.style.cssText = 'position:relative; width:100%; height:100%; overflow:hidden; container-type:inline-size;';
-        if (slide.background) inner.style.background = slide.background;
+        nyNode = document.createElement('div');
+        nyNode.style.cssText = 'position:absolute; inset:0; width:100%; height:100%; overflow:hidden; container-type:inline-size;';
+        if (slide.background) nyNode.style.background = slide.background;
         // En "side" tilfoejet som slide har elementer med koordinater relative til HELE
         // skaermen (saadan som siden ser ud naar den vises for sig selv) -- men rotatoren
         // selv fylder typisk kun en del af skaermen (f.eks. fordi der er en laast sidebar).
         // Uden dette skift bliver koordinaterne genfortolket relativt til rotatorens eget,
         // mindre og forskudte omraade, saa indholdet ser forskudt/forkert skaleret ud.
-        (slide.elements || []).forEach(subEl => inner.appendChild(buildElNode(remapElementIntoRotator(subEl, el), registerInterval)));
-        node.appendChild(inner);
-        anvendIndholdsSkala(inner, el);
+        (slide.elements || []).forEach(subEl => nyNode.appendChild(buildElNode(remapElementIntoRotator(subEl, el), registerInterval)));
+        node.appendChild(nyNode);
+        anvendIndholdsSkala(nyNode, el);
+      } else if (!slide.url || slide.kind === 'youtube') {
+        nyNode = buildMediaNode(slide); // YouTube/uden url -- kan ikke genbruges, bygges hver gang
+        node.appendChild(nyNode);
+        anvendIndholdsSkala(nyNode, el);
       } else {
-        let media = forberedteSlides.get(slide);
-        if (media) {
-          forberedteSlides.delete(slide);
-          if (media.tagName === 'VIDEO') {
-            media.currentTime = 0;
-            media.play().catch(() => {});
-          }
-        } else {
-          media = buildMediaNode(slide); // foerste visning nogensinde -- intet naaet at forberede
+        forberedSlide(slide); // ingen effekt hvis allerede bygget (se guard i forberedSlide)
+        nyNode = slideNoder.get(slide);
+        if (nyNode.tagName === 'VIDEO') {
+          nyNode.currentTime = 0;
+          nyNode.play().catch(() => {});
         }
-        node.appendChild(media);
-        anvendIndholdsSkala(media, el);
+        nyNode.style.opacity = '1';
+        nyNode.style.pointerEvents = '';
       }
+      if (synligNode && synligNode !== nyNode) {
+        if (forrigeVarCachet) {
+          synligNode.style.opacity = '0';
+          synligNode.style.pointerEvents = 'none';
+          if (synligNode.tagName === 'VIDEO') synligNode.pause();
+        } else {
+          synligNode.remove();
+        }
+      }
+      synligNode = nyNode;
       forberedSlide(el.slides[(idx + 1) % el.slides.length]);
       idx = (idx + 1) % el.slides.length;
     };
