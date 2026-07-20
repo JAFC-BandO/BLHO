@@ -9,8 +9,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="../render-shared.css?v=2026-07-20-28">
-<script src="../render-shared.js?v=2026-07-20-28"></script>
+<link rel="stylesheet" href="../render-shared.css?v=2026-07-20-29">
+<script src="../render-shared.js?v=2026-07-20-29"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -653,7 +653,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master75';
+  const SCRIPT_VERSION = '2026-07-20-master76';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -2612,6 +2612,9 @@
     // Laaste elementer fra den faelles skabelon flettes ind praecis som paa den rigtige skaerm.
     const harSider = Array.isArray(data.layout.sider) && data.layout.sider.length;
     const aktiv = harSider ? (data.layout.sider.find(s => s.id === data.layout.aktivSideId) || data.layout.sider[0]) : null;
+    // Skal saettes FOER buildElNode-kaldene: rotator-slides af typen 'side' slaar sidens
+    // AKTUELLE indhold op her (via sideId) -- se opslaaSideSlide i render-shared.js.
+    saetAktuelleSider(harSider ? data.layout.sider : []);
 
     box.style.background = data.layout.background || '#0a0a0a';
     const merged = mergeMasterElements(data.layout.elements, masterTemplate ? masterTemplate.elements : [], aktiv ? aktiv.navn : null);
@@ -3151,9 +3154,13 @@
           preview.innerHTML = '';
           const slide = el.slides[idx];
           if (slide.type === 'side') {
+            // Live-opslag som paa den rigtige skaerm: navn/antal fra sidens AKTUELLE indhold
+            // hvis den stadig findes, ellers fra sidste kendte kopi.
+            const liveSide = slide.sideId ? sider.find(x => x.id === slide.sideId) : null;
             const badge = document.createElement('div');
-            badge.style.cssText = 'width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#aaa; font-size:11px; text-align:center; padding:6px; background:' + (slide.background || '#0a0a0a') + ';';
-            badge.textContent = 'Side (' + (slide.elements || []).length + ' elementer)';
+            badge.style.cssText = 'width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#aaa; font-size:11px; text-align:center; padding:6px; background:' + ((liveSide ? liveSide.background : slide.background) || '#0a0a0a') + ';';
+            const navn = liveSide ? liveSide.navn : (slide.navn || 'Side');
+            badge.textContent = navn + ' (' + ((liveSide ? liveSide.elements : slide.elements) || []).length + ' elementer' + (liveSide ? ', følger siden live' : '') + ')';
             preview.appendChild(badge);
             anvendIndholdsSkala(badge, el);
             idx = (idx + 1) % el.slides.length;
@@ -3205,8 +3212,14 @@
           thumb.appendChild(img);
         } else if (slide.type === 'side') {
           const ico = document.createElement('div');
-          ico.textContent = 'Side';
-          ico.style.cssText = 'width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:13px;';
+          // Vis sidens NAVN (live-opslag hvis den stadig findes), ikke bare "Side" -- ellers
+          // kan man ikke kende to side-slides fra hinanden i baren.
+          const liveSide = slide.sideId ? sider.find(x => x.id === slide.sideId) : null;
+          ico.textContent = liveSide ? liveSide.navn : (slide.navn || 'Side');
+          ico.title = liveSide
+            ? 'Viser altid sidens aktuelle indhold -- redigerer du siden, følger denne slide automatisk med.'
+            : 'Siden findes ikke længere -- viser sidste kendte indhold.';
+          ico.style.cssText = 'width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:10px; text-align:center; padding:2px; overflow:hidden; color:#eee;';
           thumb.appendChild(ico);
         } else {
           const vid = document.createElement('video');
@@ -3309,11 +3322,16 @@
               ? { elements, background: baggrundsfarve }
               : sider.find(s => s.id === id);
             if (side) {
+              // sideId: sliden foelger sidens AKTUELLE indhold live (se opslaaSideSlide i
+              // render-shared.js) -- redigerer man siden bagefter, opdaterer rotator-sliden
+              // sig automatisk med. elements gemmes KUN som fallback (hvis siden slettes).
               // stripLockedMasterElements: en aeldre side kan have en fastfrosset kopi af
               // et laast element liggende fra foer det blev rettet -- den skal IKKE med ind
               // i rotator-sliden, laast indhold kommer udelukkende fra den live fletning.
               el.slides.push({
                 type: 'side',
+                sideId: id,
+                navn: (sider.find(s => s.id === id) || {}).navn || '',
                 elements: stripLockedMasterElements(JSON.parse(JSON.stringify(side.elements || []))),
                 background: side.background || '#0a0a0a',
               });
@@ -3908,6 +3926,32 @@
     btn.disabled = true;
 
     commitActiveSide();
+    // Genopfrisk side-sliders fallback-kopi: en rotator-slide med sideId foelger sidens
+    // AKTUELLE indhold live (se opslaaSideSlide i render-shared.js), men beholder en kopi som
+    // fallback til hvis siden en dag slettes. Ved hvert Gem opdateres kopien til sidens
+    // nuvaerende indhold, saa fallbacken aldrig er aeldre end sidste Gem.
+    sider.forEach(s => {
+      (s.elements || []).forEach(e => {
+        if (e.type !== 'rotator' || !Array.isArray(e.slides)) return;
+        e.slides.forEach(slide => {
+          if (slide.type !== 'side' || !slide.sideId) return;
+          const kilde = sider.find(x => x.id === slide.sideId);
+          if (!kilde) return; // siden er slettet -- behold den sidste kendte kopi
+          slide.navn = kilde.navn;
+          const kopi = stripLockedMasterElements(JSON.parse(JSON.stringify(kilde.elements || [])));
+          // Toem NESTEDE side-sliders egne kopier i denne kopi -- ellers ville hvert Gem
+          // pakke den forrige kopi ind i den nye (kopi af kopi af kopi ...) og faa gemte
+          // data til at vokse lag for lag. De nestede slides beholder deres sideId og
+          // slaas live op som alt andet; kun deres fallback toemmes her.
+          kopi.forEach(k => {
+            if (k.type !== 'rotator' || !Array.isArray(k.slides)) return;
+            k.slides.forEach(ns => { if (ns.type === 'side' && ns.sideId) ns.elements = []; });
+          });
+          slide.elements = kopi;
+          slide.background = kilde.background || '#0a0a0a';
+        });
+      });
+    });
     // layout.elements/background/aktivSideId (de felter skaerm.html og Live View reelt
     // laeser) skal komme fra den side admin har markeret med "vis her" (synligSideId) -- IKKE
     // noedvendigvis den fane man tilfaeldigvis staar paa i redigeringen lige nu. Foer blev
