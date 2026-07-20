@@ -653,7 +653,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master76';
+  const SCRIPT_VERSION = '2026-07-20-master77';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1353,11 +1353,29 @@
         // tailscale_ok er bevidst IKKE coalesced server-side (modsat tailscale_ip) -- den
         // afspejler check-in-scriptets seneste FAKTISKE test, saa en advarsel her opdager en
         // nede-Tailscale PROAKTIVT, i stedet for at det foerst opdages ved et mislykket
-        // SSH-forsoeg (som lige er sket for Horsens).
-        (e.tailscale_ok === false ?
-          '<div style="color:#b92a15; font-size:11px; font-weight:600; margin-top:2px;">⚠️ Tailscale nede' +
-          (e.tailscale_ok_sidst_at ? ' (sidst OK ' + tidSiden(e.tailscale_ok_sidst_at) + ')' : '') +
-          ' — check-in-loopet forsøger selv at genstarte den hvert minut</div>' : '');
+        // SSH-forsoeg (som er sket for Horsens).
+        //
+        // KUN naar enheden har tjekket ind for nylig: statussen er et oejebliksbillede fra
+        // SIDSTE check-in. Er check-in-loopet selv doedt (fx efter en genstart), fryser den
+        // paa det sidste den naaede at rapportere -- typisk "false" fra det korte vindue
+        // under en genstart, foer tailscaled kom op. At vise "Tailscale nede" ud fra en
+        // timegammel rapport, mens Tailscale reelt virker fint, er praecis den slags falsk
+        // alarm der koster tillid til panelet. Naar enheden IKKE tjekker ind, er DET selve
+        // problemet -- og vises i stedet, med det rigtige naeste skridt (fysisk genstart --
+        // "Genstart enhed"-knappen gaar jo netop gennem det doede loop og virker ikke).
+        (function () {
+          const checkinFrisk = e.sidst_set_at && (Date.now() - new Date(e.sidst_set_at).getTime()) < 3 * 60 * 1000;
+          if (e.tailscale_ok === false && checkinFrisk) {
+            return '<div style="color:#b92a15; font-size:11px; font-weight:600; margin-top:2px;">⚠️ Tailscale nede' +
+              (e.tailscale_ok_sidst_at ? ' (sidst OK ' + tidSiden(e.tailscale_ok_sidst_at) + ')' : '') +
+              ' — check-in-loopet forsøger selv at genstarte den hvert minut</div>';
+          }
+          if (!checkinFrisk && e.sidst_set_at) {
+            return '<div style="color:#b96a15; font-size:11px; font-weight:600; margin-top:2px;">⚠️ Ingen check-in siden ' + tidSiden(e.sidst_set_at) +
+              ' — check-in-loopet på enheden kører ikke. Genstart boksen fysisk eller via Termux (echo "svc power reboot" | su) — "Genstart enhed"-knappen virker ikke her, den går gennem selve loopet.</div>';
+          }
+          return '';
+        })();
       row.appendChild(info);
       info.querySelector('.enhedIdKopier').addEventListener('click', (ev) => {
         navigator.clipboard.writeText(ev.target.dataset.id);
