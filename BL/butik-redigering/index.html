@@ -9,8 +9,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="../render-shared.css?v=2026-07-20-23">
-<script src="../render-shared.js?v=2026-07-20-23"></script>
+<link rel="stylesheet" href="../render-shared.css?v=2026-07-20-24">
+<script src="../render-shared.js?v=2026-07-20-24"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -247,6 +247,10 @@
   .side-tab .del:hover { opacity: 1; }
   .side-tab-new { padding: 6px 10px; border-radius: 6px; background: #f4f4f2; color: #666; font-size: 13px; cursor: pointer; }
   .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #e6342c; margin-right: 5px; vertical-align: middle; }
+  /* Samme prik, men tom/klikbar -- til at VAELGE hvilken side der skal vises (se
+     renderSiderTabs). Fyldes rød naar den er valgt (samme .live-dot som i forvejen). */
+  .live-dot-vaelg { display: inline-block; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid #bbb; margin-right: 5px; vertical-align: middle; cursor: pointer; }
+  .live-dot-vaelg:hover { border-color: #e6342c; }
 
   .save-row { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
   #saveMsg.msg { margin-top: 0; }
@@ -648,7 +652,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master70';
+  const SCRIPT_VERSION = '2026-07-20-master72';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -687,7 +691,12 @@
   let baggrundsfarve = '#0a0a0a';
   let sider = [];
   let aktivSideId = null;
-  let liveAktivSideId = null;
+  // synligSideId: hvilken side der reelt bliver vist paa den RIGTIGE skaerm naeste gang der
+  // gemmes -- adskilt fra aktivSideId (som blot er "hvilken fane redigerer jeg lige nu"). Foer
+  // brugte Gem altid den fane man tilfaeldigvis stod paa, saa man kunne komme til at
+  // offentliggoere en side man kun sad og rettede i, uden at mene det. Sat via den roede
+  // prik paa sidefanen (se renderSiderTabs), ikke ved blot at klikke paa/redigere en fane.
+  let synligSideId = null;
   let liveViewIntervals = [];
   let liveViewPollHandle = null;
   // Samme "kun gentegn hvis noget reelt aendrede sig"-noegle som skaerm.htmls sidstOpdateret
@@ -908,6 +917,10 @@
       sider = [side];
       aktivSideId = side.id;
     }
+    // Ved indlaesning er den side der reelt er gemt som "aktiv" ogsaa den der rent faktisk
+    // vises paa skaermen lige nu -- synligSideId starter derfor samme sted, og aendrer sig
+    // KUN naar admin eksplicit trykker "Vis her" (se renderSiderTabs).
+    synligSideId = aktivSideId;
 
     const aktivSide = sider.find(s => s.id === aktivSideId);
     elements = aktivSide.elements;
@@ -2441,6 +2454,7 @@
     }
     if (!confirm('Slet denne side? Det kan ikke fortrydes.')) return;
     const wasActive = id === aktivSideId;
+    const varSynlig = id === synligSideId;
     sider = sider.filter(s => s.id !== id);
     if (wasActive) {
       const next = sider[0];
@@ -2456,6 +2470,9 @@
       renderCanvas();
       renderPropsPanel();
     }
+    // Slettes den side der var valgt til at blive vist paa skaermen, skal en ANDEN side
+    // overtage den rolle -- ellers ville naeste Gem pege paa en side der ikke findes mere.
+    if (varSynlig) synligSideId = sider[0].id;
     renderSiderTabs();
   }
 
@@ -2464,19 +2481,27 @@
       navn: s.navn,
       id: s.id.slice(0, 8),
       elementer: s.elements.map(e => e.type + '(' + e.id.slice(0, 6) + ')'),
-    })), '| aktivSideId=', (aktivSideId || '').slice(0, 8), '| elements-array er sider[aktiv]?', sider.find(x => x.id === aktivSideId) && sider.find(x => x.id === aktivSideId).elements === elements);
+    })), '| aktivSideId=', (aktivSideId || '').slice(0, 8), '| synligSideId=', (synligSideId || '').slice(0, 8), '| elements-array er sider[aktiv]?', sider.find(x => x.id === aktivSideId) && sider.find(x => x.id === aktivSideId).elements === elements);
     const wrap = document.getElementById('siderTabs');
     wrap.innerHTML = '';
     sider.forEach(s => {
       const tab = document.createElement('div');
       tab.className = 'side-tab' + (s.id === aktivSideId ? ' active' : '');
       const label = document.createElement('span');
-      if (s.id === liveAktivSideId) {
-        const dot = document.createElement('span');
-        dot.className = 'live-dot';
-        dot.title = 'Denne side er lige nu vist på skærmen';
-        label.appendChild(dot);
-      }
+      // Samme røde prik som altid har vist "denne side er vist på skærmen" -- nu ogsaa
+      // klikbar, saa den samtidig VAELGER hvilken side der bliver gemt som den synlige
+      // (synligSideId), i stedet for en separat knap/tekst.
+      const dot = document.createElement('span');
+      dot.className = s.id === synligSideId ? 'live-dot' : 'live-dot-vaelg';
+      dot.title = s.id === synligSideId
+        ? 'Denne side vises på skærmen (næste gang du gemmer).'
+        : 'Klik for at vise denne side på skærmen i stedet.';
+      dot.addEventListener('click', (e) => {
+        e.stopPropagation();
+        synligSideId = s.id;
+        renderSiderTabs();
+      });
+      label.appendChild(dot);
       const navnSpan = document.createElement('span');
       navnSpan.textContent = s.navn;
       navnSpan.title = 'Dobbeltklik for at omdøbe';
@@ -2563,7 +2588,6 @@
       liveViewIntervals = [];
       box.innerHTML = '';
       badge.textContent = 'Intet gemt endnu';
-      liveAktivSideId = null;
       renderSiderTabs();
       return;
     }
@@ -2593,10 +2617,8 @@
     merged.forEach(el => box.appendChild(buildElNode(el, id => liveViewIntervals.push(id))));
 
     if (harSider) {
-      liveAktivSideId = aktiv.id;
       badge.textContent = 'Side: ' + aktiv.navn;
     } else {
-      liveAktivSideId = null;
       badge.textContent = '';
     }
     renderSiderTabs();
@@ -3815,8 +3837,15 @@
     btn.disabled = true;
 
     commitActiveSide();
+    // layout.elements/background/aktivSideId (de felter skaerm.html og Live View reelt
+    // laeser) skal komme fra den side admin har markeret med "vis her" (synligSideId) -- IKKE
+    // noedvendigvis den fane man tilfaeldigvis staar paa i redigeringen lige nu. Foer blev
+    // altid den AABNE fane gemt som den synlige, saa man kunne komme til at offentliggoere en
+    // side man kun sad og rettede i. commitActiveSide() ovenfor har allerede sikret at den
+    // aabne fanes egne aendringer er skrevet ind i "sider", saa intet arbejde gaar tabt.
+    const synligSide = sider.find(s => s.id === synligSideId) || sider.find(s => s.id === aktivSideId);
     const payload = {
-      layout: { elements, background: baggrundsfarve, sider, aktivSideId },
+      layout: { elements: synligSide.elements, background: synligSide.background, sider, aktivSideId: synligSide.id },
       opdateret_at: new Date().toISOString(),
     };
     console.log('[redigering-debug] Gemmer, currentContentId=', currentContentId, 'payload=', payload);
@@ -3855,8 +3884,7 @@
     } else {
       showMsg(saveMsg, 'Gemt!', true);
       console.log('[redigering-debug] Gemt OK, opdateret_at:', payload.opdateret_at);
-      const aktivSideNavn = (sider.find(s => s.id === aktivSideId) || {}).navn;
-      logAdminHandling('gem_indhold', aktivSideNavn ? 'Side: ' + aktivSideNavn : null);
+      logAdminHandling('gem_indhold', synligSide.navn ? 'Side: ' + synligSide.navn : null);
       loadLiveView();
     }
   }
