@@ -653,7 +653,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master78';
+  const SCRIPT_VERSION = '2026-07-20-master79';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1232,7 +1232,7 @@
   // det virkede fint i en interaktiv SSH-session). Brug altid fulde kommandoer med eksplicit
   // socket-sti. tailscaled styres af termux-services (runsv), saa genstart sker med "sv".
   const HURTIG_KOMMANDOER = [
-    'tailscale --socket=$HOME/.tailscale/tailscaled.sock ip',
+    'tailscale --socket=/data/data/com.termux/files/usr/var/service/tailscaled/tailscaled.sock ip',
     'sv restart tailscaled',
     'sv status tailscaled',
     'tail -30 ~/tailscale-selfheal.log',
