@@ -138,10 +138,25 @@
      ALDRIG visuelt kunne blive tyndere end 30px i editoren, uanset hvad man traak til. */
   .el[data-type="streg"] { min-width: 4px; min-height: 4px; }
   .el.selectable-target { outline: 2px solid #ffb300; }
-  .el.selected { outline: 2px solid #4d5bff; }
+  /* box-shadow (ikke kun outline) for den valgte markering -- outline er allerede optaget af
+     .locked-element/.slot-element (stiplet orange/lilla), og da et element kun kan have ÉT
+     "outline" ad gangen, vandt DEN farve altid over den blaa valgt-markering naar man valgte
+     et laast/fast-plads-element, saa det saa ud som om intet var valgt. box-shadow er en
+     helt separat egenskab og kan derfor ALTID ses ovenpaa, uanset hvilken outline-klasse der
+     ogsaa er sat. z-index loefter desuden det valgte element visuelt over sine naboer, saa
+     "glow"-effekten ikke bliver klippet af et overlappende element ved siden af. */
+  .el.selected {
+    outline: 2px solid #4d5bff;
+    box-shadow: 0 0 0 3px #4d5bff, 0 0 18px 4px rgba(77,91,255,.75);
+    z-index: 50;
+  }
   .streg-del { display: none; }
   .el.selected .streg-del { display: block; }
-  .el.multi-selected { outline: 2px dashed #4d5bff; }
+  .el.multi-selected {
+    outline: 2px dashed #4d5bff;
+    box-shadow: 0 0 0 3px rgba(77,91,255,.5);
+    z-index: 40;
+  }
   .el.locked-element { outline: 1px dashed #ffb300; }
   /* Fast plads (slotId): egen, tydeligt anderledes markering end almindeligt laast (ffb300)
      -- position/stoerrelse er fast for alle butikker, men INDHOLDET er butikkens eget. */
@@ -414,6 +429,7 @@
         Dette element passer bedst ind i ét af skabelonens faste vinduer, så det altid rammer placeringen 100% rigtigt uden at du selv skal finjustere det bagefter.
       </div>
       <div id="slotVaelgerListe" style="display:flex; flex-direction:column; gap:8px;"></div>
+      <button id="slotVaelgerFritBtn" style="margin-top:12px; padding:10px; font-size:13px; text-align:left; border-radius:6px; border:1px dashed #ccc; background:none; cursor:pointer; color:#666; width:100%;">Nej tak, tilføj som et almindeligt, frit element i stedet</button>
     </div>
   </div>
 
@@ -632,7 +648,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master67';
+  const SCRIPT_VERSION = '2026-07-20-master68';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -2719,6 +2735,15 @@
     slotVaelgerType = null;
   }
   document.getElementById('slotVaelgerCloseBtn').addEventListener('click', lukSlotVaelger);
+  // Uden denne knap var der INGEN vej til et almindeligt, frit element saa snart skabelonen
+  // havde ledige faste pladser -- ✕ (annullér) tilfoejede ingenting, saa admin sad fast med
+  // enten at skulle vaelge en plads (som saa ogsaa laaser placeringen) eller intet element
+  // overhovedet. Nu kan man altid eksplicit vaelge det frie forloeb i stedet.
+  document.getElementById('slotVaelgerFritBtn').addEventListener('click', () => {
+    const type = slotVaelgerType;
+    lukSlotVaelger();
+    tilfoejFritElement(type);
+  });
   function vaelgSlot(slotId) {
     const type = slotVaelgerType;
     lukSlotVaelger();
@@ -3275,7 +3300,7 @@
       header.className = 'el-header';
       const tag = document.createElement('span');
       tag.className = 'tag';
-      tag.textContent = el.type + (el.locked ? ' [låst]' : '') + ((el.posLocked || el.slotId) ? ' [fast plads]' : '');
+      tag.textContent = el.type + (el.locked ? ' [låst]' : '');
       header.appendChild(tag);
 
       if (textDiv) {
