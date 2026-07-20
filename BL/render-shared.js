@@ -633,36 +633,32 @@ function buildElNode(el, registerInterval) {
     }
   } else if (el.type === 'rotator' && Array.isArray(el.slides) && el.slides.length) {
     let idx = 0;
-    // Billede/video-slides bygges og forbliver VEDHAEFTET DOM'en (skjult via opacity:0 naar
-    // ikke aktiv) for HELE rotatorens levetid -- de bliver ALDRIG fjernet eller bygget
-    // forfra efter foerste visning. Det foerste forsoeg paa denne fix (se git-historik)
-    // genbrugte kun den forberedte node VED SELVE SKIFTET, men fjernede den bagefter saa
-    // snart en anden slide blev vist -- naeste gang rotationen kom tilbage til den, skulle
-    // et helt NYT <video>-element bygges og demuxe/afkode fra bunden af igen, hvilket gav et
-    // glimt/kortvarigt "loading" HVER eneste gang rotationen ramte en video-slide, uanset
-    // hvor laenge skaermen havde koert. Ved at bygge hver slide ÉN gang og udelukkende
-    // toggle dens synlighed (opacity + pause/play) resten af tiden, skal intet nogensinde
-    // hentes/afkodes to gange -- kun til gengaeld holder rotatoren alle sine slides i
-    // hukommelsen samtidig (i praksis et par billeder/videoer, et fint tradeoff for en
-    // skaerm der koerer i uger ad gangen uden reload). "side"-slides (undersider med egne
-    // elementer) og YouTube-iframes kan ikke genbruges paa samme maade og bygges/fjernes
-    // stadig hver gang -- de opfoerer sig som foer.
+    // Billede/video-slides bygges ÉN gang og forbliver VEDHAEFTET DOM'en (skjult via
+    // opacity:0 naar ikke aktiv) for HELE rotatorens levetid -- de bliver ALDRIG fjernet
+    // eller bygget forfra efter foerste visning, saa intet skal hentes/afkodes to gange.
+    //
+    // AFGOERENDE for at undgaa det sorte glimt ved skift TIL en video: den kommende video
+    // holdes allerede I GANG (muted, loopende, men skjult) i baggrunden, FOER den vises. Et
+    // <video> der reelt spiller producerer loebende afkodede billeder -- saa naar vi blot
+    // flipper dens opacity til 1, er der oejeblikkeligt et rigtigt billede at vise. Tidligere
+    // udgaver holdt videoen paa PAUSE mens skjult og startede den foerst PAA selve skiftet
+    // (og ventede paa 'playing') -- men selv med preload=auto kan der paa svag Android-
+    // hardware gaa et kort sort oejeblik mellem play() og det foerste reelt malede billede.
+    // Ved at lade den spille hele tiden er der ingen opstart at vente paa overhovedet.
+    //
+    // For ikke at belaste svag hardware med for mange samtidige video-afkodninger holdes KUN
+    // den aktuelle + den naeste video afspillende ad gangen -- alle andre saettes paa pause.
+    // "side"-slides (undersider) og YouTube-iframes kan ikke genbruges og bygges/fjernes
+    // stadig hver gang.
     const slideNoder = new Map(); // slide (objekt-reference) -> permanent, vedhaeftet node
 
-    function forberedSlide(slide) {
-      if (!slide || !slide.url || slide.kind === 'youtube' || slideNoder.has(slide)) return;
+    function byggSlideNode(slide) {
       const media = buildMediaNode(slide);
       if (media.tagName === 'VIDEO') {
-        // "auto", bevidst: kun "nok til at starte" (metadata) er ikke nok til et blink-frit
-        // skift -- her SKAL browseren faktisk have hentet og afkodet nok til at spille med
-        // det samme. OBS: dette er den samme eftertragtning der tidligere blev mistaenkt for
-        // at bidrage til en frame-vagthund-genindlaesningsstorm paa svag Android-hardware (se
-        // git-historik) -- den mistanke blev aldrig endeligt bekraeftet (den mere sandsynlige
-        // aarsag var rAF-pause fejlfortolket som et haeng), men hold øje med Aktivitetslog
-        // efter denne aendring, saerligt paa svage enheder med flere/store videoer i rotatorer.
         media.preload = 'auto';
-        media.autoplay = false;
-        media.pause();
+        media.muted = true;
+        media.loop = true;
+        media.playsInline = true;
       }
       media.style.position = 'absolute';
       media.style.inset = '0';
@@ -671,43 +667,28 @@ function buildElNode(el, registerInterval) {
       node.appendChild(media);
       anvendIndholdsSkala(media, el);
       slideNoder.set(slide, media);
+      return media;
+    }
+
+    // Sikrer at en billede/video-slide er BYGGET, og at en video allerede SPILLER (skjult, i
+    // baggrunden) saa den er 100% klar til oejeblikkelig visning. Ingen effekt paa
+    // "side"/YouTube-slides.
+    function varmOp(slide) {
+      if (!slide || !slide.url || slide.kind === 'youtube' || slide.type === 'side') return;
+      let n = slideNoder.get(slide);
+      if (!n) n = byggSlideNode(slide);
+      if (n.tagName === 'VIDEO' && n.paused) n.play().catch(() => {});
     }
 
     let synligNode = null;
     const showSlide = () => {
       const slide = el.slides[idx];
-      // Var den FORRIGE synlige node en permanent cachet slide-node? Saa skal den kun
-      // skjules (ikke fjernes) -- en frisk-bygget "side"/YouTube-node skal derimod fjernes
-      // helt, den genbruges alligevel ikke. Fanget FOER selve skiftet, saa den stadig er
-      // korrekt selv naar skiftet (for en video) foerst fuldfoeres lidt senere.
       const forrigeNode = synligNode;
       const forrigeVarCachet = forrigeNode && Array.from(slideNoder.values()).includes(forrigeNode);
 
-      // Selve ombytningen (goer nyNode synlig, skjuler/fjerner den forrige) -- udskilt i sin
-      // egen funktion, fordi en video FOERST skal kalde denne naar den bekraefter at spille
-      // (se 'playing'-lytteren nedenfor), IKKE med det samme. Uden det ventede vi kun paa at
-      // browseren havde BUFFERET nok (preload=auto), ikke at den reelt havde AFKODET og
-      // malet et rigtigt foerste billede -- paa svagere Android-hardware kunne der stadig gaa
-      // et kort, mærkbart sort øjeblik EFTER at videoen blev gjort synlig, foer det foerste
-      // billede naaede at komme paa skaermen. Ved at blive ved med at vise den GAMLE slide
-      // indtil den NYE video bekraefter reel afspilning, er der aldrig et tomt/sort mellemrum.
-      function fuldfoerSkift(nu) {
-        nu.style.opacity = '1';
-        nu.style.pointerEvents = '';
-        if (forrigeNode && forrigeNode !== nu) {
-          if (forrigeVarCachet) {
-            forrigeNode.style.opacity = '0';
-            forrigeNode.style.pointerEvents = 'none';
-            if (forrigeNode.tagName === 'VIDEO') forrigeNode.pause();
-          } else {
-            forrigeNode.remove();
-          }
-        }
-        synligNode = nu;
-      }
-
+      let nyNode;
       if (slide.type === 'side') {
-        const nyNode = document.createElement('div');
+        nyNode = document.createElement('div');
         nyNode.style.cssText = 'position:absolute; inset:0; width:100%; height:100%; overflow:hidden; container-type:inline-size;';
         if (slide.background) nyNode.style.background = slide.background;
         // En "side" tilfoejet som slide har elementer med koordinater relative til HELE
@@ -718,44 +699,63 @@ function buildElNode(el, registerInterval) {
         (slide.elements || []).forEach(subEl => nyNode.appendChild(buildElNode(remapElementIntoRotator(subEl, el), registerInterval)));
         node.appendChild(nyNode);
         anvendIndholdsSkala(nyNode, el);
-        fuldfoerSkift(nyNode);
       } else if (!slide.url || slide.kind === 'youtube') {
-        const nyNode = buildMediaNode(slide); // YouTube/uden url -- kan ikke genbruges, bygges hver gang
+        nyNode = buildMediaNode(slide); // YouTube/uden url -- kan ikke genbruges, bygges hver gang
         node.appendChild(nyNode);
         anvendIndholdsSkala(nyNode, el);
-        fuldfoerSkift(nyNode);
       } else {
-        forberedSlide(slide); // ingen effekt hvis allerede bygget (se guard i forberedSlide)
-        const nyNode = slideNoder.get(slide);
-        if (nyNode.tagName === 'VIDEO') {
-          let skiftetAlleredeUd = false;
-          const skiftEngangKun = () => {
-            if (skiftetAlleredeUd) return;
-            skiftetAlleredeUd = true;
-            nyNode.removeEventListener('playing', paaPlaying);
-            fuldfoerSkift(nyNode);
-          };
-          const paaPlaying = () => skiftEngangKun();
-          nyNode.addEventListener('playing', paaPlaying);
-          // Sikkerhedsnet: fyrer 'playing' aldrig (netvaerks-hik, en sjaelden browser-
-          // saerhed), skift alligevel efter kort tid -- hellere et muligt kort glimt end at
-          // haenge fast paa den GAMLE slide for evigt.
-          setTimeout(skiftEngangKun, 1500);
-          nyNode.currentTime = 0;
-          nyNode.play().catch(skiftEngangKun);
-        } else {
-          fuldfoerSkift(nyNode); // billede -- ingen afkodnings-forsinkelse at vente paa
-        }
+        // Billede/video: allerede bygget (og for video: allerede varm og i gang, se varmOp),
+        // saa den kan afsloeres OEJEBLIKKELIGT uden nogen afkodnings-forsinkelse.
+        nyNode = slideNoder.get(slide) || byggSlideNode(slide);
+        if (nyNode.tagName === 'VIDEO' && nyNode.paused) nyNode.play().catch(() => {});
       }
 
-      forberedSlide(el.slides[(idx + 1) % el.slides.length]);
+      // Afsloer den NYE FOER den gamle skjules -- saa der aldrig er et enkelt frame uden noget
+      // synligt (som ville se sort ud).
+      nyNode.style.opacity = '1';
+      nyNode.style.pointerEvents = '';
+      if (forrigeNode && forrigeNode !== nyNode) {
+        if (forrigeVarCachet) {
+          forrigeNode.style.opacity = '0';
+          forrigeNode.style.pointerEvents = 'none';
+        } else {
+          forrigeNode.remove();
+        }
+      }
+      synligNode = nyNode;
+
+      // Hold KUN den aktuelle + den naeste video afspillende; saet alle oevrige video-slides
+      // paa pause, saa vi aldrig afkoder mere end to videoer samtidig paa svag hardware --
+      // men den naeste er altid 100% klar til et blink-frit skift.
+      const naesteSlide = el.slides[(idx + 1) % el.slides.length];
+      slideNoder.forEach((n, s) => {
+        if (n.tagName !== 'VIDEO') return;
+        if (s === slide || s === naesteSlide) { if (n.paused) n.play().catch(() => {}); }
+        else if (!n.paused) n.pause();
+      });
+      varmOp(naesteSlide);
+
       idx = (idx + 1) % el.slides.length;
     };
-    forberedSlide(el.slides[(idx + 1) % el.slides.length]);
+    varmOp(el.slides[(idx + 1) % el.slides.length]);
     showSlide();
     if (el.slides.length > 1) {
       registerInterval(setInterval(showSlide, el.intervalMs || 30000));
     }
+
+    // Video-helbredstjek: en video der har koert i timevis kan i sjaeldne tilfaelde gaa i staa
+    // (Android frigiver afkoderen under hukommelsespres o.l.) UDEN at resten af siden haenger
+    // -- saa frame-vagthunden fanger det ikke. Skubber blidt play() igen hvis den synlige
+    // video ikke er kommet videre siden sidste tjek. Ren play()-nudge (ingen genindlaesning),
+    // saa den aldrig selv kan give et glimt; kun en reel udbedring naar noget faktisk staar
+    // stille.
+    let sidstTid = -1;
+    registerInterval(setInterval(() => {
+      const n = synligNode;
+      if (!n || n.tagName !== 'VIDEO' || n.paused) { sidstTid = -1; return; }
+      if (n.currentTime === sidstTid) n.play().catch(() => {});
+      sidstTid = n.currentTime;
+    }, 8000));
   } else if (el.type === 'miljoeffekt') {
     const card = document.createElement('div');
     card.className = 'miljoeffekt-card';

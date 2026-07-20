@@ -9,8 +9,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="../render-shared.css?v=2026-07-20-26">
-<script src="../render-shared.js?v=2026-07-20-26"></script>
+<link rel="stylesheet" href="../render-shared.css?v=2026-07-20-27">
+<script src="../render-shared.js?v=2026-07-20-27"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -653,7 +653,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master74';
+  const SCRIPT_VERSION = '2026-07-20-master75';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -3122,6 +3122,16 @@
         linkWrap.appendChild(linkInput);
         linkWrap.appendChild(linkBtn);
         placeholder.appendChild(linkWrap);
+
+        // Aerlig forventnings-afstemning: Instagram tillader IKKE at en video/reel afspiller
+        // automatisk i en offentlig indlejring (deres platform-regel, kan ikke omgaas) -- og
+        // indlejringen viser Instagrams egen ramme (brugernavn/billedtekst), saa den fylder
+        // ikke boksen som en video. Vil man have en video der spiller automatisk og fylder
+        // hele boksen: hent videoen ned og brug et alm. Video-element i stedet.
+        const note = document.createElement('div');
+        note.style.cssText = 'font-size:9px; color:#c98; margin-top:6px; line-height:1.35; max-width:150px;';
+        note.textContent = 'OBS: Instagram-videoer afspiller ikke automatisk (Instagrams egen regel). Skal en video spille af sig selv og fylde boksen, så brug et Video-element med den downloadede video i stedet.';
+        placeholder.appendChild(note);
 
         body.appendChild(placeholder);
       }
