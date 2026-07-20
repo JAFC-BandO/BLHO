@@ -67,16 +67,52 @@ function youtubeEmbedUrl(url) {
 }
 
 // Instagram har ingen aaben API til at hente "de seneste opslag fra en profil" uden login/
-// godkendelse -- kun ÉT specifikt, allerede-offentligt opslag/reel kan indlejres uden videre,
-// via Instagrams egen /embed-side (samme mekanisme som deres officielle blockquote+embed.js,
-// bare uden at skulle indlaese det ekstra script). Matcher /p/, /reel/ og det aeldre /tv/,
-// med eller uden et brugernavn foran (instagram.com/butiksnavn/p/xxx virker ligesom
-// instagram.com/p/xxx). Returnerer null hvis linket ikke kan genkendes, saa kaldende kode kan
-// vise en tydelig fejl i stedet for et tomt/knaekket indlejring.
-function instagramEmbedUrl(url) {
+// godkendelse -- kun ÉT specifikt, allerede-offentligt opslag/reel kan indlejres uden videre.
+// Matcher /p/, /reel/ og det aeldre /tv/, med eller uden et brugernavn foran
+// (instagram.com/butiksnavn/p/xxx virker ligesom instagram.com/p/xxx). Returnerer en RENSET
+// kanonisk post-URL (uden sporings-parametre) -- eller null hvis linket ikke kan genkendes,
+// saa kaldende kode kan vise en tydelig fejl i stedet for et tomt/knaekket indlejring.
+function instagramPostUrl(url) {
   const m = url.match(/instagram\.com\/(?:[^/?#]+\/)?(p|reel|tv)\/([a-zA-Z0-9_-]+)/);
   if (!m) return null;
-  return 'https://www.instagram.com/' + m[1] + '/' + m[2] + '/embed';
+  return 'https://www.instagram.com/' + m[1] + '/' + m[2] + '/';
+}
+
+// Bygger et Instagram-opslag via deres OFFICIELLE blockquote+embed.js-indlejring (i stedet
+// for en raa iframe direkte mod deres /embed-URL) -- forskellen er at embed.js aktivt
+// forhandler stoerrelsen med indholdet og tilpasser hoejden derefter, saa opslaget rent
+// faktisk fylder sin boks fornuftigt i stedet for at blive vist i en fast, ofte forkert
+// stoerrelse. OBS, kendt Instagram-begraensning der IKKE kan omgaas herfra: video-/reel-
+// opslag afspiller ALDRIG automatisk i en offentlig indlejring, uanset metode -- Instagram
+// kraever et faktisk klik fra en bruger for at starte afspilning. Et opslag med video vil
+// derfor altid vise et stillbillede med et afspil-ikon paa en uovervaaget skaerm.
+let instagramEmbedScriptPromise = null;
+function sikrInstagramEmbedScript() {
+  if (window.instgrm && window.instgrm.Embeds) return Promise.resolve();
+  if (instagramEmbedScriptPromise) return instagramEmbedScriptPromise;
+  instagramEmbedScriptPromise = new Promise(resolve => {
+    const script = document.createElement('script');
+    script.src = 'https://www.instagram.com/embed.js';
+    script.async = true;
+    script.onload = resolve;
+    script.onerror = resolve; // fejler scriptet (fx offline), skal vi ikke haenge for evigt
+    document.body.appendChild(script);
+  });
+  return instagramEmbedScriptPromise;
+}
+function buildInstagramNode(postUrl) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'width:100%; height:100%; overflow:hidden; display:flex; align-items:center; justify-content:center; background:#fff;';
+  const bq = document.createElement('blockquote');
+  bq.className = 'instagram-media';
+  bq.setAttribute('data-instgrm-permalink', postUrl);
+  bq.setAttribute('data-instgrm-version', '14');
+  bq.style.cssText = 'width:100% !important; min-width:auto !important; max-width:100% !important; margin:0 !important;';
+  wrap.appendChild(bq);
+  sikrInstagramEmbedScript().then(() => {
+    if (window.instgrm && window.instgrm.Embeds) window.instgrm.Embeds.process();
+  });
+  return wrap;
 }
 
 function formatDanskTal(n) {
@@ -589,16 +625,11 @@ function buildElNode(el, registerInterval) {
     node.appendChild(media);
     anvendIndholdsSkala(media, el);
   } else if (el.type === 'instagram' && el.url) {
-    const embedUrl = instagramEmbedUrl(el.url);
-    if (embedUrl) {
-      const iframe = document.createElement('iframe');
-      iframe.src = embedUrl;
-      iframe.className = 'el-media';
-      iframe.setAttribute('frameborder', '0');
-      iframe.setAttribute('scrolling', 'no');
-      iframe.setAttribute('allowtransparency', 'true');
-      node.appendChild(iframe);
-      anvendIndholdsSkala(iframe, el);
+    const postUrl = instagramPostUrl(el.url);
+    if (postUrl) {
+      const wrap = buildInstagramNode(postUrl);
+      node.appendChild(wrap);
+      anvendIndholdsSkala(wrap, el);
     }
   } else if (el.type === 'rotator' && Array.isArray(el.slides) && el.slides.length) {
     let idx = 0;

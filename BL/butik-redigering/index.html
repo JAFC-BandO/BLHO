@@ -9,8 +9,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="../render-shared.css?v=2026-07-20-25">
-<script src="../render-shared.js?v=2026-07-20-25"></script>
+<link rel="stylesheet" href="../render-shared.css?v=2026-07-20-26">
+<script src="../render-shared.js?v=2026-07-20-26"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -653,7 +653,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master73';
+  const SCRIPT_VERSION = '2026-07-20-master74';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -3068,15 +3068,11 @@
       }
     } else if (el.type === 'instagram') {
       if (el.url) {
-        const embedUrl = instagramEmbedUrl(el.url);
-        if (embedUrl) {
-          const iframe = document.createElement('iframe');
-          iframe.src = embedUrl;
-          iframe.className = 'el-media-fill';
-          iframe.setAttribute('frameborder', '0');
-          iframe.setAttribute('scrolling', 'no');
-          body.appendChild(iframe);
-          anvendIndholdsSkala(iframe, el);
+        const postUrl = instagramPostUrl(el.url);
+        if (postUrl) {
+          const wrap = buildInstagramNode(postUrl);
+          body.appendChild(wrap);
+          anvendIndholdsSkala(wrap, el);
         } else {
           const fejl = document.createElement('div');
           fejl.className = 'el-placeholder';
@@ -3116,7 +3112,7 @@
         linkBtn.addEventListener('click', () => {
           const val = linkInput.value.trim();
           if (!val) return;
-          if (!instagramEmbedUrl(val)) {
+          if (!instagramPostUrl(val)) {
             alert('Kunne ikke genkende dette som et link til et Instagram-opslag/reel. Kopiér linket direkte fra Instagram (fx instagram.com/p/... eller instagram.com/reel/...).');
             return;
           }
