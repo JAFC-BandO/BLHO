@@ -1,80 +1,51 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
-  <!-- Rund sort baggrund -->
-  <circle cx="256" cy="256" r="250" fill="#000000"/>
-  
-  <!-- Professionel ydre cyan-ring -->
-  <circle cx="256" cy="256" r="236" fill="none" stroke="#00d8f6" stroke-width="10"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="100%" height="100%">
+  <defs>
+    <!-- Background -->
+    <radialGradient id="bgGrad2" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#0E1626"/>
+      <stop offset="65%" stop-color="#060A12"/>
+      <stop offset="100%" stop-color="#020408"/>
+    </radialGradient>
 
-  <!-- Organiske/Neural baggrundsdetaljer inde i kolben -->
-  <g opacity="0.35" stroke="#00d8f6" stroke-width="3" fill="none" stroke-linecap="round">
-    <path d="M 230 220 Q 210 240 200 270 T 180 320"/>
-    <path d="M 200 270 Q 230 290 240 330"/>
-    <path d="M 270 210 Q 290 240 320 280 T 340 330"/>
-    <path d="M 290 240 Q 260 270 270 320"/>
-    <path d="M 256 150 L 256 240 Q 240 270 250 310"/>
+    <!-- Cyan Gradient -->
+    <linearGradient id="cyanGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00F0FF"/>
+      <stop offset="50%" stop-color="#00A8FF"/>
+      <stop offset="100%" stop-color="#0055FF"/>
+    </linearGradient>
+
+    <!-- Core Glow -->
+    <filter id="coreGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="7" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="800" rx="90" fill="url(#bgGrad2)"/>
+
+  <!-- Outer Ring -->
+  <circle cx="400" cy="400" r="350" fill="none" stroke="#1E293B" stroke-width="2"/>
+  <circle cx="400" cy="400" r="350" fill="none" stroke="#00F0FF" stroke-width="2" stroke-dasharray="100 30 30 30" opacity="0.3"/>
+
+  <!-- Hexagon Symbol -->
+  <g transform="translate(400, 285)">
+    <path d="M 0 -150 L 130 -75 L 130 75 L 0 150 L -130 75 L -130 -75 Z" 
+          fill="none" 
+          stroke="url(#cyanGrad2)" 
+          stroke-width="14" 
+          stroke-linejoin="round" 
+          stroke-linecap="round"/>
     
-    <circle cx="200" cy="270" r="4" fill="#00d8f6"/>
-    <circle cx="290" cy="240" r="4" fill="#00d8f6"/>
-    <circle cx="240" cy="330" r="5" fill="#00d8f6"/>
-    <circle cx="270" cy="320" r="4" fill="#00d8f6"/>
-  </g>
-
-  <!-- Digitale Netværkslinjer -->
-  <g stroke="#00d8f6" stroke-width="10" stroke-linejoin="round" stroke-linecap="round">
-    <line x1="210" y1="190" x2="150" y2="240"/>
-    <line x1="150" y1="240" x2="110" y2="310"/>
-    <line x1="110" y1="310" x2="190" y2="330"/>
-    <line x1="190" y1="330" x2="210" y2="190"/>
-    <line x1="150" y1="240" x2="190" y2="330"/>
+    <path d="M 0 -150 L 0 0 L 130 75" fill="none" stroke="url(#cyanGrad2)" stroke-width="10" stroke-linecap="round"/>
+    <path d="M -130 -75 L 0 0 L -130 75" fill="none" stroke="url(#cyanGrad2)" stroke-width="10" stroke-linecap="round"/>
     
-    <line x1="210" y1="190" x2="302" y2="190"/>
-    <line x1="190" y1="330" x2="256" y2="300"/>
-    <line x1="256" y1="300" x2="322" y2="330"/>
-    
-    <line x1="302" y1="190" x2="362" y2="240"/>
-    <line x1="362" y1="240" x2="402" y2="310"/>
-    <line x1="402" y1="310" x2="322" y2="330"/>
-    <line x1="322" y1="330" x2="302" y2="180"/>
-    <line x1="362" y1="240" x2="322" y2="330"/>
+    <!-- Central Glowing Core -->
+    <circle cx="0" cy="0" r="11" fill="#00F0FF" filter="url(#coreGlow)"/>
+    <circle cx="0" cy="0" r="22" fill="none" stroke="#FFFFFF" stroke-width="2.5" opacity="0.85"/>
   </g>
 
-  <!-- Professionel Laboratoriekolbe Kontur -->
-  <path d="M 216 100 L 296 100 
-           M 236 100 L 236 175 L 148 335 C 135 360, 155 370, 180 370 L 332 370 C 357 370, 377 360, 364 335 L 276 175 L 276 100" 
-        fill="none" stroke="#00d8f6" stroke-width="20" stroke-linejoin="round" stroke-linecap="round"/>
-
-  <!-- Netværksnoder -->
-  <g fill="#00d8f6">
-    <circle cx="210" cy="190" r="16"/>
-    <circle cx="150" cy="240" r="18"/>
-    <circle cx="110" cy="310" r="20"/>
-    <circle cx="190" cy="330" r="16"/>
-    <circle cx="256" cy="300" r="18"/>
-    <circle cx="302" cy="190" r="16"/>
-    <circle cx="362" cy="240" r="18"/>
-    <circle cx="402" cy="310" r="20"/>
-    <circle cx="322" cy="330" r="16"/>
-  </g>
-  
-  <!-- Hvide lysglimt i noderne -->
-  <g fill="#ffffff">
-    <circle cx="150" cy="240" r="6"/>
-    <circle cx="256" cy="300" r="6"/>
-    <circle cx="362" cy="240" r="6"/>
-    <circle cx="110" cy="310" r="7"/>
-    <circle cx="402" cy="310" r="7"/>
-  </g>
-
-  <!-- Stiliseret buet banner i bunden til navnet -->
-  <path d="M 115 370 C 180 395, 332 395, 397 370 L 365 440 C 310 465, 202 465, 147 440 Z" 
-        fill="#000000" stroke="#00d8f6" stroke-width="10" stroke-linejoin="round"/>
-
-  <!-- Tekst: JFC LABS -->
-  <text x="256" y="422" 
-        font-family="Arial, Helvetica, sans-serif" 
-        font-weight="900" 
-        font-size="38" 
-        fill="#ffffff" 
-        letter-spacing="3" 
-        text-anchor="middle">JFC LABS</text>
+  <!-- Typography -->
+  <text x="400" y="555" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="48" fill="#FFFFFF" letter-spacing="12" text-anchor="middle">JFC LABS</text>
+  <text x="400" y="600" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="700" font-size="14" fill="#00F0FF" letter-spacing="7" opacity="0.85" text-anchor="middle">INNOVATION &amp; TECH</text>
 </svg>

@@ -11,7 +11,7 @@
   // vaere netop DENNE butiks fulde URL inkl. ?email=&password=, ellers ville genvejen
   // logge ind som en forkert/ingen butik. Bygges derfor dynamisk ud fra location.href.
   (function () {
-    const ikonUrl = new URL('favicon.svg?v=2', location.href).href;
+    const ikonUrl = new URL('favicon.svg?v=4', location.href).href;
     const manifest = {
       name: 'Butik Skærm',
       display: 'fullscreen',
@@ -19,9 +19,7 @@
       background_color: '#0a0a0a',
       theme_color: '#0a0a0a',
       // "any" (ikke en fast pixel-stoerrelse) er det korrekte "sizes"-hint for et SVG-ikon --
-      // det er opløsnings-uafhaengigt. De fleste nyere Android/Chrome-launchere haandterer
-      // SVG-manifest-ikoner fint, men er nogen enheder paa en aeldre/anderledes launcher der
-      // viser et blankt hjemmeskaerm-ikon efter dette, er det den mest sandsynlige aarsag.
+      // det er opløsnings-uafhaengigt.
       icons: [{ src: ikonUrl, sizes: 'any', type: 'image/svg+xml' }],
     };
     const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
@@ -31,7 +29,7 @@
     document.head.appendChild(link);
   })();
 </script>
-<link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=4">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til

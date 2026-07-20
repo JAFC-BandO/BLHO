@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Butik Indhold - Redigering</title>
-<link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg?v=4">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
@@ -484,6 +484,13 @@
           </div>
           <div id="propsSizeHint" style="font-size:11px; color:#888; margin-top:4px;">Skriv et tal for at gøre elementet større/mindre, uden at skulle trække i det.</div>
         </div>
+        <div id="propAutoFyldRow" style="display:none; margin-bottom:12px; background:#eef2ff; border-radius:8px; padding:10px;">
+          <label style="display:flex; align-items:center; gap:6px; margin-top:0;">
+            <input type="checkbox" id="propAutoFyldRest" style="margin:0;">
+            Fyld automatisk resten af pladsen
+          </label>
+          <div id="propAutoFyldHint" style="font-size:11px; color:#888; margin-top:4px;">Størrelse/placering udregnes automatisk ud fra hvad der allerede er på siden -- fylder ud til det naermeste andet element (eller skaermens kant, hvis intet er i vejen) i alle fire retninger. Opdateres live, saa denne plads aldrig kommer ud af trit igen, selv hvis du senere flytter noget den er tilpasset efter.</div>
+        </div>
         <div id="propsContentScaleRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Indhold-størrelse (%)</label>
           <input type="number" id="propContentScale" min="20" max="200" step="5" style="width:80px;">
@@ -553,11 +560,6 @@
             <label style="margin-top:0;">Fast plads (valgfrit)</label>
             <input type="text" id="propSlotId" placeholder="Blank = helt låst. Udfyld fx &quot;banner&quot; for en fast plads.">
             <div style="font-size:11px; color:#888; margin-top:4px;">En "fast plads" beholder DENNE placering/størrelse hos alle butikker, men hver butik vælger selv sit eget indhold der (billede/video/rotator osv.) — modsat et almindeligt låst element, som viser det samme indhold overalt. Almindelige admins kan skifte indholdet, men ikke flytte/resize/slette pladsen.</div>
-            <label style="display:flex; align-items:center; gap:6px; margin-top:10px;">
-              <input type="checkbox" id="propAutoFyldRest" style="margin:0;">
-              Fyld automatisk resten af pladsen
-            </label>
-            <div style="font-size:11px; color:#888; margin-top:4px;">Størrelse/placering udregnes automatisk til "alt der er tilbage" efter de andre låste bjælker (fx banner/sidebar) — opdateres live, hver gang du flytter/ændrer noget andet låst, så denne plads ALDRIG kan komme ud af trit igen. Kun én plads bør have dette slået til ad gangen (typisk hovedindholds-vinduet/rotatoren).</div>
           </div>
         </div>
       </div>
@@ -630,7 +632,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master65';
+  const SCRIPT_VERSION = '2026-07-20-master66';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -2731,29 +2733,41 @@
   function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
   // autoFyldRest (se Egenskaber-panelets "Fyld automatisk resten af pladsen"): udregner det
-  // markerede elements eget rektangel som "alt der er tilbage" naar man traekker de ANDRE
-  // laaste bjaelkers plads fra hele canvas -- samme geometri-logik som beregnFritOmraade(),
-  // men her ANVENDT direkte paa selve fast-plads-rektanglet i stedet for blot at foreslaa en
-  // startposition én gang. Koeres live ved hver gentegning i master-redigering (se
-  // renderCanvas), saa denne plads ALDRIG kan komme ud af trit med de andre, uanset hvordan
-  // de justeres (tal-felt eller traek). Kun ment til ÉT element ad gangen (typisk
-  // hovedindholds-vinduet/rotatoren) -- flere samtidig ville alle udregne mod samme grundlag.
+  // markerede elements eget rektangel ud fra dets NAERMESTE naboer i alle fire retninger --
+  // IKKE kun ud fra hvad der roerer selve canvas'ets yderkant. Foerste udgave af denne
+  // funktion genbrugte beregnFritOmraade()'s "kun bjaelker der roerer en yderkant taeller"-
+  // regel, hvilket virkede fint for ÉT element midt i resten (fx hovedindholds-rotatoren),
+  // men gav et forkert (for stort) resultat for et element der IKKE selv skal helt ud til en
+  // yderkant -- fx et topbanner der skal fylde ned til hovedindholdet, ikke videre ned forbi
+  // det til nyhedsbanneret ved bunden, som slet ikke er dets nabo. Algoritmen her kigger i
+  // stedet, for hver retning, efter det naermeste ANDET element der overlapper i den
+  // modsatte led (fx et element til venstre skal overlappe i Y for at taelle som en
+  // venstre-vaeg) og bruger dets kant som graense -- er der intet i vejen, bruges canvas'ets
+  // egen kant (0/100) som foer. Fungerer nu baade for laaste elementer i faelles-skabelon-
+  // redigering OG for en almindelig butiks egne (ikke fast-plads-bundne) elementer paa deres
+  // egen side (se kanAutoFylde i renderPropsPanel) -- ekskluderer derfor IKKE laengere paa
+  // e.locked, kun paa autoFyldRest selv (saa to auto-fyld-elementer ikke udregner mod
+  // hinanden). Koeres live ved hver gentegning, saa en plads ALDRIG kan komme ud af trit med
+  // sine naboer, uanset hvordan de justeres (tal-felt eller traek).
   function anvendAutoFyldRest(liste) {
     const skalAutoFyldes = liste.filter(e => e.autoFyldRest);
     if (!skalAutoFyldes.length) return;
-    // Samme "kun laaste bjaelker taeller som en vaeg"-regel som beregnFritOmraade() -- ellers
-    // ville et endnu ulaast kladde-element ved en kant fejlagtigt blive regnet med.
-    const andre = liste.filter(e => e.locked && !e.autoFyldRest);
-    let left = 0, right = 100, top = 0, bottom = 100;
-    andre.forEach(e => {
-      const ex2 = e.x + e.w, ey2 = e.y + e.h;
-      if (e.x <= 0.5 && e.h >= 50) left = Math.max(left, ex2);
-      if (ex2 >= 99.5 && e.h >= 50) right = Math.min(right, e.x);
-      if (e.y <= 0.5 && e.w >= 50) top = Math.max(top, ey2);
-      if (ey2 >= 99.5 && e.w >= 50) bottom = Math.min(bottom, e.y);
-    });
-    if (right - left < 10 || bottom - top < 10) { left = 0; right = 100; top = 0; bottom = 100; }
     skalAutoFyldes.forEach(e => {
+      const andre = liste.filter(o => o !== e && !o.autoFyldRest);
+      let left = 0, right = 100, top = 0, bottom = 100;
+      andre.forEach(o => {
+        const overlapperLodret = o.y < e.y + e.h && e.y < o.y + o.h;
+        const overlapperVandret = o.x < e.x + e.w && e.x < o.x + o.w;
+        if (overlapperLodret) {
+          if (o.x + o.w <= e.x + 0.5) left = Math.max(left, o.x + o.w);
+          if (o.x >= e.x + e.w - 0.5) right = Math.min(right, o.x);
+        }
+        if (overlapperVandret) {
+          if (o.y + o.h <= e.y + 0.5) top = Math.max(top, o.y + o.h);
+          if (o.y >= e.y + e.h - 0.5) bottom = Math.min(bottom, o.y);
+        }
+      });
+      if (right - left < 5 || bottom - top < 5) { left = 0; right = 100; top = 0; bottom = 100; }
       e.x = left; e.y = top; e.w = right - left; e.h = bottom - top;
     });
   }
@@ -2761,7 +2775,13 @@
   function renderCanvas() {
     rotatorIntervals.forEach(id => clearInterval(id));
     rotatorIntervals = [];
-    if (masterEditMode) anvendAutoFyldRest(elements);
+    // displayElements() (ikke det raa "elements") saa en butiks egen auto-fyld-element ogsaa
+    // faar laaste/fast-plads-elementer fra den faelles skabelon med som naboer -- i master-
+    // redigering er displayElements() alligevel bare elements selv (se funktionen), saa dette
+    // daekker begge sammenhaenge med samme kald. Butikkens egne (ikke-laaste) elementer
+    // optraeder i den flettede liste med SAMME objekt-reference som i elements, saa en
+    // mutation her rammer det der rent faktisk gemmes.
+    anvendAutoFyldRest(displayElements());
     canvas.innerHTML = '';
     displayElements().forEach(el => canvas.appendChild(buildElementNode(el)));
   }
@@ -3383,6 +3403,16 @@
     document.getElementById('propsSizeHint').textContent = superadminKanJustereFastPlads
       ? 'Kun du kan se dette (superadmin): sætter den faste plads' + (el.slotId ? ' "' + el.slotId + '"' : '') + 's reelle størrelse for ALLE butikker.'
       : 'Skriv et tal for at gøre elementet større/mindre, uden at skulle trække i det.';
+    // Fyld automatisk resten af pladsen: i faelles-skabelon-redigering kun for superadmin paa
+    // et LAAST element (samme raekkevidde som Bredde/Hoejde-tal-feltet ovenfor) -- uden for
+    // master-redigering derimod for ENHVER admin paa deres EGET almindelige (ikke fast-plads-
+    // bundne) element, saa de ogsaa selv kan lade et af deres egne vinduer fylde resten af
+    // deres side automatisk.
+    const kanAutoFylde = masterEditMode ? (el.locked && erSuperadmin) : !posLaast;
+    document.getElementById('propAutoFyldRow').style.display = kanAutoFylde ? 'block' : 'none';
+    document.getElementById('propAutoFyldHint').textContent = masterEditMode
+      ? 'Kun du kan se dette (superadmin): størrelse/placering udregnes automatisk ud fra de andre låste elementer i skabelonen -- fylder ud til det nærmeste andet låste element (eller skærmens kant) i alle fire retninger. Opdateres live, hver gang du flytter/ændrer noget andet låst, så denne plads ALDRIG kan komme ud af trit igen.'
+      : 'Størrelse/placering udregnes automatisk ud fra dine andre elementer på siden -- fylder ud til det nærmeste andet element (eller skærmens kant, hvis intet er i vejen) i alle fire retninger. Opdateres live, så denne plads aldrig kommer ud af trit igen, selv hvis du senere flytter noget den er tilpasset efter.';
     document.getElementById('propWidth').value = Math.round(el.w * 10) / 10;
     document.getElementById('propHeight').value = Math.round(el.h * 10) / 10;
     // Indhold-skala: uafhaengig af posLaast (den maa gerne bruges paa en fast plads' INDHOLD,
