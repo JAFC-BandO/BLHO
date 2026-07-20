@@ -9,8 +9,8 @@
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="../render-shared.css?v=2026-07-20-31">
-<script src="../render-shared.js?v=2026-07-20-31"></script>
+<link rel="stylesheet" href="../render-shared.css?v=2026-07-20-32">
+<script src="../render-shared.js?v=2026-07-20-32"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -191,16 +191,10 @@
   }
   .emoji-picker button { font-size: 16px; padding: 4px; border: none; background: none; cursor: pointer; border-radius: 4px; }
   .emoji-picker button:hover { background: #eee; }
-  .miljoeffekt-card {
-    width: 100%; height: 100%; background: #fff; color: #000; box-sizing: border-box;
-    border: 5px solid #f23297; border-radius: 16px; overflow: hidden;
-  }
-  .miljoeffekt-box1, .miljoeffekt-box2 { border-bottom: 1px solid #f23297; padding: 6% 8%; text-align: center; }
-  .miljoeffekt-box3 { padding: 6% 8%; text-align: center; }
-  .miljoeffekt-h4 { font-weight: 900; margin: 0 0 3% 0; }
-  .miljoeffekt-desc { line-height: 1.4; margin: 0; }
-  .miljoeffekt-amount { font-weight: 800; margin: 2% 0; }
-  .miljoeffekt-label { margin: 1% 0; }
+  /* INGEN lokale .miljoeffekt-*-regler her: de laa i denne <style>-blok (som kommer EFTER
+     render-shared.css-linket og derfor vandt kaskaden) og overskrev den delte CSS's slanke
+     3:4-kort med width/height 100% -- saa kortet saa strakt ud i canvas og Live View, men
+     fint paa den rigtige skaerm. Al miljoeffekt-styling ligger nu KUN i render-shared.css. */
 
   /* render-shared.css's .el/.el-text er beregnet til read-only visning (skaerm.html og Live
      View herunder), men deler klassenavn med redigerings-canvas'ets EGNE .el/.el-text regler
@@ -517,6 +511,13 @@
           <input type="number" id="propContentScale" min="20" max="200" step="5" style="width:80px;">
           <div style="font-size:11px; color:#888; margin-top:4px;">Gør ikoner/tekst/billede større eller mindre UDEN at ændre selve boksen -- går det ud over boksens kant, bliver det klippet der, ligesom alt andet indhold.</div>
         </div>
+        <div id="propsMiljoeKortRow" style="margin-bottom:12px; display:none;">
+          <label style="margin-top:0;">Kortets højde (% af boksen)</label>
+          <input type="number" id="propMiljoeHoejde" min="10" max="100" step="5" style="width:80px;">
+          <label>Kortets bredde (% af boksen)</label>
+          <input type="number" id="propMiljoeBredde" min="10" max="100" step="5" style="width:80px;" placeholder="auto">
+          <div style="font-size:11px; color:#888; margin-top:4px;">Kortet centreres altid i boksen med baggrunden rundt om. Lad bredden stå tom, så holder kortet automatisk et slankt 3:4-format ud fra højden -- sæt kun et tal hvis du selv vil styre bredden.</div>
+        </div>
         <div id="propsFontSizeRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Skriftstørrelse (vw)</label>
           <input type="number" id="propFontSize" min="0.5" max="20" step="0.1" style="width:80px;">
@@ -653,7 +654,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master80';
+  const SCRIPT_VERSION = '2026-07-20-master81';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -3395,10 +3396,9 @@
 
       body.appendChild(manageBar);
     } else if (el.type === 'miljoeffekt') {
-      const card = document.createElement('div');
-      card.className = 'miljoeffekt-card';
+      const { wrap, card } = buildMiljoeffektKort(el);
       card.textContent = 'Henter live data...';
-      body.appendChild(card);
+      body.appendChild(wrap);
       anvendIndholdsSkala(card, el);
 
       // Ingen inline skriftstoerrelses-overrides laengere: .miljoeffekt-card er nu
@@ -3634,6 +3634,11 @@
     const harSkalerbartIndhold = el.type !== 'boks' && el.type !== 'streg';
     document.getElementById('propsContentScaleRow').style.display = harSkalerbartIndhold ? 'block' : 'none';
     document.getElementById('propContentScale').value = el.contentScale || 100;
+    document.getElementById('propsMiljoeKortRow').style.display = el.type === 'miljoeffekt' ? 'block' : 'none';
+    document.getElementById('propMiljoeHoejde').value = el.kortHoejdePct || 100;
+    // Tom bredde = automatisk 3:4-format (CSS'ens aspect-ratio) -- derfor IKKE en 100-fallback
+    // her: feltet skal vise tomt, saa "auto"-placeholderen kan ses.
+    document.getElementById('propMiljoeBredde').value = el.kortBreddePct || '';
     const isText = el.type === 'titel' || el.type === 'tekst';
     const isNyhedsbanner = el.type === 'nyhedsbanner';
     document.getElementById('propsFontSizeRow').style.display = (isText || isNyhedsbanner) ? 'block' : 'none';
@@ -3708,6 +3713,21 @@
     // en meget stor skala har vist sig at kunne goere svag Android-hardware alt for langsom.
     const val = Math.min(200, Math.max(20, parseFloat(e.target.value)));
     if (!isNaN(val)) { el.contentScale = val; renderCanvas(); }
+  });
+  document.getElementById('propMiljoeHoejde').addEventListener('input', (e) => {
+    const el = elements.find(x => x.id === selectedElementId);
+    if (!el) return;
+    const val = Math.min(100, Math.max(10, parseFloat(e.target.value)));
+    if (!isNaN(val)) { el.kortHoejdePct = val; renderCanvas(); }
+  });
+  document.getElementById('propMiljoeBredde').addEventListener('input', (e) => {
+    const el = elements.find(x => x.id === selectedElementId);
+    if (!el) return;
+    // Toemmes feltet, ryddes overstyringen helt, saa kortet falder tilbage til det
+    // automatiske 3:4-format -- praecis det "auto"-placeholderen lover.
+    if (e.target.value === '') { delete el.kortBreddePct; renderCanvas(); return; }
+    const val = Math.min(100, Math.max(10, parseFloat(e.target.value)));
+    if (!isNaN(val)) { el.kortBreddePct = val; renderCanvas(); }
   });
   document.getElementById('propFontSize').addEventListener('input', (e) => {
     const el = elements.find(x => x.id === selectedElementId);

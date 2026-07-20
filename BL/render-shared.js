@@ -509,6 +509,27 @@ function miljoeffektCardHtml(data) {
   );
 }
 
+// Bygger wrapper+kort for miljoeffekt ét sted, saa skaerm/Live View OG redigerings-canvas'et
+// garanteret laver praecis samme struktur og stoerrelses-overstyringer. kortHoejdePct og
+// kortBreddePct kommer fra talfelterne i Egenskaber: hoejde i % af boksen (standard 100),
+// bredde i % af boksen -- er bredden IKKE sat, holder CSS'ens aspect-ratio kortet i et slankt
+// 3:4-format (og saettes den, slaas aspect-ratio fra, ellers ville de to slaas om bredden).
+function buildMiljoeffektKort(el) {
+  const wrap = document.createElement('div');
+  wrap.className = 'miljoeffekt-wrap';
+  const card = document.createElement('div');
+  card.className = 'miljoeffekt-card';
+  const hoejde = parseFloat(el.kortHoejdePct);
+  if (hoejde >= 10 && hoejde <= 100) card.style.height = hoejde + '%';
+  const bredde = parseFloat(el.kortBreddePct);
+  if (bredde >= 10 && bredde <= 100) {
+    card.style.width = bredde + '%';
+    card.style.aspectRatio = 'auto';
+  }
+  wrap.appendChild(card);
+  return { wrap, card };
+}
+
 // Fletter laaste elementer fra den faelles "master"-skabelon (sabloner-raekken med
 // standard=true) ind i en butiks egne elementer. Laaste master-elementer vinder altid over
 // en butiks lokale kopi med samme id (fx fra dengang siden blev oprettet ud fra skabelonen),
@@ -828,9 +849,8 @@ function buildElNode(el, registerInterval) {
       sidstTid = n.currentTime;
     }, 8000));
   } else if (el.type === 'miljoeffekt') {
-    const card = document.createElement('div');
-    card.className = 'miljoeffekt-card';
-    node.appendChild(card);
+    const { wrap, card } = buildMiljoeffektKort(el);
+    node.appendChild(wrap);
     anvendIndholdsSkala(card, el);
     const load = () => {
       fetchMiljoeffektData().then(data => { card.innerHTML = miljoeffektCardHtml(data); }).catch(() => {});
