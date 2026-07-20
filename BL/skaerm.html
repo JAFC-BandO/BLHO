@@ -95,7 +95,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master27';
+  const SCRIPT_VERSION = '2026-07-20-master28';
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
@@ -235,6 +235,22 @@
       debugLog('brugere-opslag fejlede: ' + (error ? error.message : 'ingen raekke'));
       visFejl('Denne konto er ikke koblet til en butik.');
       return false;
+    }
+
+    // Linket beder specifikt om en ANDEN butik end den konto der (stadig) er logget ind i
+    // DENNE browser hoerer til, og kontoen er ikke superadmin -- dvs. en tidligere session i
+    // browseren (fx en admin der engang aabnede en kiosk-enheds RAA login-link med dens egne
+    // legitimationsoplysninger direkte for at tjekke skaermen, eller besoegte en anden butiks
+    // "Aabn jeres rigtige skaerm"-link foer) staar stadig gemt her. Uden dette tjek faldt
+    // koden herunder bare stille tilbage til DENNE forkerte kontos EGEN butik (sidste "else"-
+    // gren) -- saa fx Odense-linket kunne ende med at vise Horsens, uden nogen forklaring,
+    // fordi en Horsens-kiosk-session laa tilbage i browseren. Log den forkerte konto ud og
+    // bed i stedet om et rigtigt login, saa det ALTID er tydeligt hvilken konto der bliver
+    // vist -- aldrig en stille forkert butik.
+    if (onsketButikId && onsketButikId !== data.butik_id && !data.er_superadmin) {
+      debugLog('Forkert konto til denne butik (sessionens butik ' + data.butik_id + ' != oensket ' + onsketButikId + ') -- logger ud.');
+      await client.auth.signOut();
+      return 'forkert-konto';
     }
 
     // ?butik_id= (se onsketButikId ovenfor) bruges KUN hvis det rent faktisk er ens egen
@@ -408,6 +424,17 @@
   // login herunder) -- alt der skal ske EFTER man er logget ind, uanset hvordan det skete.
   async function fortsaetEfterLogin() {
     const ok = await findButik();
+    if (ok === 'forkert-konto') {
+      // Vis login-formen igen med en forklaring, i stedet for stiltiende at have vist den
+      // forkerte butiks skaerm (se signOut+kommentar i findButik). Virker ogsaa naar denne
+      // funktion kaldes lige efter et interaktivt login-forsoeg (forsoegInteraktivLogin
+      // skjuler overlayet FOER den kalder hertil) -- her tvinges det bare op igen.
+      const msgEl = document.getElementById('skaermLoginMsg');
+      msgEl.textContent = 'Den gemte session i denne browser hører til en anden butik. Log ind med jeres egen konto for at se jeres skærm.';
+      msgEl.style.display = 'block';
+      document.getElementById('loginOverlay').style.display = 'flex';
+      return;
+    }
     if (!ok) return;
 
     await hentContent();
