@@ -488,19 +488,15 @@
       <a id="skaermVisLink" href="../skaerm.html" target="_blank" rel="noopener" style="display:block; text-align:center; font-size:12px; color:#040DB1; margin-bottom:20px; text-decoration:none;">Åbn jeres rigtige skærm ↗</a>
 
       <h2>Tilføj element</h2>
-      <!-- id="tilfoejElementHint" -- teksten herunder saettes af JS (se opdaterTilfoejHint) alt
-           efter om man er superadmin (frit layout) eller almindelig admin (KUN de 2 faste
-           vinduer: banner + hoved). -->
+      <!-- id="tilfoejElementHint" -- teksten herunder saettes af JS alt efter om man er
+           superadmin (frit layout) eller almindelig admin (KUN de 2 faste vinduer: banner +
+           hoved). Alle typer (ogsaa titel/tekst) er stadig synlige for almindelige admins --
+           samme adgang som foer -- de bruges bare KUN til at erstatte et af de 2 vinduer, se
+           klik-haandteringen for [data-add] nedenfor. -->
       <div id="tilfoejElementHint" style="font-size:11px; color:#888; margin-bottom:8px;"></div>
       <div class="add-row">
-        <!-- Titel/tekst er loesrevne, "frie" elementer -- de fylder ALDRIG et helt vindue og
-             kan derfor ikke bruges til at erstatte banner/hoved. En almindelig admin maa KUN
-             tilfoeje indhold i de 2 faste vinduer (se FYLDER_HELE + slot-flowet nedenfor), saa
-             disse to knapper er superadmin-only ligesom miljoeffekt/streg/ur/vejr -- IKKE for
-             at begraense superadmins frie layout, men for at almindelige admins aldrig ser en
-             knap der fører til et loesrevet element de ikke selv kan placere fornuftigt. -->
-        <button class="add-btn superadmin-only" data-add="titel" style="display:none;"><svg width="18" height="18" viewBox="0 0 20 20"><path d="M4 5h12M10 5v10" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>Titel</button>
-        <button class="add-btn superadmin-only" data-add="tekst" style="display:none;"><svg width="18" height="18" viewBox="0 0 20 20"><path d="M4 6h12M4 10h12M4 14h8" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>Tekst</button>
+        <button class="add-btn" data-add="titel"><svg width="18" height="18" viewBox="0 0 20 20"><path d="M4 5h12M10 5v10" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>Titel</button>
+        <button class="add-btn" data-add="tekst"><svg width="18" height="18" viewBox="0 0 20 20"><path d="M4 6h12M4 10h12M4 14h8" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>Tekst</button>
         <button class="add-btn" data-add="billede"><svg width="18" height="18" viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><circle cx="7.3" cy="8" r="1.3" fill="currentColor"/><path d="M4 14.5l4-4 3 3 2-2 4 3.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Billede</button>
         <button class="add-btn" data-add="video"><svg width="18" height="18" viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M8 7.3v5.4l5-2.7z" fill="currentColor"/></svg>Video</button>
         <button class="add-btn" data-add="boks"><svg width="18" height="18" viewBox="0 0 20 20"><rect x="3.5" y="4.5" width="13" height="11" rx="1.5" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>Boks</button>
@@ -684,7 +680,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master82';
+  const SCRIPT_VERSION = '2026-07-20-master83';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -2826,15 +2822,19 @@
           aabnSlotVaelger(type, ledige);
           return;
         }
-        // Begge faste vinduer er allerede i brug, og intet af dem er valgt lige nu. En
-        // almindelig admin har ingen "frit element"-flugtvej (den knap er superadmin-only,
-        // se slotVaelgerFritBtn) -- de skal KUN kunne erstatte et af de 2 vinduer, saa i
-        // stedet for at stille tavshed skabe et losrevet tredje element, forklarer vi hvad
-        // de skal goere i stedet.
-        if (!erSuperadmin) {
-          alert('I har kun de 2 vinduer (banner og hoved). Klik først på det vindue på siden du vil ændre, og tryk så på denne knap for at erstatte dets indhold.');
-          return;
-        }
+      }
+
+      // Naaet hertil uden at ramme et af de to flows ovenfor: intet vindue var valgt til at
+      // erstatte, og der var ingen ledig plads at fylde. En almindelig admin maa KUN erstatte
+      // et af de 2 faste vinduer (banner/hoved) -- aldrig tilfoeje et losrevet element et
+      // andet sted paa siden (gaelder ALLE typer, ogsaa titel/tekst, som aldrig gik gennem
+      // FYLDER_HELE-tjekket ovenfor). "Nej tak, frit element"-flugtvejen i slot-vaelgeren er
+      // desuden superadmin-only (se slotVaelgerFritBtn), saa dette er reelt den ENESTE vej en
+      // almindelig admin kunne have naaet et frit element paa. I stedet for at stiltiende
+      // oprette det, forklarer vi hvad de skal goere i stedet.
+      if (!erSuperadmin && !masterEditMode) {
+        alert('I har kun de 2 vinduer (banner og hoved). Klik først på det vindue på siden du vil ændre, og tryk så på denne knap for at erstatte dets indhold.');
+        return;
       }
 
       tilfoejFritElement(type);
