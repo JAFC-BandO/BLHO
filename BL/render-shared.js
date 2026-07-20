@@ -66,6 +66,19 @@ function youtubeEmbedUrl(url) {
   return 'https://www.youtube.com/embed/' + id + '?autoplay=1&mute=1&loop=1&controls=0&playlist=' + id;
 }
 
+// Instagram har ingen aaben API til at hente "de seneste opslag fra en profil" uden login/
+// godkendelse -- kun ÉT specifikt, allerede-offentligt opslag/reel kan indlejres uden videre,
+// via Instagrams egen /embed-side (samme mekanisme som deres officielle blockquote+embed.js,
+// bare uden at skulle indlaese det ekstra script). Matcher /p/, /reel/ og det aeldre /tv/,
+// med eller uden et brugernavn foran (instagram.com/butiksnavn/p/xxx virker ligesom
+// instagram.com/p/xxx). Returnerer null hvis linket ikke kan genkendes, saa kaldende kode kan
+// vise en tydelig fejl i stedet for et tomt/knaekket indlejring.
+function instagramEmbedUrl(url) {
+  const m = url.match(/instagram\.com\/(?:[^/?#]+\/)?(p|reel|tv)\/([a-zA-Z0-9_-]+)/);
+  if (!m) return null;
+  return 'https://www.instagram.com/' + m[1] + '/' + m[2] + '/embed';
+}
+
 function formatDanskTal(n) {
   return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
@@ -575,6 +588,18 @@ function buildElNode(el, registerInterval) {
     const media = buildMediaNode({ type: 'video', url: el.url, kind: el.kind });
     node.appendChild(media);
     anvendIndholdsSkala(media, el);
+  } else if (el.type === 'instagram' && el.url) {
+    const embedUrl = instagramEmbedUrl(el.url);
+    if (embedUrl) {
+      const iframe = document.createElement('iframe');
+      iframe.src = embedUrl;
+      iframe.className = 'el-media';
+      iframe.setAttribute('frameborder', '0');
+      iframe.setAttribute('scrolling', 'no');
+      iframe.setAttribute('allowtransparency', 'true');
+      node.appendChild(iframe);
+      anvendIndholdsSkala(iframe, el);
+    }
   } else if (el.type === 'rotator' && Array.isArray(el.slides) && el.slides.length) {
     let idx = 0;
     // Billede/video-slides bygges og forbliver VEDHAEFTET DOM'en (skjult via opacity:0 naar
