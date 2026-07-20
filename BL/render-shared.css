@@ -21,17 +21,29 @@
 .el[data-type="tekst"] .el-text { font-size: 1.8cqw; color: #d0d0d0; }
 .el-media { width: 100%; height: 100%; object-fit: fill; display: block; }
 
+/* container-type: size (begge akser) + cqmin, IKKE inline-size + cqw som foer: cqw er
+   relativt til boksens BREDDE alene, saa i en BRED boks (fx den store "hoved"-plads, naar
+   miljoeffekt saettes ind i stedet for rotatoren) blev teksten kaempestor og de tre sektioner
+   floed langt ud over bunden (klippet af overflow:hidden). Samme problem gjaldt %-padding,
+   som ogsaa er bredde-relativ. cqmin (mindste af boksens bredde/hoejde) skalerer efter den
+   MEST begraensende led, saa indholdet altid passer -- praecis samme princip som vejr-boksen.
+   Flex-kolonnen deler hoejden ligeligt mellem de tre sektioner og centrerer deres indhold,
+   saa kortet fylder sin boks paent uanset facon. */
 .miljoeffekt-card {
   width: 100%; height: 100%; background: #fff; color: #000; box-sizing: border-box;
   border: 5px solid #f23297; border-radius: 16px; overflow: hidden;
-  container-type: inline-size;
+  container-type: size;
+  display: flex; flex-direction: column;
 }
-.miljoeffekt-box1, .miljoeffekt-box2 { border-bottom: 1px solid #f23297; padding: 6% 8%; text-align: center; }
-.miljoeffekt-box3 { padding: 6% 8%; text-align: center; }
-.miljoeffekt-h4 { font-weight: 900; margin: 0 0 3% 0; font-size: 8.5cqw; }
-.miljoeffekt-desc { line-height: 1.4; margin: 0; font-size: 4.5cqw; }
-.miljoeffekt-amount { font-weight: 800; margin: 2% 0; font-size: 6.5cqw; }
-.miljoeffekt-label { margin: 1% 0; font-size: 4.5cqw; }
+.miljoeffekt-box1, .miljoeffekt-box2 { border-bottom: 1px solid #f23297; }
+.miljoeffekt-box1, .miljoeffekt-box2, .miljoeffekt-box3 {
+  padding: 2cqmin 5cqmin; text-align: center;
+  flex: 1; display: flex; flex-direction: column; justify-content: center; min-height: 0;
+}
+.miljoeffekt-h4 { font-weight: 900; margin: 0 0 1.5cqmin 0; font-size: 7cqmin; }
+.miljoeffekt-desc { line-height: 1.35; margin: 0; font-size: 4cqmin; }
+.miljoeffekt-amount { font-weight: 800; margin: 1cqmin 0; font-size: 5.5cqmin; }
+.miljoeffekt-label { margin: 0.5cqmin 0; font-size: 4cqmin; }
 
 .ur-wrap {
   width: 100%; height: 100%; display: flex; flex-direction: column;
