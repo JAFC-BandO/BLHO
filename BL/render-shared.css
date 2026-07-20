@@ -30,7 +30,14 @@
    Flex-kolonnen deler hoejden ligeligt mellem de tre sektioner og centrerer deres indhold,
    saa kortet fylder sin boks paent uanset facon. */
 .miljoeffekt-card {
-  width: 100%; height: 100%; background: #fff; color: #000; box-sizing: border-box;
+  /* Slankt kort-format i stedet for at straekke til HELE boksen: kortet holder altid en
+     3:4-plakat-facon (hoejden styrer, bredden foelger) og centreres vandret, saa der i en
+     bred boks (fx den store hoved-plads) blot er baggrund til begge sider -- fremfor et
+     kort trukket helt ud af facon. I en boks der selv er smallere end 3:4 falder max-width
+     ind og kortet fylder bredden som foer. */
+  height: 100%; aspect-ratio: 3 / 4; max-width: 100%;
+  margin-left: auto; margin-right: auto;
+  background: #fff; color: #000; box-sizing: border-box;
   border: 5px solid #f23297; border-radius: 16px; overflow: hidden;
   container-type: size;
   display: flex; flex-direction: column;
