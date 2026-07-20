@@ -632,7 +632,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master66';
+  const SCRIPT_VERSION = '2026-07-20-master67';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -2745,15 +2745,23 @@
   // venstre-vaeg) og bruger dets kant som graense -- er der intet i vejen, bruges canvas'ets
   // egen kant (0/100) som foer. Fungerer nu baade for laaste elementer i faelles-skabelon-
   // redigering OG for en almindelig butiks egne (ikke fast-plads-bundne) elementer paa deres
-  // egen side (se kanAutoFylde i renderPropsPanel) -- ekskluderer derfor IKKE laengere paa
-  // e.locked, kun paa autoFyldRest selv (saa to auto-fyld-elementer ikke udregner mod
-  // hinanden). Koeres live ved hver gentegning, saa en plads ALDRIG kan komme ud af trit med
-  // sine naboer, uanset hvordan de justeres (tal-felt eller traek).
+  // egen side (se kanAutoFylde i renderPropsPanel).
+  //
+  // VIGTIGT: andre auto-fyld-markerede elementer ER OGSAA gyldige naboer/vaegge -- de blev
+  // FOER udelukket her (for at undgaa at to elementer udregnede mod praecis samme grundlag),
+  // hvilket i praksis betoed at to auto-fyld-elementer ved siden af hinanden slet ikke saa
+  // hinanden og begge fyldte helt ud til naeste UDEN-for-gruppen-element (fx et topbanner der
+  // fyldte forbi hovedindholdet og helt ned til nyhedsbanneret, fordi hovedindholdet ogsaa
+  // havde auto-fyld slaaet til og derfor blev "usynligt" for topbanneret). Nu tager hvert
+  // auto-fyld-element blot hoejde for de ANDRE elementers NUVAERENDE placering (uanset om de
+  // selv ogsaa er auto-fyldte) -- flere auto-fyld-elementer i forlaengelse af hinanden
+  // stabiliserer sig korrekt over et par gentegninger (renderCanvas koeres jo igen ved enhver
+  // aendring), praecis som man ville forvente.
   function anvendAutoFyldRest(liste) {
     const skalAutoFyldes = liste.filter(e => e.autoFyldRest);
     if (!skalAutoFyldes.length) return;
     skalAutoFyldes.forEach(e => {
-      const andre = liste.filter(o => o !== e && !o.autoFyldRest);
+      const andre = liste.filter(o => o !== e);
       let left = 0, right = 100, top = 0, bottom = 100;
       andre.forEach(o => {
         const overlapperLodret = o.y < e.y + e.h && e.y < o.y + o.h;
