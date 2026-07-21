@@ -575,7 +575,7 @@
             <input type="text" id="propTextColorHex" placeholder="#rrggbb" style="width:90px; padding:6px 8px; font-size:12px; border:1px solid #ddd; border-radius:6px;">
           </div>
         </div>
-        <div style="margin-bottom:12px;">
+        <div id="propsBoxColorRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Boksens baggrundsfarve</label>
           <div style="display:flex; align-items:center; gap:8px;">
             <input type="color" id="propBoxColor" style="width:40px; height:32px; border:none; border-radius:6px; cursor:pointer; padding:0;">
@@ -632,11 +632,13 @@
         </div>
       </div>
 
-      <h2>Baggrund</h2>
-      <div style="display:flex; align-items:center; gap:8px; margin-bottom:20px;">
-        <input type="color" id="bgColorInput" value="#0a0a0a" style="width:40px; height:32px; border:none; border-radius:6px; cursor:pointer; padding:0;">
-        <input type="text" id="bgColorHex" placeholder="#rrggbb" style="width:90px; padding:6px 8px; font-size:12px; border:1px solid #ddd; border-radius:6px;">
-      </div>
+      <!-- Den globale "Baggrund"-farvevaelger (hele sidens egen baggrund, baggrundsfarve) er
+           bevidst FJERNET herfra -- fælles skabelonens laaste chrome (logo/ur/vejr/nyheds-
+           banner) plus de 2 faste vinduer daekker altid HELE skaermen, saa sidens egen
+           baggrund er reelt ALDRIG synlig for nogen butik (den "virkede" bare aldrig, uanset
+           hvad man satte den til). baggrundsfarve-variablen og dens gem/hent-logik er bevidst
+           IKKE fjernet (kun selve UI-kontrollen) -- den er stadig en gyldig del af en sides
+           data, hvis den nogensinde skulle blive relevant igen. -->
 
       <!-- Kun synlig mens man rent faktisk er ved at vaelge medie til et element (armForSelection
            saetter armedElementId) -- ellers stod hele biblioteket der altid og fyldte i sidebaren,
@@ -699,7 +701,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master86';
+  const SCRIPT_VERSION = '2026-07-20-master87';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -983,8 +985,6 @@
     baggrundsfarve = aktivSide.background;
     console.log('[redigering-debug] Indlaest sider fra DB:', sider.map(s => s.navn + ': ' + s.elements.map(e => e.type).join(',')).join(' | '));
 
-    document.getElementById('bgColorInput').value = baggrundsfarve;
-    document.getElementById('bgColorHex').value = baggrundsfarve;
     canvas.style.background = baggrundsfarve;
     await anvendSkaermFormat(butikId);
     await loadMedia();
@@ -1059,35 +1059,6 @@
     // skifter en admin browser/enhed, ser de bare guiden igen, hvilket er en harmlos gentagelse.
     if (!localStorage.getItem('blho_guide_set')) aabnGuide();
   }
-
-  function normalizeHex(v) {
-    v = v.trim();
-    if (!v.startsWith('#')) v = '#' + v;
-    if (/^#([0-9a-fA-F]{3})$/.test(v)) {
-      v = '#' + v.slice(1).split('').map(c => c + c).join('');
-    }
-    return /^#[0-9a-fA-F]{6}$/.test(v) ? v.toLowerCase() : null;
-  }
-
-  function wireColorHex(colorInput, hexInput, onChange) {
-    hexInput.value = colorInput.value;
-    colorInput.addEventListener('input', () => {
-      hexInput.value = colorInput.value;
-      onChange(colorInput.value);
-    });
-    hexInput.addEventListener('input', () => {
-      const normalized = normalizeHex(hexInput.value);
-      if (!normalized) return;
-      colorInput.value = normalized;
-      onChange(normalized);
-    });
-  }
-
-  function updateBgColor(val) {
-    baggrundsfarve = val;
-    canvas.style.background = val;
-  }
-  wireColorHex(document.getElementById('bgColorInput'), document.getElementById('bgColorHex'), updateBgColor);
 
   document.getElementById('loginBtn').addEventListener('click', async () => {
     const email = document.getElementById('email').value.trim();
@@ -1233,8 +1204,6 @@
     baggrundsfarve = masterTemplate ? masterTemplate.background : '#0a0a0a';
     selectedElementId = null;
     armedElementId = null;
-    document.getElementById('bgColorInput').value = baggrundsfarve;
-    document.getElementById('bgColorHex').value = baggrundsfarve;
     canvas.style.background = baggrundsfarve;
     document.getElementById('masterEditBanner').style.display = 'flex';
     document.getElementById('siderTabs').style.display = 'none';
@@ -1251,8 +1220,6 @@
     baggrundsfarve = storeBackgroundBackup;
     selectedElementId = null;
     armedElementId = null;
-    document.getElementById('bgColorInput').value = baggrundsfarve;
-    document.getElementById('bgColorHex').value = baggrundsfarve;
     canvas.style.background = baggrundsfarve;
     document.getElementById('masterEditBanner').style.display = 'none';
     document.getElementById('siderTabs').style.display = 'flex';
@@ -1850,7 +1817,7 @@
     },
     {
       titel: 'Diasshow kan vise hele sider',
-      body: 'Vælg diasshow-vinduet: i baren nederst i det tilføjer du slides — billeder, videoer, eller via "+ Side..." en hel af jeres egne sider, som så vises på skift. En side-slide følger altid sidens aktuelle indhold: retter du siden, opdaterer diasshowet automatisk med. Klik på selve side-slidet (i baren eller midt i visningen) for at hoppe direkte ind og redigere den side.',
+      body: 'Vælg diasshow-vinduet: nederst i det kan du tilføje slides på 3 måder — "+ Bibliotek", et link, eller "Vælg side..." for en hel af jeres egne sider, som så vises på skift. En side-slide følger altid sidens aktuelle indhold: retter du siden, opdaterer diasshowet automatisk med. Klik på selve side-slidet (i baren eller midt i visningen) for at hoppe direkte ind og redigere den side.',
       target: () => document.querySelector('.el[data-type="rotator"]') || document.querySelector('.slot-element') || document.getElementById('canvas'),
     },
     {
@@ -2304,8 +2271,6 @@
     const side = sider.find(s => s.id === id);
     elements = side.elements;
     baggrundsfarve = side.background;
-    document.getElementById('bgColorInput').value = baggrundsfarve;
-    document.getElementById('bgColorHex').value = baggrundsfarve;
     canvas.style.background = baggrundsfarve;
     selectedElementId = null;
     armedElementId = null;
@@ -2343,8 +2308,6 @@
     aktivSideId = nyt.id;
     elements = nyt.elements;
     baggrundsfarve = nyt.background;
-    document.getElementById('bgColorInput').value = baggrundsfarve;
-    document.getElementById('bgColorHex').value = baggrundsfarve;
     canvas.style.background = baggrundsfarve;
     selectedElementId = null;
     armedElementId = null;
@@ -2384,8 +2347,6 @@
       aktivSideId = next.id;
       elements = next.elements;
       baggrundsfarve = next.background;
-      document.getElementById('bgColorInput').value = baggrundsfarve;
-      document.getElementById('bgColorHex').value = baggrundsfarve;
       canvas.style.background = baggrundsfarve;
       selectedElementId = null;
       armedElementId = null;
@@ -3087,7 +3048,7 @@
       }
     } else if (el.type === 'rotator') {
       const preview = document.createElement('div');
-      preview.style.cssText = 'position:relative; width:100%; height:' + (canEdit ? '70%' : '100%') + '; background:#000; overflow:hidden;';
+      preview.style.cssText = 'position:relative; width:100%; height:' + (canEdit ? '62%' : '100%') + '; background:#000; overflow:hidden;';
       body.appendChild(preview);
 
       if (!el.slides.length) {
@@ -3156,8 +3117,17 @@
         }
       }
 
+      // Splittet i 2 raekker (indhold OVER tilfoej-kontroller) i stedet for ét langt, faelles
+      // scroll-omraade som foer -- med mange slides skubbede "+"/link/side-kontrollerne bare
+      // laengere og laengere ud af syne til hoejre, saa man skulle scrolle blindt for at finde
+      // dem igen. Nu er "tilfoej"-raekken ALTID synlig lige under, uanset hvor mange slides der
+      // allerede er.
       const manageBar = document.createElement('div');
-      manageBar.style.cssText = 'height:30%; overflow-x:auto; overflow-y:hidden; display:' + (canEdit ? 'flex' : 'none') + '; gap:6px; align-items:center; padding:4px; background:#111;';
+      manageBar.style.cssText = 'height:38%; display:' + (canEdit ? 'flex' : 'none') + '; flex-direction:column; gap:4px; padding:4px; background:#111;';
+
+      const slideRow = document.createElement('div');
+      slideRow.style.cssText = 'flex:1; min-height:0; overflow-x:auto; overflow-y:hidden; display:flex; gap:6px; align-items:center;';
+      manageBar.appendChild(slideRow);
 
       // Stoerre thumbnails + et taldelt "1/2/3"-badge og en rigtig video-thumbnail (foerste
       // frame, ikke bare et generisk ▶-ikon) -- de var for smaa og for ens til at kunne
@@ -3216,27 +3186,39 @@
           renderCanvas();
         });
         thumb.appendChild(rm);
-        manageBar.appendChild(thumb);
+        slideRow.appendChild(thumb);
       });
 
-      // "+" armer elementet og aabner medie-biblioteket i sidebaren (samme mekanisme som
-      // billede/video-elementers "Vælg fra bibliotek") -- man kan enten klikke et EKSISTERENDE
-      // medie der, eller bruge sidebarens egen "Upload nyt billede/video" lige nedenunder, som
-      // (via armedElementId) automatisk lander som en ny slide her. Tidligere aabnede "+"
-      // direkte en OS-fil-dialog og sprang biblioteket helt over.
+      // Egen "tilfoej"-raekke med 3 tydeligt navngivne veje ind (bibliotek / link / side) --
+      // stod tidligere ublandet imellem selve slide-thumbnailsne uden nogen forklaring paa
+      // HVAD hver kontrol goer, saa det var let at overse eller forveksle med endnu en slide.
+      const addRow = document.createElement('div');
+      addRow.style.cssText = 'flex-shrink:0; display:flex; gap:6px; align-items:center; padding-top:4px; border-top:1px solid #2a2a2a; overflow-x:auto;';
+      manageBar.appendChild(addRow);
+
+      // Aabner medie-biblioteket i sidebaren (samme mekanisme som billede/video-elementers
+      // "Vælg fra bibliotek") -- man kan enten klikke et EKSISTERENDE medie der, eller bruge
+      // sidebarens egen "Upload nyt billede/video" lige nedenunder, som (via armedElementId)
+      // automatisk lander som en ny slide her. Tidligere var denne knap et content-loest "+"
+      // der saa ud som endnu en thumbnail -- nu et tydeligt navngivet, anderledes-formet knap.
       const addBtn = document.createElement('button');
-      addBtn.textContent = '+';
-      addBtn.style.cssText = 'flex-shrink:0; width:56px; height:56px; display:flex; align-items:center; justify-content:center; background:#2a2a2a; color:#ddd; border-radius:4px; cursor:pointer; font-size:20px;';
+      addBtn.textContent = '+ Bibliotek';
+      addBtn.style.cssText = 'flex-shrink:0; padding:6px 10px; font-size:11px; background:#2a2a2a; color:#ddd; border-radius:4px; cursor:pointer;';
       addBtn.addEventListener('click', () => armForSelection(el));
-      manageBar.appendChild(addBtn);
+      addRow.appendChild(addBtn);
+
+      const linkLabel = document.createElement('span');
+      linkLabel.textContent = 'eller link:';
+      linkLabel.style.cssText = 'flex-shrink:0; font-size:10px; color:#888;';
+      addRow.appendChild(linkLabel);
 
       const linkInput = document.createElement('input');
       linkInput.type = 'text';
-      linkInput.placeholder = 'Link (billede/video/YouTube)';
-      linkInput.style.cssText = 'flex-shrink:0; font-size:10px; padding:4px 6px; border-radius:4px; border:1px solid #444; background:#111; color:#eee; width:110px;';
+      linkInput.placeholder = 'Billede/video/YouTube-link';
+      linkInput.style.cssText = 'flex-shrink:0; font-size:10px; padding:4px 6px; border-radius:4px; border:1px solid #444; background:#111; color:#eee; width:130px;';
       const linkBtn = document.createElement('button');
-      linkBtn.textContent = 'OK';
-      linkBtn.style.cssText = 'flex-shrink:0; padding:4px 8px; font-size:11px;';
+      linkBtn.textContent = 'Tilføj';
+      linkBtn.style.cssText = 'flex-shrink:0; padding:6px 10px; font-size:11px;';
       linkBtn.addEventListener('click', () => {
         const val = linkInput.value.trim();
         if (!val) return;
@@ -3246,14 +3228,19 @@
           : { type: 'billede', url: val });
         renderCanvas();
       });
-      manageBar.appendChild(linkInput);
-      manageBar.appendChild(linkBtn);
+      addRow.appendChild(linkInput);
+      addRow.appendChild(linkBtn);
 
       if (sider.length > 1) {
+        const sideLabel = document.createElement('span');
+        sideLabel.textContent = 'eller side:';
+        sideLabel.style.cssText = 'flex-shrink:0; font-size:10px; color:#888;';
+        addRow.appendChild(sideLabel);
+
         const sideSelect = document.createElement('select');
         sideSelect.style.cssText = 'flex-shrink:0; font-size:10px; padding:4px; border-radius:4px; border:1px solid #444; background:#111; color:#eee; width:100px;';
         const placeholderOpt = document.createElement('option');
-        placeholderOpt.textContent = '+ Side...';
+        placeholderOpt.textContent = 'Vælg side...';
         placeholderOpt.value = '';
         sideSelect.appendChild(placeholderOpt);
 
@@ -3288,7 +3275,7 @@
             renderCanvas();
           }
         });
-        manageBar.appendChild(sideSelect);
+        addRow.appendChild(sideSelect);
       }
 
       body.appendChild(manageBar);
@@ -3552,6 +3539,14 @@
     const textColorVal = el.textColor || defaultTextColor(el.type);
     document.getElementById('propTextColor').value = textColorVal;
     document.getElementById('propTextColorHex').value = textColorVal;
+    // Boksens baggrundsfarve er kun synlig for typer der IKKE selv daekker hele boksen med
+    // ugennemsigtigt indhold -- billede/video/diasshow/nyhedsbanner fylder altid 100% (eller
+    // har deres egen faste sorte baggrund), saa farven bag dem kan aldrig ses uanset hvad man
+    // saetter den til. "tom" har sin egen placeholder-baggrund og er lige saa usynlig. Boks/
+    // streg/titel/tekst/ur/vejr/miljoeffekt/instagram fylder derimod IKKE altid hele boksen
+    // (fx miljoeffektkortets slanke 3:4-format), saa her giver farven reelt mening.
+    const boksfarveUsynlig = { billede: 1, video: 1, rotator: 1, nyhedsbanner: 1, tom: 1 };
+    document.getElementById('propsBoxColorRow').style.display = boksfarveUsynlig[el.type] ? 'none' : 'block';
     const boxColorVal = el.boxColor || '#000000';
     document.getElementById('propBoxColor').value = boxColorVal;
     document.getElementById('propBoxColorHex').value = boxColorVal;
