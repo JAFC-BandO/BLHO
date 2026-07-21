@@ -95,12 +95,19 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master28';
+  const SCRIPT_VERSION = '2026-07-20-master29';
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
+  // SAMME storageKey som butik-redigering (bevidst, ikke en tilfaeldighed) -- en admin der
+  // allerede er logget ind i redigeringen og klikker "Se [butik]s skærm" skal IKKE skulle
+  // logge ind forfra i den nye fane, den skal bare genbruge sessionen de allerede har. Paavirker
+  // IKKE kiosk-enhedernes eget login (de kalder altid signInWithPassword friskt via deres egne
+  // ?email=&password=-parametre ved hver side-indlaesning, se start() nedenfor) -- og mismatch-
+  // tjekket i findButik() sikrer stadig at en forkert/gammel session for en ANDEN butik bliver
+  // logget ud og bedt om et rigtigt login, i stedet for stiltiende at vise den forkerte butik.
   const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-    auth: { storageKey: 'sb-skaerm-auth' }
+    auth: { storageKey: 'sb-butik-redigering-auth' }
   });
 
   // ---------- Fejl-fangst (til Aktivitetslog) ----------

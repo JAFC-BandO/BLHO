@@ -152,11 +152,6 @@
   }
   .streg-del { display: none; }
   .el.selected .streg-del { display: block; }
-  .el.multi-selected {
-    outline: 2px dashed #4d5bff;
-    box-shadow: 0 0 0 3px rgba(77,91,255,.5);
-    z-index: 40;
-  }
   .el.locked-element { outline: 1px dashed #ffb300; }
   /* Fast plads (slotId): egen, tydeligt anderledes markering end almindeligt laast (ffb300)
      -- position/stoerrelse er fast for alle butikker, men INDHOLDET er butikkens eget. */
@@ -333,8 +328,7 @@
           <button id="aktivitetslogBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Aktivitetslog</button>
           <button id="feedbackAdminBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Feedback fra butikker</button>
           <div style="font-size:11px; color:#666; line-height:1.5;">
-            <b>Fælles skabelon:</b> ét layout du redigerer ét sted. Elementer du låser der (lås-knappen i Egenskaber) vises identisk og skrivebeskyttet på ALLE butikkers skærme med det samme.<br>
-            <b>Del/afmærk en almindelig skabelon:</b> brug "Gem side" / "Gem valgt element" i sidebaren, eller "Sæt standard" ud for en eksisterende skabelon.
+            <b>Fælles skabelon:</b> ét layout du redigerer ét sted. Elementer du låser der (lås-knappen i Egenskaber) vises identisk og skrivebeskyttet på ALLE butikkers skærme med det samme.
           </div>
         </div>
       </div>
@@ -481,11 +475,12 @@
       <div id="liveViewBox" style="position:relative; width:100%; aspect-ratio:16/9; background:#0a0a0a; border-radius:8px; overflow:hidden; container-type:inline-size; margin-bottom:8px;"></div>
       <!-- Aabner den RIGTIGE skaerm-visning (skaerm.html) i en ny fane -- ikke et link med
            kredentialer bagt ind, man logger selv ind der med sin egen konto (se skaerm.html's
-           nye interaktive login). href'et bliver sat dynamisk (se opdaterSkaermVisLink) til
-           at baere ?butik_id= for den butik man rent faktisk kigger paa lige nu -- ellers
-           ville en superadmin der har "skiftet butik" altid lande paa sin EGEN hjemme-butik i
+           nye interaktive login, som nu deler session med DENNE side, se dens storageKey).
+           href OG tekst saettes dynamisk (se opdaterSkaermVisLink) til at baere ?butik_id= og
+           selve butiksnavnet for den butik man rent faktisk kigger paa lige nu -- ellers ville
+           en superadmin der har "skiftet butik" altid lande paa sin EGEN hjemme-butik i
            stedet for den de faktisk redigerer, naar de har en eksisterende session. -->
-      <a id="skaermVisLink" href="../skaerm.html" target="_blank" rel="noopener" style="display:block; text-align:center; font-size:12px; color:#040DB1; margin-bottom:20px; text-decoration:none;">Åbn jeres rigtige skærm ↗</a>
+      <a id="skaermVisLink" href="../skaerm.html" target="_blank" rel="noopener" style="display:block; text-align:center; font-size:12px; color:#040DB1; margin-bottom:20px; text-decoration:none;">Se jeres skærm ↗</a>
 
       <h2>Tilføj element</h2>
       <!-- id="tilfoejElementHint" -- teksten herunder saettes af JS alt efter om man er
@@ -625,14 +620,6 @@
         Upload nyt billede/video
         <input type="file" id="uploadInput" accept="image/*,video/*">
       </label>
-
-      <h2 style="margin-top:24px;">Skabeloner</h2>
-      <div style="font-size:11px; color:#888; margin-bottom:8px;">Tip: Shift+klik for at vælge flere elementer ad gangen</div>
-      <div style="display:flex; gap:8px; margin-bottom:10px;">
-        <button id="saveSideSkabelonBtn" style="flex:1; padding:8px 4px; font-size:12px; background:#eef0fd; color:#040DB1;">Gem side</button>
-        <button id="saveElementSkabelonBtn" style="flex:1; padding:8px 4px; font-size:12px; background:#eef0fd; color:#040DB1;">Gem valgt element</button>
-      </div>
-      <div id="sablonerGrid" style="display:flex; flex-direction:column; gap:6px;"></div>
     </div>
 
     <div class="canvas-outer">
@@ -680,11 +667,13 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master83';
+  const SCRIPT_VERSION = '2026-07-20-master84';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
+  // Samme storageKey genbruges bevidst af skaerm.html, saa "Se [butik]s skærm"-linket
+  // (nedenfor) aabner en admins allerede-logget-ind session direkte, uden et ekstra login.
   const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
     auth: { storageKey: 'sb-butik-redigering-auth' }
   });
@@ -733,13 +722,11 @@
   // konstant "blink" ogsaa naar den rigtige skaerm slet ikke havde aendret sig.
   let liveViewSidstOpdateret = null;
   let mediaLibrary = [];
-  let sabloner = [];
   let erSuperadmin = false;
   let aktuelBrugerEmail = null;
   let aktuelBrugerNavn = null;
   let armedElementId = null;
   let selectedElementId = null;
-  let multiSelected = new Set();
   let rotatorIntervals = [];
   let masterTemplate = null; // { id, elements, background } | null -- den delte "sabloner" standard-raekke
   let masterEditMode = false;
@@ -870,14 +857,25 @@
     if (liveBox) liveBox.style.aspectRatio = forhold;
   }
 
-  // Saetter "Aabn jeres rigtige skaerm"-linket til at baere ?butik_id= for den butik man
-  // FAKTISK kigger paa lige nu -- uden dette landede en superadmin med "skift butik" altid
-  // paa sin egen hjemme-butik i skaerm.html (hvis de allerede havde en gemt session der fra
+  // Saetter "Se [butik]s skaerm"-linket til at baere ?butik_id= for den butik man FAKTISK
+  // kigger paa lige nu -- uden dette landede en superadmin med "skift butik" altid paa sin
+  // egen hjemme-butik i skaerm.html (hvis de allerede havde en gemt session der fra
   // tidligere), i stedet for den butik de rent faktisk sad og redigerede. skaerm.html tjekker
   // selv at man har lov til at se den paagaeldende butik (egen butik_id, eller superadmin).
+  // Linkteksten baerer ogsaa selve butiksnavnet (ikke bare et generisk "jeres skaerm") --
+  // ellers var det umuligt at se paa selve knappen HVILKEN butiks skaerm man var ved at
+  // aabne, saerligt for en superadmin der lige har skiftet butik.
   function opdaterSkaermVisLink() {
     const link = document.getElementById('skaermVisLink');
-    if (link && currentButikId) link.href = '../skaerm.html?butik_id=' + currentButikId;
+    if (!link || !currentButikId) return;
+    link.href = '../skaerm.html?butik_id=' + currentButikId;
+    const navn = document.getElementById('butikNavn').textContent;
+    // Dansk genitiv: ord der allerede ender paa s/x/z faar kun en apostrof ("Horsens' skærm"),
+    // alle andre faar et almindeligt "s" ("Odenses skærm") -- uden dette saa et navn som
+    // "Horsens" fejlagtigt ud som "Horsenss skærm".
+    const enderPaaSXZ = /[sxz]$/i.test(navn);
+    const genitiv = navn + (enderPaaSXZ ? '\'' : 's');
+    link.textContent = 'Se ' + genitiv + ' skærm ↗';
   }
 
   // Indlaeser ALT butik-specifikt data (sabloner, faelles skabelon, content, media, canvas,
@@ -896,9 +894,7 @@
 
     selectedElementId = null;
     armedElementId = null;
-    multiSelected.clear();
 
-    await loadSabloner();
     await loadMasterTemplate();
 
     const { data: contentRow } = await client
@@ -1205,7 +1201,6 @@
     baggrundsfarve = masterTemplate ? masterTemplate.background : '#0a0a0a';
     selectedElementId = null;
     armedElementId = null;
-    multiSelected.clear();
     document.getElementById('bgColorInput').value = baggrundsfarve;
     document.getElementById('bgColorHex').value = baggrundsfarve;
     canvas.style.background = baggrundsfarve;
@@ -1223,7 +1218,6 @@
     baggrundsfarve = storeBackgroundBackup;
     selectedElementId = null;
     armedElementId = null;
-    multiSelected.clear();
     document.getElementById('bgColorInput').value = baggrundsfarve;
     document.getElementById('bgColorHex').value = baggrundsfarve;
     canvas.style.background = baggrundsfarve;
@@ -1996,7 +1990,6 @@
     showMsg(saveMsg, 'Fælles skabelon gemt — synkroniseres til alle butikker!', true);
     logAdminHandling('gem_skabelon', 'Fælles skabelon');
     await loadMasterTemplate();
-    await loadSabloner();
     loadLiveView();
   }
 
@@ -2145,21 +2138,9 @@
     renderMediaGrid();
   });
 
-  // ---------- Skabeloner ----------
-
-  async function loadSabloner() {
-    const { data, error } = await client
-      .from('sabloner')
-      .select('*')
-      .or('butik_id.eq.' + currentButikId + ',delt.eq.true')
-      .order('oprettet_at', { ascending: false });
-    if (!error && data) sabloner = data;
-    renderSablonerGrid();
-  }
-
   // Den "faelles skabelon" (sabloner-raekken med standard=true) er den LIVE kilde til
-  // laaste elementer paa tvaers af alle butikker -- hentes friskt (ikke fra det evt. aeldre
-  // `sabloner`-array) saa Live View kan opdage aendringer andre superadmin-sessioner laver.
+  // laaste elementer paa tvaers af alle butikker -- hentes friskt hver gang, saa Live View
+  // kan opdage aendringer andre superadmin-sessioner laver.
   async function loadMasterTemplate() {
     const { data, error } = await client
       .from('sabloner')
@@ -2202,166 +2183,6 @@
       return eget;
     });
   }
-
-  function renderSablonerGrid() {
-    const grid = document.getElementById('sablonerGrid');
-    grid.innerHTML = '';
-    sabloner.forEach(s => {
-      const row = document.createElement('div');
-      row.style.cssText = 'display:flex; align-items:center; gap:6px; background:#f7f7fb; padding:6px 8px; border-radius:6px; font-size:12px;';
-
-      const label = document.createElement('span');
-      const icon = s.type === 'side' ? '[Side] ' : s.type === 'gruppe' ? '[Gruppe] ' : '[Element] ';
-      label.textContent = icon + s.navn + (s.delt ? ' (delt)' : '') + (s.standard ? ' (standard)' : '');
-      label.title = (s.delt ? 'Delt med alle butikker. ' : '') + (s.standard ? 'Standard-skabelon for nye sider.' : '');
-      label.style.cssText = 'flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
-      row.appendChild(label);
-
-      if (erSuperadmin && s.type === 'side') {
-        const starBtn = document.createElement('span');
-        starBtn.textContent = s.standard ? 'Standard' : 'Sæt standard';
-        starBtn.style.fontWeight = s.standard ? '700' : '400';
-        starBtn.title = s.standard ? 'Fjern som standard' : 'Sæt som standard for nye sider';
-        starBtn.style.cssText = 'cursor:pointer; padding:0 2px;';
-        starBtn.addEventListener('click', () => setStandardSkabelon(s));
-        row.appendChild(starBtn);
-      }
-
-      const useBtn = document.createElement('button');
-      useBtn.textContent = 'Brug';
-      useBtn.style.cssText = 'padding:4px 8px; font-size:11px;';
-      useBtn.addEventListener('click', () => applySkabelon(s));
-      row.appendChild(useBtn);
-
-      if (s.butik_id === currentButikId) {
-        const delBtn = document.createElement('span');
-        delBtn.textContent = '✕';
-        delBtn.style.cssText = 'color:#b92a15; cursor:pointer; padding:0 4px;';
-        delBtn.addEventListener('click', () => deleteSkabelon(s.id));
-        row.appendChild(delBtn);
-      }
-
-      grid.appendChild(row);
-    });
-  }
-
-  function applySkabelon(s) {
-    if (s.type === 'side') {
-      if (!confirm('Dette erstatter hele den nuværende side med skabelonen "' + s.navn + '". Fortsæt?')) return;
-      elements = JSON.parse(JSON.stringify(s.data.elements || []));
-      elements.forEach(el => { el.id = uid(); });
-      baggrundsfarve = s.data.background || '#0a0a0a';
-      document.getElementById('bgColorInput').value = baggrundsfarve;
-      document.getElementById('bgColorHex').value = baggrundsfarve;
-      canvas.style.background = baggrundsfarve;
-      selectedElementId = null;
-      armedElementId = null;
-      renderCanvas();
-      renderPropsPanel();
-    } else if (s.type === 'gruppe') {
-      const clones = JSON.parse(JSON.stringify(s.data.elements || []));
-      clones.forEach(c => { c.id = uid(); });
-      elements.push(...clones);
-      renderCanvas();
-    } else {
-      const clone = JSON.parse(JSON.stringify(s.data));
-      clone.id = uid();
-      clone.x = 10;
-      clone.y = 10;
-      elements.push(clone);
-      renderCanvas();
-    }
-  }
-
-  async function deleteSkabelon(id) {
-    if (!confirm('Slet denne skabelon?')) return;
-    // .select() efter .delete() er noedvendigt for at kunne se om noget REELT blev slettet --
-    // hvis RLS stille blokerer sletningen (fx en skabelon der hoerer til en anden butik end
-    // den du selv er logget ind/skiftet til som), returnerer Postgrest 0 paavirkede raekker
-    // UDEN fejl. Uden dette tjek troede UI'et sletningen lykkedes og fjernede den lokalt,
-    // mens raekken (og et evt. standard=true-flag) reelt stadig laa i databasen -- det er
-    // netop det der har forhindret en NY skabelon i at kunne saettes som standard bagefter
-    // (kun én raekke maa vaere standard=true, haandhaevet af en unique index).
-    const { data, error } = await client.from('sabloner').delete().eq('id', id).select();
-    if (error) { alert('Kunne ikke slette: ' + error.message); return; }
-    if (!data || !data.length) {
-      alert('Skabelonen blev IKKE slettet -- den tilhører formentlig en anden butik, og du har ikke rettigheder til at slette den (kræver superadmin for skabeloner uden for din egen butik, og at supabase/migration_superadmin_full_access.sql er kørt).');
-      return;
-    }
-    sabloner = sabloner.filter(s => s.id !== id);
-    renderSablonerGrid();
-  }
-
-  async function setStandardSkabelon(target) {
-    const newValue = !target.standard;
-    if (newValue) {
-      const others = sabloner.filter(s => s.standard && s.id !== target.id);
-      for (const o of others) {
-        await client.from('sabloner').update({ standard: false }).eq('id', o.id);
-        o.standard = false;
-      }
-    }
-    // En standard-skabelon SKAL ogsaa vaere delt, ellers kan andre butikkers RLS-opslag
-    // (som kun ser delt=true-raekker uden for egen butik) slet ikke finde den.
-    const patch = newValue ? { standard: true, delt: true } : { standard: false };
-    const { error } = await client.from('sabloner').update(patch).eq('id', target.id);
-    if (error) { alert('Kunne ikke opdatere: ' + error.message); return; }
-    Object.assign(target, patch);
-    renderSablonerGrid();
-    await loadMasterTemplate();
-    renderCanvas();
-    loadLiveView();
-  }
-
-  document.getElementById('saveSideSkabelonBtn').addEventListener('click', async () => {
-    const navn = prompt('Navn på skabelonen:');
-    if (!navn) return;
-    const delt = erSuperadmin && confirm('Del denne skabelon med ALLE butikker?\n\nOK = del med alle butikker\nAnnuller = kun til denne butik (' + document.getElementById('butikNavn').textContent + ')');
-    const { data, error } = await client
-      .from('sabloner')
-      .insert({ butik_id: currentButikId, type: 'side', navn, delt, data: { elements: stripLockedMasterElements(elements), background: baggrundsfarve } })
-      .select()
-      .single();
-    if (error) { alert('Kunne ikke gemme skabelon: ' + error.message); return; }
-    sabloner.unshift(data);
-    renderSablonerGrid();
-  });
-
-  function updateSaveSelectionButtonLabel() {
-    const btn = document.getElementById('saveElementSkabelonBtn');
-    if (multiSelected.size > 1) {
-      btn.textContent = 'Gem ' + multiSelected.size + ' valgte som skabelon';
-    } else {
-      btn.textContent = 'Gem valgt element';
-    }
-  }
-
-  document.getElementById('saveElementSkabelonBtn').addEventListener('click', async () => {
-    let type, data;
-
-    if (multiSelected.size > 1) {
-      type = 'gruppe';
-      data = { elements: elements.filter(e => multiSelected.has(e.id)).map(e => JSON.parse(JSON.stringify(e))) };
-    } else {
-      const singleId = multiSelected.size === 1 ? [...multiSelected][0] : selectedElementId;
-      const el = elements.find(e => e.id === singleId);
-      if (!el) { alert('Vælg først et element (eller flere med Shift+klik) på canvas.'); return; }
-      type = 'element';
-      data = el;
-    }
-
-    const navn = prompt('Navn på skabelonen:');
-    if (!navn) return;
-    const delt = erSuperadmin && confirm('Del denne skabelon med ALLE butikker?\n\nOK = del med alle butikker\nAnnuller = kun til denne butik (' + document.getElementById('butikNavn').textContent + ')');
-    const { data: row, error } = await client
-      .from('sabloner')
-      .insert({ butik_id: currentButikId, type, navn, delt, data })
-      .select()
-      .single();
-    if (error) { alert('Kunne ikke gemme skabelon: ' + error.message); return; }
-    sabloner.unshift(row);
-    renderSablonerGrid();
-  });
 
   function findExistingMedia(filename) {
     return mediaLibrary.find(m => m.filnavn === filename);
@@ -2476,24 +2297,22 @@
     canvas.style.background = baggrundsfarve;
     selectedElementId = null;
     armedElementId = null;
-    multiSelected.clear();
     renderCanvas();
     renderPropsPanel();
     renderSiderTabs();
   }
 
   function standardSideData() {
-    const std = sabloner.find(s => s.type === 'side' && s.standard);
-    if (!std) return null;
+    if (!masterTemplate) return null;
     // Laaste elementer maa ALDRIG bages ind i en ny sides egne data -- de kommer udelukkende
     // fra den live fletning (mergeMasterElements) baseret paa masterens egne id'er. Hvis vi
     // klonede dem her (med nye id'er), ville kloningen aldrig mere matche masteren: den ville
     // vises dobbelt (master-versionen OG den fastfrosne lokale kopi) og den lokale kopi ville
     // aldrig opdatere sig igen, selv naar masteren aendres.
-    const unlockedOnly = (std.data.elements || []).filter(e => !e.locked);
+    const unlockedOnly = (masterTemplate.elements || []).filter(e => !e.locked);
     const cloned = JSON.parse(JSON.stringify(unlockedOnly));
     cloned.forEach(cl => { cl.id = uid(); });
-    return { elements: cloned, background: std.data.background || '#0a0a0a' };
+    return { elements: cloned, background: masterTemplate.background || '#0a0a0a' };
   }
 
   function addNewSide() {
@@ -2516,7 +2335,6 @@
     canvas.style.background = baggrundsfarve;
     selectedElementId = null;
     armedElementId = null;
-    multiSelected.clear();
     renderCanvas();
     renderPropsPanel();
     renderSiderTabs();
@@ -2541,7 +2359,6 @@
       canvas.style.background = baggrundsfarve;
       selectedElementId = null;
       armedElementId = null;
-      multiSelected.clear();
       renderCanvas();
       renderPropsPanel();
     }
@@ -3010,11 +2827,6 @@
       selectedElementId = null;
       renderPropsPanel();
     }
-    if (multiSelected.size) {
-      multiSelected.clear();
-      canvas.querySelectorAll('.multi-selected').forEach(n => n.classList.remove('multi-selected'));
-      updateSaveSelectionButtonLabel();
-    }
   });
 
   function buildElementNode(el) {
@@ -3047,16 +2859,7 @@
       if (!el.boxColor) node.style.background = 'none';
     }
     if (canEdit) {
-      node.addEventListener('click', (e) => {
-        if (e.shiftKey) {
-          e.stopPropagation();
-          if (multiSelected.has(el.id)) multiSelected.delete(el.id); else multiSelected.add(el.id);
-          node.classList.toggle('multi-selected', multiSelected.has(el.id));
-          updateSaveSelectionButtonLabel();
-        } else {
-          selectElement(el.id);
-        }
-      });
+      node.addEventListener('click', () => selectElement(el.id));
     }
 
     const body = document.createElement('div');
@@ -3368,8 +3171,7 @@
       manageBar.appendChild(linkInput);
       manageBar.appendChild(linkBtn);
 
-      const sideSkabeloner = sabloner.filter(s => s.type === 'side');
-      if (sider.length > 1 || sideSkabeloner.length) {
+      if (sider.length > 1) {
         const sideSelect = document.createElement('select');
         sideSelect.style.cssText = 'flex-shrink:0; font-size:10px; padding:4px; border-radius:4px; border:1px solid #444; background:#111; color:#eee; width:100px;';
         const placeholderOpt = document.createElement('option');
@@ -3377,63 +3179,35 @@
         placeholderOpt.value = '';
         sideSelect.appendChild(placeholderOpt);
 
-        if (sider.length > 1) {
-          const sideGroup = document.createElement('optgroup');
-          sideGroup.label = 'Sider';
-          sider.forEach(s => {
-            const opt = document.createElement('option');
-            opt.value = 'side:' + s.id;
-            opt.textContent = s.navn;
-            sideGroup.appendChild(opt);
-          });
-          sideSelect.appendChild(sideGroup);
-        }
-
-        if (sideSkabeloner.length) {
-          const skabelonGroup = document.createElement('optgroup');
-          skabelonGroup.label = 'Skabeloner';
-          sideSkabeloner.forEach(s => {
-            const opt = document.createElement('option');
-            opt.value = 'skabelon:' + s.id;
-            opt.textContent = s.navn;
-            skabelonGroup.appendChild(opt);
-          });
-          sideSelect.appendChild(skabelonGroup);
-        }
+        sider.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = s.navn;
+          sideSelect.appendChild(opt);
+        });
 
         sideSelect.addEventListener('change', () => {
-          const [kind, id] = sideSelect.value.split(':');
-          if (kind === 'side') {
-            // Brug live data hvis det er den side vi lige nu redigerer, ellers den gemte version
-            const side = id === aktivSideId
-              ? { elements, background: baggrundsfarve }
-              : sider.find(s => s.id === id);
-            if (side) {
-              // sideId: sliden foelger sidens AKTUELLE indhold live (se opslaaSideSlide i
-              // render-shared.js) -- redigerer man siden bagefter, opdaterer rotator-sliden
-              // sig automatisk med. elements gemmes KUN som fallback (hvis siden slettes).
-              // stripLockedMasterElements: en aeldre side kan have en fastfrosset kopi af
-              // et laast element liggende fra foer det blev rettet -- den skal IKKE med ind
-              // i rotator-sliden, laast indhold kommer udelukkende fra den live fletning.
-              el.slides.push({
-                type: 'side',
-                sideId: id,
-                navn: (sider.find(s => s.id === id) || {}).navn || '',
-                elements: stripLockedMasterElements(JSON.parse(JSON.stringify(side.elements || []))),
-                background: side.background || '#0a0a0a',
-              });
-              renderCanvas();
-            }
-          } else if (kind === 'skabelon') {
-            const chosen = sabloner.find(s => s.id === id);
-            if (chosen) {
-              el.slides.push({
-                type: 'side',
-                elements: stripLockedMasterElements(JSON.parse(JSON.stringify(chosen.data.elements || []))),
-                background: chosen.data.background || '#0a0a0a',
-              });
-              renderCanvas();
-            }
+          const id = sideSelect.value;
+          if (!id) return;
+          // Brug live data hvis det er den side vi lige nu redigerer, ellers den gemte version
+          const side = id === aktivSideId
+            ? { elements, background: baggrundsfarve }
+            : sider.find(s => s.id === id);
+          if (side) {
+            // sideId: sliden foelger sidens AKTUELLE indhold live (se opslaaSideSlide i
+            // render-shared.js) -- redigerer man siden bagefter, opdaterer rotator-sliden
+            // sig automatisk med. elements gemmes KUN som fallback (hvis siden slettes).
+            // stripLockedMasterElements: en aeldre side kan have en fastfrosset kopi af
+            // et laast element liggende fra foer det blev rettet -- den skal IKKE med ind
+            // i rotator-sliden, laast indhold kommer udelukkende fra den live fletning.
+            el.slides.push({
+              type: 'side',
+              sideId: id,
+              navn: (sider.find(s => s.id === id) || {}).navn || '',
+              elements: stripLockedMasterElements(JSON.parse(JSON.stringify(side.elements || []))),
+              background: side.background || '#0a0a0a',
+            });
+            renderCanvas();
           }
         });
         manageBar.appendChild(sideSelect);
@@ -3510,7 +3284,6 @@
 
       if (el.id === armedElementId) node.classList.add('selectable-target');
       if (el.id === selectedElementId) node.classList.add('selected');
-      if (multiSelected.has(el.id)) node.classList.add('multi-selected');
 
       return node;
     }
@@ -3580,7 +3353,6 @@
 
     if (el.id === armedElementId) node.classList.add('selectable-target');
     if (el.id === selectedElementId) node.classList.add('selected');
-    if (multiSelected.has(el.id)) node.classList.add('multi-selected');
 
     return node;
   }
@@ -3593,11 +3365,6 @@
   }
 
   function selectElement(id) {
-    if (multiSelected.size) {
-      multiSelected.clear();
-      canvas.querySelectorAll('.multi-selected').forEach(n => n.classList.remove('multi-selected'));
-      updateSaveSelectionButtonLabel();
-    }
     if (selectedElementId === id) return;
     const prev = canvas.querySelector('.el.selected');
     if (prev) prev.classList.remove('selected');
