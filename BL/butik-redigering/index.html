@@ -701,7 +701,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master87';
+  const SCRIPT_VERSION = '2026-07-20-master88';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1072,7 +1072,7 @@
       showMsg(loginMsg, 'Forkert email eller adgangskode.', false);
       return;
     }
-    logAdminHandling('login');
+    // Logges inde i checkPasswordThenProceed() -- se kommentar der.
     await checkPasswordThenProceed();
   });
 
@@ -2001,6 +2001,15 @@
   async function checkPasswordThenProceed() {
     const { data: { user } } = await client.auth.getUser();
     if (!user) return;
+
+    // Logges HER (ikke kun i loginBtn's klik-haandtering) -- ellers blev et login KUN logget
+    // hvis man rent faktisk skrev email+password ind. Men Supabase gemmer sessionen i
+    // localStorage og genbruger den automatisk (se client.auth.getSession() herunder), saa
+    // enhver admin der bare lukker/genaabner fanen (den ALMINDELIGE maade at bruge siden paa)
+    // aldrig ramte loginBtn-koden -- og dukkede derfor slet ikke op i Aktivitetsloggen efter
+    // deres allerfoerste besoeg. checkPasswordThenProceed() er den FAELLES vej begge login-
+    // metoder (frisk og genbrugt session) altid gaar igennem, saa her fanges begge.
+    logAdminHandling('login');
 
     const { data: bruger } = await client
       .from('brugere')
