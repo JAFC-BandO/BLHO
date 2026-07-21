@@ -268,6 +268,16 @@
     border-radius: 10px;
   }
 
+  /* Genbrugt "kig herhen"-puls -- baade naar medie-biblioteket lige er aabnet (se
+     armForSelection) og naar de 2 faste vinduer skal fremhaeves lige efter en ny side er
+     oprettet (se addNewSide). Faerdig-animeret (3 gennemloeb) i stedet for en uendelig loop,
+     saa den trraekker opmaerksomhed uden at blive et permanent distraherende blink. */
+  @keyframes opmaerksomhedsPuls {
+    0%, 100% { box-shadow: 0 0 0 3px #4d5bff, 0 0 0 rgba(77,91,255,0); }
+    50% { box-shadow: 0 0 0 3px #4d5bff, 0 0 20px 6px rgba(77,91,255,.7); }
+  }
+  .opmaerksomheds-puls { animation: opmaerksomhedsPuls 0.8s ease-in-out 3; border-radius: 6px; }
+
   /* --- Telefon/smal skaerm --- .main var et FAST 260px-sidebar + fluid grid, som paa en
      telefon (typisk 360-430px bred) klemte canvas-kolonnen ned i en ubrugelig smal stribe
      ved siden af sidebaren. Under 760px stables sidebar og canvas i stedet oveni hinanden
@@ -567,14 +577,14 @@
           <input type="number" id="propScrollSekunder" min="10" max="300" step="5" style="width:80px;">
           <div style="font-size:11px; color:#888; margin-top:4px;">Højere tal = langsommere.</div>
         </div>
-        <div style="margin-bottom:12px;">
+        <div id="propsCenterRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Centrer på skærmen</label>
           <div style="display:flex; gap:8px;">
             <button id="centerHBtn" style="padding:6px 10px; font-size:12px; flex:1;">Vandret</button>
             <button id="centerVBtn" style="padding:6px 10px; font-size:12px; flex:1;">Lodret</button>
           </div>
         </div>
-        <div style="margin-bottom:12px;">
+        <div id="propsLagRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Lag (ræsækkefølge)</label>
           <div style="display:flex; gap:8px;">
             <button id="propMoveBack" style="padding:6px 10px; font-size:12px; flex:1;">◀ Send bagud</button>
@@ -613,13 +623,20 @@
         <input type="text" id="bgColorHex" placeholder="#rrggbb" style="width:90px; padding:6px 8px; font-size:12px; border:1px solid #ddd; border-radius:6px;">
       </div>
 
-      <h2>Medie-bibliotek</h2>
-      <div class="media-banner" id="mediaBanner">Vælg et medie til elementet nedenfor (eller klik her for at annullere)</div>
-      <div class="media-grid" id="mediaGrid"></div>
-      <label class="upload-label">
-        Upload nyt billede/video
-        <input type="file" id="uploadInput" accept="image/*,video/*">
-      </label>
+      <!-- Kun synlig mens man rent faktisk er ved at vaelge medie til et element (armForSelection
+           saetter armedElementId) -- ellers stod hele biblioteket der altid og fyldte i sidebaren,
+           ogsaa naar man slet ikke skulle bruge det. Vises + scrolles i syne + pulser (se
+           armForSelection) i det oejeblik man trykker "+"/"Vælg fra bibliotek", saa det er
+           tydeligt HVOR man nu skal goere noget. -->
+      <div id="mediaLibrarySection" style="display:none;">
+        <h2>Medie-bibliotek</h2>
+        <div class="media-banner" id="mediaBanner">Vælg et medie til elementet nedenfor (eller klik her for at annullere)</div>
+        <div class="media-grid" id="mediaGrid"></div>
+        <label class="upload-label">
+          Upload nyt billede/video
+          <input type="file" id="uploadInput" accept="image/*,video/*">
+        </label>
+      </div>
     </div>
 
     <div class="canvas-outer">
@@ -667,7 +684,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master84';
+  const SCRIPT_VERSION = '2026-07-20-master85';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1208,6 +1225,7 @@
     document.getElementById('siderTabs').style.display = 'none';
     renderCanvas();
     renderPropsPanel();
+    renderMediaGrid();
     loadLiveView();
   }
 
@@ -1225,6 +1243,7 @@
     document.getElementById('siderTabs').style.display = 'flex';
     renderCanvas();
     renderPropsPanel();
+    renderMediaGrid();
     renderSiderTabs();
     loadLiveView();
   }
@@ -1816,7 +1835,7 @@
     },
     {
       titel: 'Rotatoren kan vise hele sider',
-      body: 'Vælg rotator-vinduet: i baren nederst i det tilføjer du slides — billeder, videoer, eller via "+ Side..." en hel af jeres egne sider, som så vises inde i rotationen. En side-slide følger altid sidens aktuelle indhold: retter du siden, opdaterer rotatoren automatisk med.',
+      body: 'Vælg rotator-vinduet: i baren nederst i det tilføjer du slides — billeder, videoer, eller via "+ Side..." en hel af jeres egne sider, som så vises inde i rotationen. En side-slide følger altid sidens aktuelle indhold: retter du siden, opdaterer rotatoren automatisk med. Klik på selve side-slidet (i baren eller midt i visningen) for at hoppe direkte ind og redigere den side.',
       target: () => document.querySelector('.el[data-type="rotator"]') || document.querySelector('.slot-element') || document.getElementById('canvas'),
     },
     {
@@ -2068,19 +2087,25 @@
     renderMediaGrid();
   }
 
+  // Medie-biblioteket er KUN relevant mens man faktisk er ved at vaelge medie til et element
+  // (armedElementId sat via armForSelection) -- resten af tiden stod hele griden der bare og
+  // fyldte i sidebaren uden nogen aktuel brug. Sektionen vises/skjules derfor her, ét sted,
+  // saa ALLE steder der kalder renderMediaGrid() (sideskift, slet element, annullér osv.)
+  // automatisk holder synligheden korrekt uden selv at skulle huske det.
   function renderMediaGrid() {
     mediaGrid.innerHTML = '';
     const armedEl = elements.find(e => e.id === armedElementId);
+    document.getElementById('mediaLibrarySection').style.display = armedEl ? 'block' : 'none';
+    if (!armedEl) return;
+
     // En rotator har intet enkelt "type" at matche imod (den kan indeholde BAADE billeder og
     // videoer som slides) -- vis derfor hele biblioteket uden type-filter naar det er en
     // rotator der er armet, i stedet for det almindelige "kun samme type som elementet".
-    const filtered = !armedEl ? mediaLibrary
-      : armedEl.type === 'rotator' ? mediaLibrary
-      : mediaLibrary.filter(m => m.type === armedEl.type);
+    const filtered = armedEl.type === 'rotator' ? mediaLibrary : mediaLibrary.filter(m => m.type === armedEl.type);
 
     filtered.forEach(m => {
       const item = document.createElement('div');
-      item.className = 'media-item' + (armedEl ? ' selectable' : '');
+      item.className = 'media-item selectable';
       item.innerHTML = m.type === 'billede'
         ? '<img src="' + m.url + '">'
         : '<video src="' + m.url + '" muted></video>';
@@ -2089,19 +2114,7 @@
       fname.textContent = m.filnavn || '';
       item.appendChild(fname);
 
-      if (!armedEl) {
-        const delBtn = document.createElement('span');
-        delBtn.textContent = '✕';
-        delBtn.style.cssText = 'position:absolute; top:2px; right:2px; background:rgba(0,0,0,.7); color:#f88; font-size:11px; padding:1px 5px; border-radius:3px; cursor:pointer; z-index:2;';
-        delBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          deleteMedia(m);
-        });
-        item.appendChild(delBtn);
-      }
-
       item.addEventListener('click', () => {
-        if (!armedEl) return;
         anvendMediePaaMaal(armedEl, m.type, m.url);
         armedElementId = null;
         mediaBanner.classList.remove('active');
@@ -2110,25 +2123,6 @@
       });
       mediaGrid.appendChild(item);
     });
-  }
-
-  async function deleteMedia(m) {
-    if (!confirm('Slet "' + (m.filnavn || 'denne fil') + '" fra medie-biblioteket?\n\nBemærk: det fjerner den ikke fra steder hvor den allerede er sat ind på en side.')) return;
-
-    const marker = '/object/public/media/';
-    const idx = m.url.indexOf(marker);
-    if (idx !== -1) {
-      const path = m.url.slice(idx + marker.length);
-      await client.storage.from('media').remove([path]);
-    }
-
-    const { error } = await client.from('media').delete().eq('id', m.id);
-    if (error) {
-      alert('Kunne ikke slette: ' + error.message);
-      return;
-    }
-    mediaLibrary = mediaLibrary.filter(x => x.id !== m.id);
-    renderMediaGrid();
   }
 
   mediaBanner.addEventListener('click', () => {
@@ -2299,6 +2293,7 @@
     armedElementId = null;
     renderCanvas();
     renderPropsPanel();
+    renderMediaGrid();
     renderSiderTabs();
   }
 
@@ -2337,7 +2332,26 @@
     armedElementId = null;
     renderCanvas();
     renderPropsPanel();
+    renderMediaGrid();
     renderSiderTabs();
+    // Den nye side har (via standardSideData) allerede faaet de 2 faste vinduer materialiseret
+    // ind i sine elementer -- fremhaev dem lige nu, saa det er tydeligt at man kan/skal klikke
+    // paa dem for at vaelge indhold, i stedet for at admin selv skal opdage/gaette det.
+    fremhaevFastePladser();
+  }
+
+  // Pulser en kort "kig herhen"-markering paa de faste vinduer (banner/hoved) og viser en kort
+  // besked om at man kan klikke paa dem -- bruges lige efter en ny side er oprettet, hvor det
+  // ellers ikke er aabenlyst at de 2 vinduer allerede staar klar til at faa valgt indhold.
+  function fremhaevFastePladser() {
+    const pladser = canvas.querySelectorAll('.slot-element');
+    if (!pladser.length) return;
+    pladser.forEach(node => {
+      node.classList.add('opmaerksomheds-puls');
+      setTimeout(() => node.classList.remove('opmaerksomheds-puls'), 2400);
+    });
+    showMsg(saveMsg, 'Ny side oprettet — klik på de 2 markerede vinduer (banner og hoved) for at vælge hvad de skal vise.', true);
+    setTimeout(() => { saveMsg.style.display = 'none'; }, 6000);
   }
 
   function deleteSide(id) {
@@ -2361,6 +2375,7 @@
       armedElementId = null;
       renderCanvas();
       renderPropsPanel();
+      renderMediaGrid();
     }
     // Slettes den side der var valgt til at blive vist paa skaermen, skal en ANDEN side
     // overtage den rolle -- ellers ville naeste Gem pege paa en side der ikke findes mere.
@@ -3051,6 +3066,19 @@
             badge.style.cssText = 'width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#aaa; font-size:11px; text-align:center; padding:6px; background:' + ((liveSide ? liveSide.background : slide.background) || '#0a0a0a') + ';';
             const navn = liveSide ? liveSide.navn : (slide.navn || 'Side');
             badge.textContent = navn + ' (' + ((liveSide ? liveSide.elements : slide.elements) || []).length + ' elementer' + (liveSide ? ', følger siden live' : '') + ')';
+            // Klik direkte videre ind i siden i stedet for blot at vaelge selve rotator-
+            // elementet -- en side-slide ER en af butikkens egne sider, saa "redigere den" her
+            // betyder skifte til dens fane, praecis som at klikke sidefanen selv. Gaelder KUN
+            // side-slides (billed-/video-slides er direkte materiale i selve rotatoren, ikke
+            // en side, saa de har intet "gaa til" at springe til).
+            if (liveSide) {
+              badge.style.cursor = 'pointer';
+              badge.title = 'Klik for at redigere denne side direkte';
+              badge.addEventListener('click', (e) => {
+                e.stopPropagation();
+                switchToSide(liveSide.id);
+              });
+            }
             preview.appendChild(badge);
             anvendIndholdsSkala(badge, el);
             idx = (idx + 1) % el.slides.length;
@@ -3107,10 +3135,18 @@
           const liveSide = slide.sideId ? sider.find(x => x.id === slide.sideId) : null;
           ico.textContent = liveSide ? liveSide.navn : (slide.navn || 'Side');
           ico.title = liveSide
-            ? 'Viser altid sidens aktuelle indhold -- redigerer du siden, følger denne slide automatisk med.'
+            ? 'Viser altid sidens aktuelle indhold -- klik for at redigere denne side direkte.'
             : 'Siden findes ikke længere -- viser sidste kendte indhold.';
           ico.style.cssText = 'width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:10px; text-align:center; padding:2px; overflow:hidden; color:#eee;';
           thumb.appendChild(ico);
+          // Klik paa selve thumbnailen (ikke ✕'et, som stopper sin egen event, se rm herunder)
+          // hopper direkte ind i siden -- en side-slide ER en af butikkens egne sider, saa
+          // "redigere den" betyder skifte til dens fane. Kun for side-slides: et billede/
+          // video-slide er direkte materiale i rotatoren, der er ingen side at springe til.
+          if (liveSide) {
+            thumb.style.cursor = 'pointer';
+            thumb.addEventListener('click', () => switchToSide(liveSide.id));
+          }
         } else {
           const vid = document.createElement('video');
           vid.src = slide.url + (slide.kind === 'youtube' ? '' : '#t=0.1');
@@ -3362,6 +3398,13 @@
     mediaBanner.classList.add('active');
     renderCanvas();
     renderMediaGrid();
+    // Biblioteket var lige skjult (se renderMediaGrid) og popper nu op et stykke nede i
+    // sidebaren -- uden et scroll+puls kunne det nemt blive overset, saerligt paa en telefon
+    // hvor sidebaren kan vaere flere skaermhoejder lang.
+    const sektion = document.getElementById('mediaLibrarySection');
+    sektion.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    sektion.classList.add('opmaerksomheds-puls');
+    setTimeout(() => sektion.classList.remove('opmaerksomheds-puls'), 2400);
   }
 
   function selectElement(id) {
@@ -3418,6 +3461,14 @@
     // overlap-fejl mellem banner/hoved tidligere) med et praecist, ufarligt tal-felt --
     // stadig 100% fast for alle andre end superadmin.
     const posLaast = !!el.posLocked || !!el.slotId;
+    // "Centrer paa skaermen" og "Lag" flytter/omorganiserer elementet -- helt virkningsloest
+    // paa en fast plads (posLaast), hvis placering/raekkefoelge ALDRIG kan aendres af en
+    // almindelig admin. Skjules derfor for dem her, saa Egenskaber-panelet for de 2 faste
+    // vinduer (banner/hoved) kun viser kontroller der reelt goer noget -- superadmin ser dem
+    // stadig altid, ogsaa for et posLaast element (fx til at faa et overblik/aendre andet).
+    const skjulPositionsKontroller = posLaast && !erSuperadmin;
+    document.getElementById('propsCenterRow').style.display = skjulPositionsKontroller ? 'none' : 'block';
+    document.getElementById('propsLagRow').style.display = skjulPositionsKontroller ? 'none' : 'block';
     // Bruges ogsaa til at deaktivere kontroller nederst i funktionen.
     const canEditSelected = masterEditMode || !el.locked;
     // autoFyldRest: stoerrelsen udregnes automatisk (se anvendAutoFyldRest) -- et manuelt tal
