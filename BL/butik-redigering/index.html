@@ -701,7 +701,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master91';
+  const SCRIPT_VERSION = '2026-07-20-master92';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1652,9 +1652,21 @@
     // og custom_kommando_sat_at ryddes OGSAA her -- ellers stod sat_at tilbage uden et
     // tilhoerende svar, hvilket fik raekken til fejlagtigt at vise "Afventer svar" for evigt
     // (i praksis paa alle enheder man nogensinde har sendt en kommando til).
+    //
+    // EN KOMMANDO DER ALDRIG BLEV BESVARET (fx sendt mens enheden var nede/overbelastet, se
+    // Horsens 21.-24. juli 2026) blev tidligere IKKE ryddet her -- kun besvarede kommandoer
+    // var daekket ovenfor. Den blev derfor haengende og viste "Afventer svar" i al evighed,
+    // laenge efter nogen reelt forventede et svar (loopets eget loefte er "op til et minuts
+    // tid"). Alt aeldre end 5 minutter uden svar regnes derfor som opgivet og ryddes her ogsaa.
+    const KOMMANDO_OPGIVET_MINUTTER = 5;
     const harSvar = alleEnheder.filter(e => e.custom_kommando_svar != null);
-    if (harSvar.length) {
-      await Promise.all(harSvar.map(e =>
+    const opgivet = alleEnheder.filter(e =>
+      e.custom_kommando_svar == null && e.custom_kommando_sat_at &&
+      (Date.now() - new Date(e.custom_kommando_sat_at).getTime()) > KOMMANDO_OPGIVET_MINUTTER * 60000
+    );
+    const skalRyddes = harSvar.concat(opgivet);
+    if (skalRyddes.length) {
+      await Promise.all(skalRyddes.map(e =>
         client.from('enheder').update({
           custom_kommando: null,
           custom_kommando_sat_at: null,
