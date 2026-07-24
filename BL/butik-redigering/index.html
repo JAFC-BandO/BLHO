@@ -593,6 +593,11 @@
           <label style="margin-top:0;">Interval mellem slides (sek)</label>
           <input type="number" id="propInterval" min="1" max="120" step="1" style="width:80px;">
         </div>
+        <div id="propsRotatorSlidesRow" style="margin-bottom:12px; display:none;">
+          <label style="margin-top:0;">Slides</label>
+          <div style="font-size:11px; color:#888; margin:2px 0 6px 0;">Klik på en slide for at se hvad den er (springer direkte til siden, hvis det er en side-slide), eller ✕ for at fjerne den. Virker her uanset hvor lille selve vinduet er på canvas (fx banneret).</div>
+          <div id="propsRotatorSlidesBody" style="background:#111; border-radius:8px; padding:8px;"></div>
+        </div>
         <div id="propsScrollRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Rulle-hastighed (sekunder per gennemløb)</label>
           <input type="number" id="propScrollSekunder" min="10" max="300" step="5" style="width:80px;">
@@ -2900,6 +2905,180 @@
     }
   });
 
+  // Bygger diasshow-styringen (slide-thumbnails med nummer/fjern + "tilføj"-raekken).
+  // Udtrukket til sin egen funktion, saa den kan bruges BAADE inline i selve canvas-boksen
+  // (som foer) OG i Egenskaber-panelet i sidebaren (standalone:true) -- sidstnaevnte blev
+  // noedvendigt fordi manageBar's inline hoejde er en PROCENTDEL af boksens EGEN hoejde
+  // (38%), hvilket virker fint for det store "hoved"-vindue, men gjorde thumbnails/knapper
+  // ubrugeligt smaa i det korte, vandrette "banner"-vindue. I sidebaren er der ingen fast
+  // forael der-hoejde at vaere procent af, saa der bruges i stedet naturlig stoerrelse.
+  function buildRotatorManageBar(el, standalone) {
+    const manageBar = document.createElement('div');
+    manageBar.style.cssText = standalone
+      ? 'display:flex; flex-direction:column; gap:4px;'
+      : 'height:38%; display:flex; flex-direction:column; gap:4px; padding:4px; background:#111;';
+
+    const slideRow = document.createElement('div');
+    slideRow.style.cssText = 'flex:1; min-height:0; overflow-x:auto; overflow-y:hidden; display:flex; gap:6px; align-items:center;'
+      + (standalone ? ' flex-wrap:wrap; min-height:60px;' : '');
+    manageBar.appendChild(slideRow);
+
+    // Stoerre thumbnails + et taldelt "1/2/3"-badge og en rigtig video-thumbnail (foerste
+    // frame, ikke bare et generisk ▶-ikon) -- de var for smaa og for ens til at kunne
+    // kende slides fra hinanden (tidligere 34px, samme ikon for alle videoer uanset indhold).
+    el.slides.forEach((slide, i) => {
+      const thumb = document.createElement('div');
+      thumb.style.cssText = 'position:relative; width:56px; height:56px; flex-shrink:0; background:#333; border-radius:4px; overflow:hidden;';
+      if (slide.type === 'billede') {
+        const img = document.createElement('img');
+        img.src = slide.url;
+        img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+        thumb.appendChild(img);
+      } else if (slide.type === 'side') {
+        const ico = document.createElement('div');
+        // Vis sidens NAVN (live-opslag hvis den stadig findes), ikke bare "Side" -- ellers
+        // kan man ikke kende to side-slides fra hinanden i baren.
+        const liveSide = slide.sideId ? sider.find(x => x.id === slide.sideId) : null;
+        ico.textContent = liveSide ? liveSide.navn : (slide.navn || 'Side');
+        ico.title = liveSide
+          ? 'Viser altid sidens aktuelle indhold -- klik for at redigere denne side direkte.'
+          : 'Siden findes ikke længere -- viser sidste kendte indhold.';
+        ico.style.cssText = 'width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:10px; text-align:center; padding:2px; overflow:hidden; color:#eee;';
+        thumb.appendChild(ico);
+        // Klik paa selve thumbnailen (ikke ✕'et, som stopper sin egen event, se rm herunder)
+        // hopper direkte ind i siden -- en side-slide ER en af butikkens egne sider, saa
+        // "redigere den" betyder skifte til dens fane. Kun for side-slides: et billede/
+        // video-slide er direkte materiale i rotatoren, der er ingen side at springe til.
+        if (liveSide) {
+          thumb.style.cursor = 'pointer';
+          thumb.addEventListener('click', () => switchToSide(liveSide.id));
+        }
+      } else {
+        const vid = document.createElement('video');
+        vid.src = slide.url + (slide.kind === 'youtube' ? '' : '#t=0.1');
+        vid.muted = true;
+        vid.preload = 'metadata';
+        vid.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+        thumb.appendChild(vid);
+        if (slide.kind === 'youtube') {
+          const ico = document.createElement('div');
+          ico.textContent = '▶ YouTube';
+          ico.style.cssText = 'position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#aaa; font-size:9px; background:#222;';
+          thumb.appendChild(ico);
+        }
+      }
+      const num = document.createElement('span');
+      num.textContent = String(i + 1);
+      num.style.cssText = 'position:absolute; bottom:0; left:0; background:rgba(0,0,0,.7); color:#fff; font-size:9px; padding:0 4px; border-radius:0 4px 0 0; line-height:1.4;';
+      thumb.appendChild(num);
+      const rm = document.createElement('span');
+      rm.textContent = '✕';
+      rm.style.cssText = 'position:absolute; top:0; right:0; background:rgba(0,0,0,.7); color:#f88; font-size:10px; padding:1px 4px; cursor:pointer;';
+      rm.addEventListener('click', (e) => {
+        e.stopPropagation();
+        el.slides.splice(i, 1);
+        renderCanvas();
+        renderPropsPanel();
+      });
+      thumb.appendChild(rm);
+      slideRow.appendChild(thumb);
+    });
+
+    // Egen "tilfoej"-raekke med 3 tydeligt navngivne veje ind (bibliotek / link / side) --
+    // stod tidligere ublandet imellem selve slide-thumbnailsne uden nogen forklaring paa
+    // HVAD hver kontrol goer, saa det var let at overse eller forveksle med endnu en slide.
+    const addRow = document.createElement('div');
+    addRow.style.cssText = 'flex-shrink:0; display:flex; gap:6px; align-items:center; padding-top:4px; border-top:1px solid #2a2a2a; overflow-x:auto;'
+      + (standalone ? ' flex-wrap:wrap;' : '');
+    manageBar.appendChild(addRow);
+
+    // Aabner medie-biblioteket i sidebaren (samme mekanisme som billede/video-elementers
+    // "Vælg fra bibliotek") -- man kan enten klikke et EKSISTERENDE medie der, eller bruge
+    // sidebarens egen "Upload nyt billede/video" lige nedenunder, som (via armedElementId)
+    // automatisk lander som en ny slide her. Tidligere var denne knap et content-loest "+"
+    // der saa ud som endnu en thumbnail -- nu et tydeligt navngivet, anderledes-formet knap.
+    const addBtn = document.createElement('button');
+    addBtn.textContent = '+ Bibliotek';
+    addBtn.style.cssText = 'flex-shrink:0; padding:6px 10px; font-size:11px; background:#2a2a2a; color:#ddd; border-radius:4px; cursor:pointer;';
+    addBtn.addEventListener('click', () => armForSelection(el));
+    addRow.appendChild(addBtn);
+
+    const linkLabel = document.createElement('span');
+    linkLabel.textContent = 'eller link:';
+    linkLabel.style.cssText = 'flex-shrink:0; font-size:10px; color:#888;';
+    addRow.appendChild(linkLabel);
+
+    const linkInput = document.createElement('input');
+    linkInput.type = 'text';
+    linkInput.placeholder = 'Billede/video/YouTube-link';
+    linkInput.style.cssText = 'flex-shrink:0; font-size:10px; padding:4px 6px; border-radius:4px; border:1px solid #444; background:#111; color:#eee; width:130px;';
+    const linkBtn = document.createElement('button');
+    linkBtn.textContent = 'Tilføj';
+    linkBtn.style.cssText = 'flex-shrink:0; padding:6px 10px; font-size:11px;';
+    linkBtn.addEventListener('click', () => {
+      const val = linkInput.value.trim();
+      if (!val) return;
+      const isVideo = isYoutubeUrl(val) || /\.(mp4|webm|ogg)(\?|$)/i.test(val);
+      el.slides.push(isVideo
+        ? { type: 'video', url: val, kind: isYoutubeUrl(val) ? 'youtube' : 'direct' }
+        : { type: 'billede', url: val });
+      renderCanvas();
+      renderPropsPanel();
+    });
+    addRow.appendChild(linkInput);
+    addRow.appendChild(linkBtn);
+
+    if (sider.length > 1) {
+      const sideLabel = document.createElement('span');
+      sideLabel.textContent = 'eller side:';
+      sideLabel.style.cssText = 'flex-shrink:0; font-size:10px; color:#888;';
+      addRow.appendChild(sideLabel);
+
+      const sideSelect = document.createElement('select');
+      sideSelect.style.cssText = 'flex-shrink:0; font-size:10px; padding:4px; border-radius:4px; border:1px solid #444; background:#111; color:#eee; width:100px;';
+      const placeholderOpt = document.createElement('option');
+      placeholderOpt.textContent = 'Vælg side...';
+      placeholderOpt.value = '';
+      sideSelect.appendChild(placeholderOpt);
+
+      sider.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.navn;
+        sideSelect.appendChild(opt);
+      });
+
+      sideSelect.addEventListener('change', () => {
+        const id = sideSelect.value;
+        if (!id) return;
+        // Brug live data hvis det er den side vi lige nu redigerer, ellers den gemte version
+        const side = id === aktivSideId
+          ? { elements, background: baggrundsfarve }
+          : sider.find(s => s.id === id);
+        if (side) {
+          // sideId: sliden foelger sidens AKTUELLE indhold live (se opslaaSideSlide i
+          // render-shared.js) -- redigerer man siden bagefter, opdaterer rotator-sliden
+          // sig automatisk med. elements gemmes KUN som fallback (hvis siden slettes).
+          // stripLockedMasterElements: en aeldre side kan have en fastfrosset kopi af
+          // et laast element liggende fra foer det blev rettet -- den skal IKKE med ind
+          // i rotator-sliden, laast indhold kommer udelukkende fra den live fletning.
+          el.slides.push({
+            type: 'side',
+            sideId: id,
+            navn: (sider.find(s => s.id === id) || {}).navn || '',
+            elements: stripLockedMasterElements(JSON.parse(JSON.stringify(side.elements || []))),
+            background: side.background || '#0a0a0a',
+          });
+          renderCanvas();
+          renderPropsPanel();
+        }
+      });
+      addRow.appendChild(sideSelect);
+    }
+
+    return manageBar;
+  }
+
   function buildElementNode(el) {
     const node = document.createElement('div');
     node.className = 'el';
@@ -3182,168 +3361,12 @@
         }
       }
 
-      // Splittet i 2 raekker (indhold OVER tilfoej-kontroller) i stedet for ét langt, faelles
-      // scroll-omraade som foer -- med mange slides skubbede "+"/link/side-kontrollerne bare
-      // laengere og laengere ud af syne til hoejre, saa man skulle scrolle blindt for at finde
-      // dem igen. Nu er "tilfoej"-raekken ALTID synlig lige under, uanset hvor mange slides der
-      // allerede er.
-      const manageBar = document.createElement('div');
-      manageBar.style.cssText = 'height:38%; display:' + (canEdit ? 'flex' : 'none') + '; flex-direction:column; gap:4px; padding:4px; background:#111;';
-
-      const slideRow = document.createElement('div');
-      slideRow.style.cssText = 'flex:1; min-height:0; overflow-x:auto; overflow-y:hidden; display:flex; gap:6px; align-items:center;';
-      manageBar.appendChild(slideRow);
-
-      // Stoerre thumbnails + et taldelt "1/2/3"-badge og en rigtig video-thumbnail (foerste
-      // frame, ikke bare et generisk ▶-ikon) -- de var for smaa og for ens til at kunne
-      // kende slides fra hinanden (tidligere 34px, samme ikon for alle videoer uanset indhold).
-      el.slides.forEach((slide, i) => {
-        const thumb = document.createElement('div');
-        thumb.style.cssText = 'position:relative; width:56px; height:56px; flex-shrink:0; background:#333; border-radius:4px; overflow:hidden;';
-        if (slide.type === 'billede') {
-          const img = document.createElement('img');
-          img.src = slide.url;
-          img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
-          thumb.appendChild(img);
-        } else if (slide.type === 'side') {
-          const ico = document.createElement('div');
-          // Vis sidens NAVN (live-opslag hvis den stadig findes), ikke bare "Side" -- ellers
-          // kan man ikke kende to side-slides fra hinanden i baren.
-          const liveSide = slide.sideId ? sider.find(x => x.id === slide.sideId) : null;
-          ico.textContent = liveSide ? liveSide.navn : (slide.navn || 'Side');
-          ico.title = liveSide
-            ? 'Viser altid sidens aktuelle indhold -- klik for at redigere denne side direkte.'
-            : 'Siden findes ikke længere -- viser sidste kendte indhold.';
-          ico.style.cssText = 'width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:10px; text-align:center; padding:2px; overflow:hidden; color:#eee;';
-          thumb.appendChild(ico);
-          // Klik paa selve thumbnailen (ikke ✕'et, som stopper sin egen event, se rm herunder)
-          // hopper direkte ind i siden -- en side-slide ER en af butikkens egne sider, saa
-          // "redigere den" betyder skifte til dens fane. Kun for side-slides: et billede/
-          // video-slide er direkte materiale i rotatoren, der er ingen side at springe til.
-          if (liveSide) {
-            thumb.style.cursor = 'pointer';
-            thumb.addEventListener('click', () => switchToSide(liveSide.id));
-          }
-        } else {
-          const vid = document.createElement('video');
-          vid.src = slide.url + (slide.kind === 'youtube' ? '' : '#t=0.1');
-          vid.muted = true;
-          vid.preload = 'metadata';
-          vid.style.cssText = 'width:100%; height:100%; object-fit:cover;';
-          thumb.appendChild(vid);
-          if (slide.kind === 'youtube') {
-            const ico = document.createElement('div');
-            ico.textContent = '▶ YouTube';
-            ico.style.cssText = 'position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#aaa; font-size:9px; background:#222;';
-            thumb.appendChild(ico);
-          }
-        }
-        const num = document.createElement('span');
-        num.textContent = String(i + 1);
-        num.style.cssText = 'position:absolute; bottom:0; left:0; background:rgba(0,0,0,.7); color:#fff; font-size:9px; padding:0 4px; border-radius:0 4px 0 0; line-height:1.4;';
-        thumb.appendChild(num);
-        const rm = document.createElement('span');
-        rm.textContent = '✕';
-        rm.style.cssText = 'position:absolute; top:0; right:0; background:rgba(0,0,0,.7); color:#f88; font-size:10px; padding:1px 4px; cursor:pointer;';
-        rm.addEventListener('click', (e) => {
-          e.stopPropagation();
-          el.slides.splice(i, 1);
-          renderCanvas();
-        });
-        thumb.appendChild(rm);
-        slideRow.appendChild(thumb);
-      });
-
-      // Egen "tilfoej"-raekke med 3 tydeligt navngivne veje ind (bibliotek / link / side) --
-      // stod tidligere ublandet imellem selve slide-thumbnailsne uden nogen forklaring paa
-      // HVAD hver kontrol goer, saa det var let at overse eller forveksle med endnu en slide.
-      const addRow = document.createElement('div');
-      addRow.style.cssText = 'flex-shrink:0; display:flex; gap:6px; align-items:center; padding-top:4px; border-top:1px solid #2a2a2a; overflow-x:auto;';
-      manageBar.appendChild(addRow);
-
-      // Aabner medie-biblioteket i sidebaren (samme mekanisme som billede/video-elementers
-      // "Vælg fra bibliotek") -- man kan enten klikke et EKSISTERENDE medie der, eller bruge
-      // sidebarens egen "Upload nyt billede/video" lige nedenunder, som (via armedElementId)
-      // automatisk lander som en ny slide her. Tidligere var denne knap et content-loest "+"
-      // der saa ud som endnu en thumbnail -- nu et tydeligt navngivet, anderledes-formet knap.
-      const addBtn = document.createElement('button');
-      addBtn.textContent = '+ Bibliotek';
-      addBtn.style.cssText = 'flex-shrink:0; padding:6px 10px; font-size:11px; background:#2a2a2a; color:#ddd; border-radius:4px; cursor:pointer;';
-      addBtn.addEventListener('click', () => armForSelection(el));
-      addRow.appendChild(addBtn);
-
-      const linkLabel = document.createElement('span');
-      linkLabel.textContent = 'eller link:';
-      linkLabel.style.cssText = 'flex-shrink:0; font-size:10px; color:#888;';
-      addRow.appendChild(linkLabel);
-
-      const linkInput = document.createElement('input');
-      linkInput.type = 'text';
-      linkInput.placeholder = 'Billede/video/YouTube-link';
-      linkInput.style.cssText = 'flex-shrink:0; font-size:10px; padding:4px 6px; border-radius:4px; border:1px solid #444; background:#111; color:#eee; width:130px;';
-      const linkBtn = document.createElement('button');
-      linkBtn.textContent = 'Tilføj';
-      linkBtn.style.cssText = 'flex-shrink:0; padding:6px 10px; font-size:11px;';
-      linkBtn.addEventListener('click', () => {
-        const val = linkInput.value.trim();
-        if (!val) return;
-        const isVideo = isYoutubeUrl(val) || /\.(mp4|webm|ogg)(\?|$)/i.test(val);
-        el.slides.push(isVideo
-          ? { type: 'video', url: val, kind: isYoutubeUrl(val) ? 'youtube' : 'direct' }
-          : { type: 'billede', url: val });
-        renderCanvas();
-      });
-      addRow.appendChild(linkInput);
-      addRow.appendChild(linkBtn);
-
-      if (sider.length > 1) {
-        const sideLabel = document.createElement('span');
-        sideLabel.textContent = 'eller side:';
-        sideLabel.style.cssText = 'flex-shrink:0; font-size:10px; color:#888;';
-        addRow.appendChild(sideLabel);
-
-        const sideSelect = document.createElement('select');
-        sideSelect.style.cssText = 'flex-shrink:0; font-size:10px; padding:4px; border-radius:4px; border:1px solid #444; background:#111; color:#eee; width:100px;';
-        const placeholderOpt = document.createElement('option');
-        placeholderOpt.textContent = 'Vælg side...';
-        placeholderOpt.value = '';
-        sideSelect.appendChild(placeholderOpt);
-
-        sider.forEach(s => {
-          const opt = document.createElement('option');
-          opt.value = s.id;
-          opt.textContent = s.navn;
-          sideSelect.appendChild(opt);
-        });
-
-        sideSelect.addEventListener('change', () => {
-          const id = sideSelect.value;
-          if (!id) return;
-          // Brug live data hvis det er den side vi lige nu redigerer, ellers den gemte version
-          const side = id === aktivSideId
-            ? { elements, background: baggrundsfarve }
-            : sider.find(s => s.id === id);
-          if (side) {
-            // sideId: sliden foelger sidens AKTUELLE indhold live (se opslaaSideSlide i
-            // render-shared.js) -- redigerer man siden bagefter, opdaterer rotator-sliden
-            // sig automatisk med. elements gemmes KUN som fallback (hvis siden slettes).
-            // stripLockedMasterElements: en aeldre side kan have en fastfrosset kopi af
-            // et laast element liggende fra foer det blev rettet -- den skal IKKE med ind
-            // i rotator-sliden, laast indhold kommer udelukkende fra den live fletning.
-            el.slides.push({
-              type: 'side',
-              sideId: id,
-              navn: (sider.find(s => s.id === id) || {}).navn || '',
-              elements: stripLockedMasterElements(JSON.parse(JSON.stringify(side.elements || []))),
-              background: side.background || '#0a0a0a',
-            });
-            renderCanvas();
-          }
-        });
-        addRow.appendChild(sideSelect);
-      }
-
-      body.appendChild(manageBar);
+      // Slide-styringen (thumbnails/tilfoej) er en delt funktion (buildRotatorManageBar,
+      // se ovenfor) -- vises her KUN inline naar der reelt er plads til det (canEdit). Den
+      // egentlige, ALTID brugbare vej til at styre slides er nu Egenskaber-panelet i
+      // sidebaren (renderPropsPanel), som ikke er begraenset af boksens egen (evt. meget
+      // lave, "banner") hoejde paa canvas.
+      if (canEdit) body.appendChild(buildRotatorManageBar(el, false));
     } else if (el.type === 'miljoeffekt') {
       const { wrap, card } = buildMiljoeffektKort(el);
       card.textContent = 'Henter live data...';
@@ -3653,6 +3676,13 @@
     document.getElementById('propsIntervalRow').style.display = isRotator ? 'block' : 'none';
     if (isRotator) {
       document.getElementById('propInterval').value = Math.round((el.intervalMs || 30000) / 1000);
+    }
+
+    document.getElementById('propsRotatorSlidesRow').style.display = isRotator ? 'block' : 'none';
+    if (isRotator) {
+      const slidesBody = document.getElementById('propsRotatorSlidesBody');
+      slidesBody.innerHTML = '';
+      if (canEditSelected) slidesBody.appendChild(buildRotatorManageBar(el, true));
     }
 
     document.getElementById('propsScrollRow').style.display = isNyhedsbanner ? 'block' : 'none';
