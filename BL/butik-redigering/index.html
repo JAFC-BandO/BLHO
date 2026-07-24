@@ -3380,12 +3380,16 @@
       // widgeten -- traek direkte i den, eller pile-tast for finjustering (se
       // startVejrHeadingDrag og PILE_RETNINGER-haandteringen). stopPropagation forhindrer
       // at traekket ogsaa flytter/vaelger hele boksen (node's egen pointerdown/click).
-      // OBS: overskrift-drag er ALTID tilladt, ogsaa naar elementet er laast (locked) --
-      // placering af teksten er en per-butik-justering, ikke en indholdssaendring. Vi
-      // saetter pointer-events:auto paa overskriften eksplicit, fordi en laast node faar
-      // pointer-events:none paa rodnivaa (se lidt laengere oppe), hvilket ellers ville
-      // blokere al interaktion inde i widgeten.
-      {
+      // OBS: overskrift-drag er tilladt i to tilfaelde:
+      //  1) Superadmin redigerer faelles skabelon (masterEditMode) -- her er elementet ikke
+      //     laast endnu, og canEdit er true, men vi vil stadig tilbyde heading-drag.
+      //  2) Elementet er laast (vejr kommer fra faelles skabelon, vises i en butiks canvas)
+      //     -- placering af overskriften er en per-butik-justering, ikke en indholds-
+      //     aendring. Vi saetter pointer-events:auto eksplicit, da en laast node faar
+      //     pointer-events:none paa rodnivaa.
+      // En normal admins EGET (ikke-laaste) vejr-element kan IKKE flytte overskriften
+      // separat -- der flyttes hele boksen som normalt.
+      if (masterEditMode || el.locked) {
         const heading = vejr.querySelector('.vejr-heading');
         heading.style.cursor = 'move';
         heading.style.pointerEvents = 'auto';
