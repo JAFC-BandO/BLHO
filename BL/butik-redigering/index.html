@@ -702,7 +702,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master93';
+  const SCRIPT_VERSION = '2026-07-20-master94';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1268,6 +1268,12 @@
     'pgrep -af tailscaled',
     'df -h',
     'ps aux',
+    // Klik-i-stedet-for-skriv: fritekst-feltet er let at lave tastefejl i (bekraeftet 24. juli
+    // 2026 -- "exporet"/"pgrp"-tastefejl fik en fejlfindings-kommando til stille at fejle uden
+    // klart fejlsvar). Disse to er specifikt til at faa SSH i gang igen NAAR check-in-loopet
+    // stadig svarer fint, men sshd-daemonen selv er nede.
+    'pgrep -af sshd',
+    'pkill -f sshd; sleep 1; sshd',
   ];
 
   // Selv-gemte hurtig-kommandoer (lokalt i browseren, per-admin) -- ud over de faste
