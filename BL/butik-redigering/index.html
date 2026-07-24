@@ -2857,9 +2857,13 @@
     if (!selectedElementId) return;
     const selEl = elements.find(x => x.id === selectedElementId);
     if (!selEl) return;
-    if (selEl.locked && !masterEditMode) return;
+    // Laast element: de fleste tastatur-handlinger er blokerede -- UNDTAGELSE er pileflytning
+    // af vejr-overskriftens placering (en per-butik-justering, ikke en indholdssaendring).
+    const vejrHeadingOnly = selEl.locked && !masterEditMode
+      && selectedVejrHeadingId === selEl.id && selEl.type === 'vejr';
+    if (selEl.locked && !masterEditMode && !vejrHeadingOnly) return;
 
-    if (e.key === 'Delete' || e.key === 'Backspace') {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !vejrHeadingOnly) {
       e.preventDefault();
       elements = elements.filter(x => x.id !== selectedElementId);
       selectedElementId = null;
@@ -3376,9 +3380,15 @@
       // widgeten -- traek direkte i den, eller pile-tast for finjustering (se
       // startVejrHeadingDrag og PILE_RETNINGER-haandteringen). stopPropagation forhindrer
       // at traekket ogsaa flytter/vaelger hele boksen (node's egen pointerdown/click).
-      if (canEdit) {
+      // OBS: overskrift-drag er ALTID tilladt, ogsaa naar elementet er laast (locked) --
+      // placering af teksten er en per-butik-justering, ikke en indholdssaendring. Vi
+      // saetter pointer-events:auto paa overskriften eksplicit, fordi en laast node faar
+      // pointer-events:none paa rodnivaa (se lidt laengere oppe), hvilket ellers ville
+      // blokere al interaktion inde i widgeten.
+      {
         const heading = vejr.querySelector('.vejr-heading');
         heading.style.cursor = 'move';
+        heading.style.pointerEvents = 'auto';
         heading.addEventListener('pointerdown', (e) => {
           e.stopPropagation();
           selectElement(el.id);
