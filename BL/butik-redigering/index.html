@@ -416,6 +416,7 @@
           <option value="js_fejl">JS-fejl</option>
           <option value="status">Status (heartbeat)</option>
           <option value="checkin_loop_start">Check-in-loop startet</option>
+          <option value="proaktiv_genstart">Proaktiv genstart (lav hukommelse)</option>
         </select>
       </div>
 
@@ -701,7 +702,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master92';
+  const SCRIPT_VERSION = '2026-07-20-master93';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -1696,7 +1697,7 @@
       .then(({ error }) => { if (error) console.warn('[aktivitetslog] kunne ikke logge:', error.message); });
   }
 
-  const HANDLING_LABELS = { login: 'Login', gem_indhold: 'Gemte indhold', gem_skabelon: 'Gemte fælles skabelon', js_fejl: 'JS-fejl', status: 'Status', checkin_loop_start: 'Check-in-loop startet' };
+  const HANDLING_LABELS = { login: 'Login', gem_indhold: 'Gemte indhold', gem_skabelon: 'Gemte fælles skabelon', js_fejl: 'JS-fejl', status: 'Status', checkin_loop_start: 'Check-in-loop startet', proaktiv_genstart: 'Proaktiv genstart (lav hukommelse)' };
 
   async function loadAktivitetslog() {
     const butikFilter = document.getElementById('aktivitetslogButikFilter').value;
