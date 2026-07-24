@@ -451,8 +451,8 @@ function buildVejrNode(el, registerInterval) {
   let harIndlaestFoerste = false;
   const load = () => {
     const navn = hentAktuelButikNavn();
-    if (!navn) return;
     heading.textContent = navn ? 'Vejret i dag (' + navn + ')' : 'Vejret i dag';
+    if (!navn) return;
     fetchVejrData(navn).then(data => {
       nuIkon.innerHTML = vejrIkonHtml(data.nu.weathercode);
       temp.textContent = Math.round(data.nu.temperature) + '°';

@@ -10,7 +10,7 @@
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
 <link rel="stylesheet" href="../render-shared.css?v=2026-07-20-32">
-<script src="../render-shared.js?v=2026-07-24-33"></script>
+<script src="../render-shared.js?v=2026-07-24-34"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -3389,7 +3389,7 @@
       //     pointer-events:none paa rodnivaa.
       // En normal admins EGET (ikke-laaste) vejr-element kan IKKE flytte overskriften
       // separat -- der flyttes hele boksen som normalt.
-      if (masterEditMode || el.locked) {
+      if (masterEditMode) {
         const heading = vejr.querySelector('.vejr-heading');
         heading.style.cursor = 'move';
         heading.style.pointerEvents = 'auto';
