@@ -565,6 +565,11 @@
           <input type="number" id="propMiljoeBredde" min="10" max="100" step="5" style="width:80px;" placeholder="auto">
           <div style="font-size:11px; color:#888; margin-top:4px;">Kortet centreres altid i boksen med baggrunden rundt om. Lad bredden stå tom, så holder kortet automatisk et slankt 3:4-format ud fra højden -- sæt kun et tal hvis du selv vil styre bredden.</div>
         </div>
+        <div id="propsVejrHeadingRow" style="margin-bottom:12px; display:none;">
+          <label style="margin-top:0;">Overskriftens placering ("Vejret i dag (by)")</label>
+          <div style="font-size:11px; color:#888; margin:2px 0 6px 0;">Træk direkte i teksten på canvas for at flytte den, eller marker den (klik på den) og brug piletasterne til finjustering.</div>
+          <button id="propVejrHeadingResetBtn" style="padding:6px 10px; font-size:12px;">Nulstil placering</button>
+        </div>
         <div id="propsFontSizeRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Skriftstørrelse (vw)</label>
           <input type="number" id="propFontSize" min="0.5" max="20" step="0.1" style="width:80px;">
@@ -702,7 +707,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-20-master94';
+  const SCRIPT_VERSION = '2026-07-24-master94';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -762,6 +767,10 @@
   let aktuelBrugerNavn = null;
   let armedElementId = null;
   let selectedElementId = null;
+  // Naar man klikker direkte paa et vejr-elements overskrift ("Vejret i dag (by)"), er det
+  // DEN (ikke hele boksen) pile-tasterne skal flytte, indtil man vaelger noget andet -- se
+  // PILE_RETNINGER-haandteringen og startVejrHeadingDrag.
+  let selectedVejrHeadingId = null;
   let rotatorIntervals = [];
   let masterTemplate = null; // { id, elements, background } | null -- den delte "sabloner" standard-raekke
   let masterEditMode = false;
@@ -2863,14 +2872,22 @@
       e.preventDefault();
       const trin = e.shiftKey ? 1 : 0.2;
       const [dx, dy] = PILE_RETNINGER[e.key];
-      selEl.x = Math.round((selEl.x + dx * trin) * 100) / 100;
-      selEl.y = Math.round((selEl.y + dy * trin) * 100) / 100;
+      if (selectedVejrHeadingId === selEl.id && selEl.type === 'vejr') {
+        // Samme trin-stoerrelse som normal element-flytning, blot i cqw/cqh (se
+        // buildVejrNode) i stedet for %-af-canvas -- foeles derfor lige saa fint/groft.
+        selEl.vejrHeadingX = Math.round(((selEl.vejrHeadingX || 0) + dx * trin) * 100) / 100;
+        selEl.vejrHeadingY = Math.round(((selEl.vejrHeadingY || 0) + dy * trin) * 100) / 100;
+      } else {
+        selEl.x = Math.round((selEl.x + dx * trin) * 100) / 100;
+        selEl.y = Math.round((selEl.y + dy * trin) * 100) / 100;
+      }
       renderCanvas();
     }
   });
 
   canvas.addEventListener('click', (e) => {
     if (e.target !== canvas) return;
+    selectedVejrHeadingId = null;
     if (selectedElementId) {
       const prev = canvas.querySelector('.el.selected');
       if (prev) prev.classList.remove('selected');
@@ -3352,9 +3369,23 @@
     } else if (el.type === 'vejr') {
       // buildVejrNode regner selv sin skriftstoerrelse ud fra elementets egen rect, ligesom
       // buildUrNode -- ingen ekstra editor-specifik korrektion noedvendig her.
-      const vejr = buildVejrNode(id => rotatorIntervals.push(id));
+      const vejr = buildVejrNode(el, id => rotatorIntervals.push(id));
       body.appendChild(vejr);
       anvendIndholdsSkala(vejr, el);
+      // Overskriften ("Vejret i dag (by)") kan flyttes FRIT, uafhaengigt af resten af
+      // widgeten -- traek direkte i den, eller pile-tast for finjustering (se
+      // startVejrHeadingDrag og PILE_RETNINGER-haandteringen). stopPropagation forhindrer
+      // at traekket ogsaa flytter/vaelger hele boksen (node's egen pointerdown/click).
+      if (canEdit) {
+        const heading = vejr.querySelector('.vejr-heading');
+        heading.style.cursor = 'move';
+        heading.addEventListener('pointerdown', (e) => {
+          e.stopPropagation();
+          selectElement(el.id);
+          selectedVejrHeadingId = el.id;
+          startVejrHeadingDrag(e, el, vejr, heading);
+        });
+      }
     }
 
     if (el.type === 'streg') {
@@ -3484,6 +3515,11 @@
   }
 
   function selectElement(id) {
+    // Et almindeligt klik paa selve boksen betyder "jeg vil flytte/redigere HELE elementet" --
+    // en evt. tidligere "traek kun overskriften"-tilstand (se startVejrHeadingDrag) skal
+    // ryddes, ellers ville pile-tasterne blive ved med at flytte overskriften i stedet for
+    // boksen efter man har klikket vaek fra den.
+    selectedVejrHeadingId = null;
     if (selectedElementId === id) return;
     const prev = canvas.querySelector('.el.selected');
     if (prev) prev.classList.remove('selected');
@@ -3574,6 +3610,7 @@
     document.getElementById('propsContentScaleRow').style.display = harSkalerbartIndhold ? 'block' : 'none';
     document.getElementById('propContentScale').value = el.contentScale || 100;
     document.getElementById('propsMiljoeKortRow').style.display = el.type === 'miljoeffekt' ? 'block' : 'none';
+    document.getElementById('propsVejrHeadingRow').style.display = el.type === 'vejr' ? 'block' : 'none';
     document.getElementById('propMiljoeHoejde').value = el.kortHoejdePct || 100;
     // Tom bredde = automatisk 3:4-format (CSS'ens aspect-ratio) -- derfor IKKE en 100-fallback
     // her: feltet skal vise tomt, saa "auto"-placeholderen kan ses.
@@ -3704,6 +3741,14 @@
     const el = elements.find(x => x.id === selectedElementId);
     if (!el) return;
     delete el.boxColor;
+    renderCanvas();
+  });
+
+  document.getElementById('propVejrHeadingResetBtn').addEventListener('click', () => {
+    const el = elements.find(x => x.id === selectedElementId);
+    if (!el) return;
+    delete el.vejrHeadingX;
+    delete el.vejrHeadingY;
     renderCanvas();
   });
 
@@ -3883,6 +3928,34 @@
       // "fyld automatisk resten"-plads snappe til den nye placering med det samme -- ellers
       // ville den foerst rette sig efter naeste, ubeslaegtede gentegning.
       if (masterEditMode) renderCanvas();
+    }
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  }
+
+  // Flytter KUN vejr-widgetens overskrift ("Vejret i dag (by)"), ikke hele boksen -- ingen
+  // snapping mod andre elementer (giver ikke mening for tekst inde i en boks). cqw/cqh (ikke
+  // %) fordi de er relative til .vejr-wrap (den element vi maaler paa her) uanset boksens
+  // egen stoerrelse -- se tilsvarende kommentar i buildVejrNode (render-shared.js).
+  function startVejrHeadingDrag(e, el, wrapNode, headingNode) {
+    e.preventDefault();
+    const rect = wrapNode.getBoundingClientRect();
+    const startX = e.clientX, startY = e.clientY;
+    const startOffsetX = el.vejrHeadingX || 0;
+    const startOffsetY = el.vejrHeadingY || 0;
+
+    function onMove(ev) {
+      const dCqw = ((ev.clientX - startX) / rect.width) * 100;
+      const dCqh = ((ev.clientY - startY) / rect.height) * 100;
+      el.vejrHeadingX = Math.round((startOffsetX + dCqw) * 100) / 100;
+      el.vejrHeadingY = Math.round((startOffsetY + dCqh) * 100) / 100;
+      headingNode.style.position = 'relative';
+      headingNode.style.left = el.vejrHeadingX + 'cqw';
+      headingNode.style.top = el.vejrHeadingY + 'cqh';
+    }
+    function onUp() {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
     }
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);

@@ -408,12 +408,22 @@ function vejrDagNavn(datoStreng) {
   return navn.charAt(0).toUpperCase() + navn.slice(1);
 }
 
-function buildVejrNode(registerInterval) {
+function buildVejrNode(el, registerInterval) {
   const wrap = document.createElement('div');
   wrap.className = 'vejr-wrap';
 
   const heading = document.createElement('div');
   heading.className = 'vejr-heading';
+  // Fri placering af overskriften ALENE (resten af widgeten ligger fast i sin normale
+  // flex-column-plads) -- admin kan traekke/pile-taste den rundt i redigeringen (se
+  // startVejrHeadingDrag i butik-redigering/index.html). cqw/cqh (ikke %) fordi %  paa
+  // et transform/position vil vaere relativt til overskriftens EGEN (tekst-hoejde-lille)
+  // boks, ikke hele widgetens -- cqw/cqh er altid relativt til .vejr-wrap uanset stoerrelse.
+  if (el && (el.vejrHeadingX || el.vejrHeadingY)) {
+    heading.style.position = 'relative';
+    heading.style.left = (el.vejrHeadingX || 0) + 'cqw';
+    heading.style.top = (el.vejrHeadingY || 0) + 'cqh';
+  }
   wrap.appendChild(heading);
   wrap.appendChild(vejrHrNode());
 
@@ -866,7 +876,7 @@ function buildElNode(el, registerInterval) {
     node.appendChild(banner);
     anvendIndholdsSkala(banner, el);
   } else if (el.type === 'vejr') {
-    const vejr = buildVejrNode(registerInterval);
+    const vejr = buildVejrNode(el, registerInterval);
     node.appendChild(vejr);
     anvendIndholdsSkala(vejr, el);
   }
