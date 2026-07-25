@@ -593,11 +593,6 @@
           <label style="margin-top:0;">Interval mellem slides (sek)</label>
           <input type="number" id="propInterval" min="1" max="120" step="1" style="width:80px;">
         </div>
-        <div id="propsRotatorSlidesRow" style="margin-bottom:12px; display:none;">
-          <label style="margin-top:0;">Slides</label>
-          <div style="font-size:11px; color:#888; margin:2px 0 6px 0;">Klik på en slide for at se hvad den er (springer direkte til siden, hvis det er en side-slide), eller ✕ for at fjerne den. Virker her uanset hvor lille selve vinduet er på canvas (fx banneret).</div>
-          <div id="propsRotatorSlidesBody" style="background:#111; border-radius:8px; padding:8px;"></div>
-        </div>
         <div id="propsScrollRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Rulle-hastighed (sekunder per gennemløb)</label>
           <input type="number" id="propScrollSekunder" min="10" max="300" step="5" style="width:80px;">
@@ -980,6 +975,15 @@
         aktivSideId = side.id;
       }
     } else {
+      // KRITISK: ingen eksisterende content-raekke for denne butik endnu -- currentContentId
+      // SKAL nulstilles her. Ellers beholder den den FORRIGE butiks id (sat af et tidligere
+      // loadButikData-kald), og et efterfoelgende "Gem" ville lave et UPDATE mod den forrige
+      // butiks raekke i stedet for et INSERT for denne nye butik -- overskriver saa den
+      // forrige butiks indhold med denne butiks (tomme) standard-side. Bekraeftet hændt i
+      // praksis 25. juli 2026: Horsens' fulde multi-side-indhold blev overskrevet med en tom
+      // standard-side, fordi superadmin kiggede på Vanløse (ingen content-raekke) lige efter
+      // Horsens, og currentContentId stod stadig paa Horsens' id.
+      currentContentId = null;
       const std = standardSideData();
       const side = {
         id: uid(),
@@ -2905,22 +2909,15 @@
     }
   });
 
-  // Bygger diasshow-styringen (slide-thumbnails med nummer/fjern + "tilføj"-raekken).
-  // Udtrukket til sin egen funktion, saa den kan bruges BAADE inline i selve canvas-boksen
-  // (som foer) OG i Egenskaber-panelet i sidebaren (standalone:true) -- sidstnaevnte blev
-  // noedvendigt fordi manageBar's inline hoejde er en PROCENTDEL af boksens EGEN hoejde
-  // (38%), hvilket virker fint for det store "hoved"-vindue, men gjorde thumbnails/knapper
-  // ubrugeligt smaa i det korte, vandrette "banner"-vindue. I sidebaren er der ingen fast
-  // forael der-hoejde at vaere procent af, saa der bruges i stedet naturlig stoerrelse.
-  function buildRotatorManageBar(el, standalone) {
+  // Bygger diasshow-styringen (slide-thumbnails med nummer/fjern + "tilføj"-raekken), inline i
+  // selve canvas-boksen. Udtrukket til sin egen funktion udelukkende for at undgaa at gentage
+  // den samme, ret lange kode to steder i buildElementNode.
+  function buildRotatorManageBar(el) {
     const manageBar = document.createElement('div');
-    manageBar.style.cssText = standalone
-      ? 'display:flex; flex-direction:column; gap:4px;'
-      : 'height:38%; display:flex; flex-direction:column; gap:4px; padding:4px; background:#111;';
+    manageBar.style.cssText = 'height:38%; display:flex; flex-direction:column; gap:4px; padding:4px; background:#111;';
 
     const slideRow = document.createElement('div');
-    slideRow.style.cssText = 'flex:1; min-height:0; overflow-x:auto; overflow-y:hidden; display:flex; gap:6px; align-items:center;'
-      + (standalone ? ' flex-wrap:wrap; min-height:60px;' : '');
+    slideRow.style.cssText = 'flex:1; min-height:0; overflow-x:auto; overflow-y:hidden; display:flex; gap:6px; align-items:center;';
     manageBar.appendChild(slideRow);
 
     // Stoerre thumbnails + et taldelt "1/2/3"-badge og en rigtig video-thumbnail (foerste
@@ -2988,8 +2985,7 @@
     // stod tidligere ublandet imellem selve slide-thumbnailsne uden nogen forklaring paa
     // HVAD hver kontrol goer, saa det var let at overse eller forveksle med endnu en slide.
     const addRow = document.createElement('div');
-    addRow.style.cssText = 'flex-shrink:0; display:flex; gap:6px; align-items:center; padding-top:4px; border-top:1px solid #2a2a2a; overflow-x:auto;'
-      + (standalone ? ' flex-wrap:wrap;' : '');
+    addRow.style.cssText = 'flex-shrink:0; display:flex; gap:6px; align-items:center; padding-top:4px; border-top:1px solid #2a2a2a; overflow-x:auto;';
     manageBar.appendChild(addRow);
 
     // Aabner medie-biblioteket i sidebaren (samme mekanisme som billede/video-elementers
@@ -3366,7 +3362,7 @@
       // egentlige, ALTID brugbare vej til at styre slides er nu Egenskaber-panelet i
       // sidebaren (renderPropsPanel), som ikke er begraenset af boksens egen (evt. meget
       // lave, "banner") hoejde paa canvas.
-      if (canEdit) body.appendChild(buildRotatorManageBar(el, false));
+      if (canEdit) body.appendChild(buildRotatorManageBar(el));
     } else if (el.type === 'miljoeffekt') {
       const { wrap, card } = buildMiljoeffektKort(el);
       card.textContent = 'Henter live data...';
@@ -3678,12 +3674,6 @@
       document.getElementById('propInterval').value = Math.round((el.intervalMs || 30000) / 1000);
     }
 
-    document.getElementById('propsRotatorSlidesRow').style.display = isRotator ? 'block' : 'none';
-    if (isRotator) {
-      const slidesBody = document.getElementById('propsRotatorSlidesBody');
-      slidesBody.innerHTML = '';
-      if (canEditSelected) slidesBody.appendChild(buildRotatorManageBar(el, true));
-    }
 
     document.getElementById('propsScrollRow').style.display = isNyhedsbanner ? 'block' : 'none';
     if (isNyhedsbanner) {
@@ -4097,7 +4087,11 @@
     let error, updatedRows;
 
     if (currentContentId) {
-      const res = await client.from('content').update(payload).eq('id', currentContentId).select();
+      // EKSTRA sikkerhedsnet ud over id-matchet: filtrer OGSAA paa butik_id. Rammer et evt.
+      // fremtidigt stale-currentContentId-tilfaelde (som 25. juli 2026-haendelsen, se
+      // loadButikData) 0 raekker i stedet for at overskrive en ANDEN butiks raekke -- koden
+      // herunder viser allerede en tydelig advarsel naar en update rammer 0 raekker.
+      const res = await client.from('content').update(payload).eq('id', currentContentId).eq('butik_id', currentButikId).select();
       error = res.error;
       updatedRows = res.data;
       console.log('[redigering-debug] Update-resultat, raekker ramt:', updatedRows ? updatedRows.length : 0, updatedRows);
