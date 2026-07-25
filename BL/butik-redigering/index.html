@@ -707,7 +707,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-25-master97';
+  const SCRIPT_VERSION = '2026-07-25-master98';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -2870,12 +2870,13 @@
     if (el.locked && !masterEditMode) return;
 
     slideOverlayNode = document.createElement('div');
-    // Centreret (ikke bund-forankret) saa et panel med mange slides (flere raekker
-    // thumbnails) kan vokse i BEGGE retninger uden at blive skaaret af skaermkanten --
-    // bund-forankring ville ellers presse et hoejt panel op over toppen af skaermen.
-    // max-height er en sikkerhedsgraense for et urealistisk stort antal slides, ikke noget
-    // der forventes at ramme ved normal brug.
-    slideOverlayNode.style.cssText = 'position:fixed; z-index:1000; top:50%; left:50%; transform:translate(-50%, -50%); width:460px; max-width:94vw; max-height:92vh; overflow-y:auto; background:#111; border-radius:8px; padding:12px; box-shadow:0 8px 24px rgba(0,0,0,.45);';
+    // Bund-forankret (foretrukket frem for centreret), men max-height er udregnet fra selve
+    // vinduets hoejde (calc(100vh - 32px)) i stedet for en fast vh-procent -- saa panelet
+    // altid kan vokse HELT op til (men aldrig forbi) toppen af skaermen, uanset hvor mange
+    // raekker thumbnails det indeholder. Det var det, der manglede foer: en vh-procent taeller
+    // ikke med at panelet ALLEREDE starter 16px fra bunden, saa det kunne stadig blive skaaret
+    // af/kraeve scroll foer det reelt ramte skaermkanten.
+    slideOverlayNode.style.cssText = 'position:fixed; z-index:1000; bottom:16px; left:50%; transform:translateX(-50%); width:460px; max-width:94vw; max-height:calc(100vh - 32px); overflow-y:auto; background:#111; border-radius:8px; padding:12px; box-shadow:0 8px 24px rgba(0,0,0,.45);';
     const titel = document.createElement('div');
     titel.textContent = 'Slides — ' + (el.slotId ? el.slotId : 'diasshow');
     titel.style.cssText = 'color:#aaa; font-size:12px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px;';
