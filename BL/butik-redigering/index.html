@@ -707,7 +707,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-25-master103';
+  const SCRIPT_VERSION = '2026-07-25-master104';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -878,29 +878,6 @@
 
   // ---------- Login / bootstrap ----------
 
-  // Saetter canvas/Live View til PRAECIS samme billedformat som butikkens fysiske skaerm
-  // rent faktisk har (rapporteret af enhedens check-in-script via `wm size`) -- i stedet for
-  // en fast antaget 16:9. Uden dette kunne elementer se rigtigt placerede ud i editoren, men
-  // ligge delvist uden for hvad den ægte skaerm har plads til at vise. Ingen kendt oploesning
-  // endnu (ny enhed, eller et aeldre check-in-script) -> falder tilbage til CSS'ens 16:9.
-  async function anvendSkaermFormat(butikId) {
-    const { data } = await client
-      .from('enheder')
-      .select('skaerm_bredde, skaerm_hoejde')
-      .eq('butik_id', butikId)
-      .not('skaerm_bredde', 'is', null)
-      .not('skaerm_hoejde', 'is', null)
-      .order('sidst_set_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const forhold = (data && data.skaerm_bredde && data.skaerm_hoejde)
-      ? (data.skaerm_bredde + ' / ' + data.skaerm_hoejde)
-      : '';
-    canvas.style.aspectRatio = forhold;
-    const liveBox = document.getElementById('liveViewBox');
-    if (liveBox) liveBox.style.aspectRatio = forhold;
-  }
-
   // Saetter "Se [butik]s skaerm"-linket til at baere ?butik_id= for den butik man FAKTISK
   // kigger paa lige nu -- uden dette landede en superadmin med "skift butik" altid paa sin
   // egen hjemme-butik i skaerm.html (hvis de allerede havde en gemt session der fra
@@ -1005,7 +982,6 @@
     console.log('[redigering-debug] Indlaest sider fra DB:', sider.map(s => s.navn + ': ' + s.elements.map(e => e.type).join(',')).join(' | '));
 
     canvas.style.background = baggrundsfarve;
-    await anvendSkaermFormat(butikId);
     await loadMedia();
     renderSiderTabs();
     renderCanvas();
