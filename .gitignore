@@ -14,6 +14,7 @@ supabase/migration_tailscale_status.sql
 supabase/migration_nightly_reboot.sql
 supabase/migration_nightly_backup.sql
 supabase/migration_enhed_hukommelse.sql
+supabase/migration_backup_butik_id.sql
 media/
 SUPABASE.md
 ANDROID-KIOSK-SETUP.md
