@@ -707,7 +707,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-25-master98';
+  const SCRIPT_VERSION = '2026-07-25-master99';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -2876,7 +2876,11 @@
     // raekker thumbnails det indeholder. Det var det, der manglede foer: en vh-procent taeller
     // ikke med at panelet ALLEREDE starter 16px fra bunden, saa det kunne stadig blive skaaret
     // af/kraeve scroll foer det reelt ramte skaermkanten.
-    slideOverlayNode.style.cssText = 'position:fixed; z-index:1000; bottom:16px; left:50%; transform:translateX(-50%); width:460px; max-width:94vw; max-height:calc(100vh - 32px); overflow-y:auto; background:#111; border-radius:8px; padding:12px; box-shadow:0 8px 24px rgba(0,0,0,.45);';
+    // Bredere (900px, ikke 460) saa flere thumbnails staar paa SAMME raekke i stedet for at
+    // pakke sig i flere raekker ovenpaa hinanden -- det var det, der stadig udloeste en
+    // (unoedvendig) lodret scrollbar: nok raekker thumbnails + tilfoej-kontrollerne kunne
+    // stadig samlet blive hoejere end skaermen, selv med korrekt udregnet max-height.
+    slideOverlayNode.style.cssText = 'position:fixed; z-index:1000; bottom:16px; left:50%; transform:translateX(-50%); width:900px; max-width:96vw; max-height:calc(100vh - 32px); overflow-y:auto; background:#111; border-radius:8px; padding:12px; box-shadow:0 8px 24px rgba(0,0,0,.45);';
     const titel = document.createElement('div');
     titel.textContent = 'Slides — ' + (el.slotId ? el.slotId : 'diasshow');
     titel.style.cssText = 'color:#aaa; font-size:12px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px;';
