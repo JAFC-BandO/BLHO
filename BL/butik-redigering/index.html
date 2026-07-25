@@ -2855,34 +2855,28 @@
   // gang canvas gentegnes eller et element (de)vaelges -- fjernes helt igen naar intet (eller
   // noget andet end et diasshow) er valgt.
   let slideOverlayNode = null;
+  // Fast, forudsigelig placering (bund-midt af hele vinduet) i stedet for at udregne en
+  // position ud fra det valgte elements egen boks (getBoundingClientRect) -- sidstnaevnte
+  // virkede fint for hoved-vinduet, men viste sig UPAALIDELIGT for banner-vinduet (helt
+  // oeverst paa canvas). I stedet for at blive ved med at jagte den praecise aarsag (kunne
+  // ikke faa fejlsoegnings-output fra en anden pc), er en fast placering en mere robust
+  // loesning -- den er umulig at faa til at havne forkert, uanset hvilket element paa
+  // canvas der er valgt.
   function updateSlideOverlay() {
     if (slideOverlayNode) { slideOverlayNode.remove(); slideOverlayNode = null; }
-    console.log('[slide-overlay-debug] selectedElementId=', selectedElementId, 'masterEditMode=', masterEditMode);
     if (masterEditMode || !selectedElementId) return;
     const el = elements.find(e => e.id === selectedElementId);
-    console.log('[slide-overlay-debug] el=', el && { id: el.id, type: el.type, slotId: el.slotId, locked: el.locked, slidesLen: el.slides && el.slides.length });
-    if (!el || el.type !== 'rotator') { console.log('[slide-overlay-debug] afbrudt: ikke rotator'); return; }
-    if (el.locked && !masterEditMode) { console.log('[slide-overlay-debug] afbrudt: locked'); return; }
-    const node = canvas.querySelector('[data-el-id="' + selectedElementId + '"]');
-    console.log('[slide-overlay-debug] node fundet?', !!node);
-    if (!node) return;
-    const rect = node.getBoundingClientRect();
-    console.log('[slide-overlay-debug] rect=', JSON.stringify(rect));
-    const BREDDE = 340, MAKS_HOEJDE = 170;
+    if (!el || el.type !== 'rotator') return;
+    if (el.locked && !masterEditMode) return;
 
     slideOverlayNode = document.createElement('div');
-    slideOverlayNode.style.cssText = 'position:fixed; z-index:1000; width:' + BREDDE + 'px; max-width:90vw; background:#111; border-radius:8px; padding:8px; box-shadow:0 8px 24px rgba(0,0,0,.45);';
-    // Under boksen hvis der er plads, ellers ovenover den -- saa panelet aldrig selv ryger
-    // ud over skaermkanten (relevant netop for banneret, som ofte sidder helt oeverst).
-    const pladsUnder = window.innerHeight - rect.bottom;
-    slideOverlayNode.style.top = (pladsUnder > MAKS_HOEJDE ? rect.bottom + 6 : Math.max(6, rect.top - MAKS_HOEJDE - 6)) + 'px';
-    let left = rect.left;
-    if (left + BREDDE + 6 > window.innerWidth) left = window.innerWidth - BREDDE - 6;
-    if (left < 6) left = 6;
-    slideOverlayNode.style.left = left + 'px';
+    slideOverlayNode.style.cssText = 'position:fixed; z-index:1000; bottom:16px; left:50%; transform:translateX(-50%); width:340px; max-width:90vw; background:#111; border-radius:8px; padding:8px; box-shadow:0 8px 24px rgba(0,0,0,.45);';
+    const titel = document.createElement('div');
+    titel.textContent = 'Slides — ' + (el.slotId ? el.slotId : 'diasshow');
+    titel.style.cssText = 'color:#aaa; font-size:10px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;';
+    slideOverlayNode.appendChild(titel);
     slideOverlayNode.appendChild(buildRotatorManageBar(el));
     document.body.appendChild(slideOverlayNode);
-    console.log('[slide-overlay-debug] overlay tilfoejet, top=', slideOverlayNode.style.top, 'left=', slideOverlayNode.style.left, 'window=', window.innerWidth, window.innerHeight);
   }
 
   let resizeTimer = null;
