@@ -124,7 +124,7 @@
   .upload-label input { display: none; }
 
   /* --- Canvas --- */
-  .canvas-outer { background: white; border-radius: 10px; padding: 14px; }
+  .canvas-outer { background: white; border-radius: 10px; padding: 14px; max-width: 800px; margin: 0 auto; }
   .canvas {
     position: relative;
     width: 100%;
@@ -707,7 +707,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-25-master99';
+  const SCRIPT_VERSION = '2026-07-25-master100';
   console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
@@ -2156,6 +2156,27 @@
       fname.className = 'fname';
       fname.textContent = m.filnavn || '';
       item.appendChild(fname);
+
+      // Slet-knap: RLS begraenser allerede media SELECT/DELETE til rolle='admin' i egen
+      // butik, saa denne knap kan kun nogensinde vise/ramme ting man selv har adgang til --
+      // griden her viser jo udelukkende currentButikId's eget bibliotek (se loadMedia).
+      // Sletter KUN selve biblioteks-raekken (+ filen i Storage), IKKE noget der allerede er
+      // placeret paa en side -- de gemmer deres egen url direkte, ikke en reference til denne
+      // raekke, saa eksisterende indhold paavirkes ikke af at fjerne den fra biblioteket.
+      const del = document.createElement('span');
+      del.textContent = '✕';
+      del.title = 'Fjern fra medie-biblioteket';
+      del.style.cssText = 'position:absolute; top:0; right:0; background:rgba(0,0,0,.7); color:#f88; font-size:13px; padding:3px 7px; cursor:pointer; border-radius:0 0 0 8px; z-index:2;';
+      del.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm('Fjern "' + (m.filnavn || 'dette medie') + '" fra medie-biblioteket? Allerede placeret indhold, der bruger det, forbliver uaendret.')) return;
+        const storagePath = m.url.split('/public/media/')[1];
+        if (storagePath) await client.storage.from('media').remove([storagePath]);
+        await client.from('media').delete().eq('id', m.id);
+        mediaLibrary = mediaLibrary.filter(x => x.id !== m.id);
+        renderMediaGrid();
+      });
+      item.appendChild(del);
 
       item.addEventListener('click', () => {
         anvendMediePaaMaal(armedEl, m.type, m.url);
