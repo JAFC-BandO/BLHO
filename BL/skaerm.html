@@ -230,13 +230,25 @@
   }
 
   async function findButik() {
-    const { data: { user } } = await client.auth.getUser();
-    debugLog('auth.getUser() -> ' + (user ? user.id : 'INTET (ikke logget ind?)'));
-    const { data, error } = await client
-      .from('brugere')
-      .select('butik_id, er_superadmin, butikker(navn)')
-      .eq('id', user.id)
-      .single();
+    // Samme begrundelse som try/catch'ene i hentMasterSkabelon/hentContent -- en reelt AFVIST
+    // promise (fx "Failed to fetch", intet netvaerk endnu lige efter boot) skal fanges her OGSAA,
+    // ellers propagerer den op igennem fortsaetEfterLogin() og forhindrer AT polling-loopet
+    // (setInterval i hentContent) nogensinde bliver sat op -- skaermen sidder saa fast for
+    // evigt uden nogen automatisk retry.
+    let user, data, error;
+    try {
+      ({ data: { user } } = await client.auth.getUser());
+      debugLog('auth.getUser() -> ' + (user ? user.id : 'INTET (ikke logget ind?)'));
+      ({ data, error } = await client
+        .from('brugere')
+        .select('butik_id, er_superadmin, butikker(navn)')
+        .eq('id', user.id)
+        .single());
+    } catch (netErr) {
+      debugLog('Netvaerksfejl ved login-opslag: ' + netErr.message);
+      visFejl('Kunne ikke hente butiksdata (netværksfejl). Prøver igen om lidt.');
+      return 'netvaerksfejl';
+    }
 
     if (error || !data) {
       debugLog('brugere-opslag fejlede: ' + (error ? error.message : 'ingen raekke'));
@@ -281,30 +293,51 @@
   }
 
   async function hentMasterSkabelon() {
-    const { data, error } = await client
-      .from('sabloner')
-      .select('data, opdateret_at')
-      .eq('standard', true)
-      .eq('type', 'side')
-      .maybeSingle();
-    if (error) {
-      debugLog('Kunne ikke hente faelles skabelon: ' + error.message);
-      return;
+    // Fanger BAADE Supabase's egen {error}-resultat-form (fx RLS/database-fejl) OG en reelt
+    // AFVIST promise (fx "Failed to fetch" -- ingen netvaerksforbindelse overhovedet, saerligt
+    // sandsynligt lige efter boot, foer WiFi/DNS er faerdig med at reetablere sig). Uden dette
+    // try/catch propagerede en afvist promise helt op igennem hentContent() til
+    // fortsaetEfterLogin(), som afbroed FOER polling-intervallet naaede at blive sat op --
+    // skaermen sad saa fast for evigt (ingen automatisk retry), indtil nogen genstartede den
+    // manuelt. Set i praksis paa Vanløse 28. juli 2026.
+    try {
+      const { data, error } = await client
+        .from('sabloner')
+        .select('data, opdateret_at')
+        .eq('standard', true)
+        .eq('type', 'side')
+        .maybeSingle();
+      if (error) {
+        debugLog('Kunne ikke hente faelles skabelon: ' + error.message);
+        return;
+      }
+      masterOpdateretAt = data ? data.opdateret_at : null;
+      masterElements = (data && data.data && data.data.elements) || [];
+    } catch (netErr) {
+      debugLog('Netvaerksfejl ved hentning af faelles skabelon: ' + netErr.message);
     }
-    masterOpdateretAt = data ? data.opdateret_at : null;
-    masterElements = (data && data.data && data.data.elements) || [];
   }
 
   async function hentContent() {
     await hentMasterSkabelon();
 
-    const { data, error } = await client
-      .from('content')
-      .select('*')
-      .eq('butik_id', butikId)
-      .order('opdateret_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // Samme begrundelse som i hentMasterSkabelon ovenfor -- en reelt afvist promise (ikke
+    // Supabase's egen {error}-form) skal OGSAA fanges her, ellers er hentMasterSkabelon's
+    // eget try/catch ligegyldigt: dette kald kunne stadig afbryde fortsaetEfterLogin foer
+    // polling-intervallet naar at blive oprettet.
+    let data, error;
+    try {
+      ({ data, error } = await client
+        .from('content')
+        .select('*')
+        .eq('butik_id', butikId)
+        .order('opdateret_at', { ascending: false })
+        .limit(1)
+        .maybeSingle());
+    } catch (netErr) {
+      debugLog('Netvaerksfejl ved hentning af content: ' + netErr.message);
+      return;
+    }
 
     if (error) {
       debugLog('FEJL ved hentning af content: ' + error.message);
@@ -431,6 +464,16 @@
   // login herunder) -- alt der skal ske EFTER man er logget ind, uanset hvordan det skete.
   async function fortsaetEfterLogin() {
     const ok = await findButik();
+    // Netvaerket var endnu ikke klar (fx lige efter boot, foer WiFi/DNS er faerdig med at
+    // reetablere sig) -- IKKE en permanent fejl som "forkert-konto" eller "ingen butik", saa
+    // proev automatisk igen om lidt i stedet for at lade skaermen sidde fast for evigt. Se
+    // ogsaa try/catch i findButik/hentMasterSkabelon/hentContent -- denne retry er kun
+    // noedvendig for selve LOGIN-trinet, fordi polling-loopet (setInterval i hentContent)
+    // slet ikke er sat op endnu paa dette tidspunkt og derfor ikke selv kan forsoege igen.
+    if (ok === 'netvaerksfejl') {
+      setTimeout(fortsaetEfterLogin, 10000);
+      return;
+    }
     if (ok === 'forkert-konto') {
       // Vis login-formen igen med en forklaring, i stedet for stiltiende at have vist den
       // forkerte butiks skaerm (se signOut+kommentar i findButik). Virker ogsaa naar denne
