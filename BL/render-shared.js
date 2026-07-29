@@ -119,6 +119,36 @@ function formatDanskTal(n) {
   return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
 
+// Nogle af skaermene (Android-enheder uden root/ADB) kan ikke selv NTP-synkronisere deres
+// systemur -- vi kan ikke rette DET fra serversiden. Men "Ur"-widgetten behoever ikke stole
+// paa enhedens eget ur: vi laeser i stedet Date-headeren fra sidens EGET HTTP-svar (samme
+// origin som siden selv koerer paa -- GitHub Pages) og regner en offset ud, der lægges oven
+// paa enhedens Date.now(). Bevidst IKKE et cross-origin kald (fx til Supabase): browseren
+// skjuler som udgangspunkt Date-headeren for JS paa cross-origin svar, medmindre serveren
+// selv aabner den via Access-Control-Expose-Headers -- det goer Supabase ikke. Samme origin
+// har ingen af de begraensninger. urOffsetMs caches i localStorage, saa en enhed med forkert
+// ur stadig viser (naesten) rigtig tid med det samme efter en genstart -- foer foerste
+// vellykkede synk naar at loebe.
+let urOffsetMs = Number(localStorage.getItem('urOffsetMs')) || 0;
+async function synkroniserUrOffset() {
+  try {
+    const foerFetch = Date.now();
+    const res = await fetch(location.href, { cache: 'no-store' });
+    const serverDato = res.headers.get('date');
+    if (!serverDato) return;
+    // Traekker halvdelen af rundturstiden fra, saa netvaerksforsinkelsen ikke selv bliver en
+    // fejlkilde i offsettet.
+    const rundtursTid = Date.now() - foerFetch;
+    urOffsetMs = new Date(serverDato).getTime() + rundtursTid / 2 - Date.now();
+    localStorage.setItem('urOffsetMs', String(urOffsetMs));
+  } catch (e) {
+    // Ingen netvaerk lige nu -- behold sidste kendte offset (bedre end at falde tilbage til
+    // enhedens raa, formentlig forkerte ur).
+  }
+}
+synkroniserUrOffset();
+setInterval(synkroniserUrOffset, 10 * 60 * 1000);
+
 function buildUrNode(registerInterval) {
   const wrap = document.createElement('div');
   wrap.className = 'ur-wrap';
@@ -154,7 +184,7 @@ function buildUrNode(registerInterval) {
     }
   };
   const tick = () => {
-    const d = new Date();
+    const d = new Date(Date.now() + urOffsetMs);
     hh.textContent = String(d.getHours()).padStart(2, '0');
     mm.textContent = String(d.getMinutes()).padStart(2, '0');
     colon.style.opacity = d.getSeconds() % 2 === 0 ? '1' : '0';
