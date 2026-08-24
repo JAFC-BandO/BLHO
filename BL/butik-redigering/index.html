@@ -707,8 +707,33 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-28-master106';
-  console.log('[redigering-debug] Script version:', SCRIPT_VERSION);
+  const SCRIPT_VERSION = '2026-07-28-master107';
+
+  // ---------- Debug-log ----------
+  // Konsol-logningen er slaaet FRA i normal drift, saa driftsdetaljer (e-mail,
+  // butik_id, superadmin-flag, database-id'er og session-info) ikke ligger aabent
+  // i browserens konsol. Ved fejlsoegning slaas den til med ?debug=1 i adressen;
+  // flaget huskes i sessionStorage, saa det overlever reloads i samme fane, og
+  // slaas fra igen med ?debug=0 (eller ved at lukke fanen).
+  const DEBUG = (function () {
+    try {
+      const q = new URLSearchParams(location.search).get('debug');
+      if (q === '1') sessionStorage.setItem('redigering-debug', '1');
+      if (q === '0') sessionStorage.removeItem('redigering-debug');
+      return sessionStorage.getItem('redigering-debug') === '1';
+    } catch (e) {
+      return false; // sessionStorage kan vaere blokeret -- saa er debug bare slaaet fra
+    }
+  })();
+  function dbg() {
+    if (!DEBUG) return;
+    console.log.apply(console, ['[redigering-debug]'].concat(Array.prototype.slice.call(arguments)));
+  }
+  function dbgWarn() {
+    if (!DEBUG) return;
+    console.warn.apply(console, Array.prototype.slice.call(arguments));
+  }
+  dbg('Script version:', SCRIPT_VERSION);
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
@@ -926,7 +951,7 @@
       .limit(1)
       .maybeSingle();
 
-    console.log('[redigering-debug] Hentet content-raekke:', contentRow && contentRow.id, 'opdateret_at:', contentRow && contentRow.opdateret_at);
+    dbg('Hentet content-raekke:', contentRow && contentRow.id, 'opdateret_at:', contentRow && contentRow.opdateret_at);
 
     if (contentRow) {
       currentContentId = contentRow.id;
@@ -979,7 +1004,7 @@
     const aktivSide = sider.find(s => s.id === aktivSideId);
     elements = aktivSide.elements;
     baggrundsfarve = aktivSide.background;
-    console.log('[redigering-debug] Indlaest sider fra DB:', sider.map(s => s.navn + ': ' + s.elements.map(e => e.type).join(',')).join(' | '));
+    dbg('Indlaest sider fra DB:', sider.map(s => s.navn + ': ' + s.elements.map(e => e.type).join(',')).join(' | '));
 
     canvas.style.background = baggrundsfarve;
     await loadMedia();
@@ -1026,7 +1051,7 @@
     // Horsens)") -- det er ikke det man vil hilse nogen med, saa den del klippes af og kun
     // det rene navn foran bruges. Falder tilbage til email hvis navnet mangler helt.
     aktuelBrugerNavn = (brugerRow.navn || '').replace(/\s*\(.*\)\s*$/, '').trim() || null;
-    console.log('[redigering-debug] Logget ind som', user.email, '| er_superadmin=', erSuperadmin, '| butik_id=', brugerRow.butik_id);
+    dbg('Logget ind som', user.email, '| er_superadmin=', erSuperadmin, '| butik_id=', brugerRow.butik_id);
     document.getElementById('superadminBadge').style.display = erSuperadmin ? 'inline-block' : 'none';
     document.querySelectorAll('.superadmin-only').forEach(elNode => {
       elNode.style.display = erSuperadmin ? '' : 'none';
@@ -1688,10 +1713,10 @@
   // ---------- Aktivitetslog (kun superadmin) ----------
   // Fejlfri og "best effort": logningen maa aldrig kunne blokere selve login/gem-flowet,
   // saa alle kald til logAdminHandling er bevidst fire-and-forget (ingen await i den
-  // kaldende kode, ingen fejl-haandtering ud over en console.warn).
+  // kaldende kode, ingen fejl-haandtering ud over en debug-advarsel).
   function logAdminHandling(handling, detaljer) {
     client.rpc('log_admin_handling', { p_handling: handling, p_detaljer: detaljer || null })
-      .then(({ error }) => { if (error) console.warn('[aktivitetslog] kunne ikke logge:', error.message); });
+      .then(({ error }) => { if (error) dbgWarn('[aktivitetslog] kunne ikke logge:', error.message); });
   }
 
   const HANDLING_LABELS = { login: 'Login', gem_indhold: 'Gemte indhold', gem_skabelon: 'Gemte fælles skabelon', js_fejl: 'JS-fejl', status: 'Status', checkin_loop_start: 'Check-in-loop startet', proaktiv_genstart: 'Proaktiv genstart (lav hukommelse)' };
@@ -2416,7 +2441,7 @@
   }
 
   function renderSiderTabs() {
-    console.log('[redigering-debug] Sider-status:', sider.map(s => ({
+    dbg('Sider-status:', sider.map(s => ({
       navn: s.navn,
       id: s.id.slice(0, 8),
       elementer: s.elements.map(e => e.type + '(' + e.id.slice(0, 6) + ')'),
@@ -4111,12 +4136,12 @@
       layout: { elements: synligSide.elements, background: synligSide.background, sider, aktivSideId: synligSide.id },
       opdateret_at: new Date().toISOString(),
     };
-    console.log('[redigering-debug] Gemmer, currentContentId=', currentContentId, 'payload=', payload);
-    console.log('[redigering-debug] Gemmer sider:', sider.map(s => s.navn + ': ' + s.elements.map(e => e.type).join(',')).join(' | '));
+    dbg('Gemmer, currentContentId=', currentContentId, 'payload=', payload);
+    dbg('Gemmer sider:', sider.map(s => s.navn + ': ' + s.elements.map(e => e.type).join(',')).join(' | '));
 
     const { data: sessionCheck } = await client.auth.getSession();
     const { data: userCheck } = await client.auth.getUser();
-    console.log('[redigering-debug] Session lige foer gem: session findes=', !!sessionCheck.session,
+    dbg('Session lige foer gem: session findes=', !!sessionCheck.session,
       'session.user.id=', sessionCheck.session && sessionCheck.session.user.id,
       'getUser() id=', userCheck && userCheck.user && userCheck.user.id,
       'access_token (foerste 20 tegn)=', sessionCheck.session && sessionCheck.session.access_token.slice(0, 20));
@@ -4131,7 +4156,7 @@
       const res = await client.from('content').update(payload).eq('id', currentContentId).eq('butik_id', currentButikId).select();
       error = res.error;
       updatedRows = res.data;
-      console.log('[redigering-debug] Update-resultat, raekker ramt:', updatedRows ? updatedRows.length : 0, updatedRows);
+      dbg('Update-resultat, raekker ramt:', updatedRows ? updatedRows.length : 0, updatedRows);
     } else {
       const { data, error: insertErr } = await client
         .from('content')
@@ -4140,7 +4165,7 @@
         .single();
       error = insertErr;
       if (data) currentContentId = data.id;
-      console.log('[redigering-debug] Insert-resultat:', data);
+      dbg('Insert-resultat:', data);
     }
 
     btn.disabled = false;
@@ -4150,7 +4175,7 @@
       showMsg(saveMsg, 'ADVARSEL: Gem-kaldet ramte 0 rækker (formentlig en RLS/id-uoverensstemmelse) - intet blev reelt gemt!', false);
     } else {
       showMsg(saveMsg, 'Gemt!', true);
-      console.log('[redigering-debug] Gemt OK, opdateret_at:', payload.opdateret_at);
+      dbg('Gemt OK, opdateret_at:', payload.opdateret_at);
       logAdminHandling('gem_indhold', synligSide.navn ? 'Side: ' + synligSide.navn : null);
       loadLiveView();
     }
