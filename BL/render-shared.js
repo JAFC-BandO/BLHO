@@ -49,14 +49,59 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-function stripInlineFontSize(html) {
-  const tmp = document.createElement('div');
-  tmp.innerHTML = html;
-  tmp.querySelectorAll('[style]').forEach(node => {
+// ---------- Sanering af gemt tekst-HTML ----------
+// el.html kommer fra content.layout i databasen, og en butiks-admin kan skrive dertil --
+// ogsaa direkte mod REST-API'et, helt uden om vores editor og browserens egen filtrering af
+// indsat indhold. Samme HTML bliver indsat med innerHTML BAADE paa den rigtige skaerm og i
+// superadmins canvas/Live View. Uden sanering kunne en enkelt butik altsaa faa kode til at
+// koere i en superadmins browser -- og dermed naa superadmins egen session, der ligger i
+// localStorage paa praecis samme origin (se storageKey-kommentaren i skaerm.html).
+//
+// Formateringsknapperne kan kun bold/italic/underline, saa allowlisten herunder daekker alt
+// hvad editoren selv kan lave. Ukendte tags pakkes UD (teksten beholdes) i stedet for at
+// blive slettet, saa indhold der er indsat fra fx Word ikke pludselig forsvinder.
+const HTML_TILLADTE_TAGS = new Set(
+  ['B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'BR', 'SPAN', 'DIV', 'P', 'FONT', 'SUB', 'SUP', 'SMALL']);
+const HTML_TILLADTE_ATTR = new Set(['style', 'color', 'face', 'size']);
+// Disse fjernes HELT (inkl. indhold) i stedet for at blive pakket ud -- ellers ville fx selve
+// kildeteksten i et <script> staa tilbage som synlig tekst paa skaermen.
+const HTML_FJERN_HELT = new Set(
+  ['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META', 'BASE', 'FORM', 'INPUT',
+   'BUTTON', 'TEXTAREA', 'SELECT', 'OPTION', 'IMG', 'SVG', 'MATH', 'AUDIO', 'VIDEO', 'SOURCE',
+   'TRACK', 'CANVAS', 'APPLET', 'FRAME', 'FRAMESET', 'NOSCRIPT', 'TEMPLATE']);
+
+// Hed tidligere stripInlineFontSize og gjorde kun det sidste af de to trin herunder. Navnet er
+// aendret fordi den nu ogsaa er et sikkerhedsfilter -- den maa ikke kunne springes over.
+function renseHtml(html) {
+  if (html == null) return '';
+  // DOMParser er inert: intet script koerer, og ingen billeder/ressourcer hentes mens vi
+  // saniterer. At saette innerHTML paa en almindelig detached div ville derimod allerede
+  // kunne udloese fx <img src=x onerror=...> paa selve saneringstidspunktet.
+  const doc = new DOMParser().parseFromString('<!doctype html><body>' + html, 'text/html');
+
+  doc.body.querySelectorAll('*').forEach(node => {
+    if (!node.isConnected) return; // laa inde i et element vi allerede har fjernet
+    if (HTML_FJERN_HELT.has(node.tagName)) { node.remove(); return; }
+    if (!HTML_TILLADTE_TAGS.has(node.tagName)) { node.replaceWith(...node.childNodes); return; }
+    // Alt hvad der ikke staar paa attribut-listen ryger -- det daekker samtlige on*-handlere
+    // (onerror, onload, onclick ...), href/src og alt andet vi ikke selv har brug for.
+    Array.from(node.attributes).forEach(attr => {
+      if (!HTML_TILLADTE_ATTR.has(attr.name.toLowerCase())) node.removeAttribute(attr.name);
+    });
+    const style = node.getAttribute('style');
+    if (style && /url\s*\(|expression\s*\(|javascript:|@import|behavior\s*:|-moz-binding/i.test(style)) {
+      node.removeAttribute('style');
+    }
+  });
+
+  // Uaendret fra den gamle stripInlineFontSize: skriftstoerrelsen styres af el.fontSize, ikke
+  // af inline-style, ellers skalerer teksten ikke med skaermen.
+  doc.body.querySelectorAll('[style]').forEach(node => {
     node.style.fontSize = '';
     if (!node.getAttribute('style').trim()) node.removeAttribute('style');
   });
-  return tmp.innerHTML;
+
+  return doc.body.innerHTML;
 }
 
 function youtubeEmbedUrl(url) {
@@ -716,7 +761,7 @@ function buildElNode(el, registerInterval) {
   if (el.type === 'titel' || el.type === 'tekst') {
     const t = document.createElement('div');
     t.className = 'el-text';
-    t.innerHTML = indsaetButikNavn(el.html != null ? stripInlineFontSize(el.html) : escapeHtml(el.text || ''));
+    t.innerHTML = indsaetButikNavn(el.html != null ? renseHtml(el.html) : escapeHtml(el.text || ''));
     if (el.fontSize) t.style.fontSize = el.fontSize + 'cqw';
     if (el.textColor) t.style.color = el.textColor;
     node.appendChild(t);
