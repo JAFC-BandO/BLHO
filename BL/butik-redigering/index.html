@@ -10,7 +10,7 @@
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
 <link rel="stylesheet" href="../render-shared.css?v=2026-07-20-32">
-<script src="../render-shared.js?v=2026-07-29-36"></script>
+<script src="../render-shared.js?v=2026-08-24-37"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -707,7 +707,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-07-28-master107';
+  const SCRIPT_VERSION = '2026-08-24-master108';
 
   // ---------- Debug-log ----------
   // Konsol-logningen er slaaet FRA i normal drift, saa driftsdetaljer (e-mail,
@@ -870,7 +870,7 @@
         e.stopPropagation();
         textDiv.focus();
         document.execCommand('insertText', false, em);
-        el.html = stripInlineFontSize(textDiv.innerHTML);
+        el.html = renseHtml(textDiv.innerHTML);
         picker.remove();
         openEmojiPicker = null;
       });
@@ -893,7 +893,7 @@
     }, 0);
   }
 
-  // escapeHtml, stripInlineFontSize, youtubeEmbedUrl, formatDanskTal, fetchMiljoeffektData og
+  // escapeHtml, renseHtml, youtubeEmbedUrl, formatDanskTal, fetchMiljoeffektData og
   // miljoeffektCardHtml kommer nu fra render-shared.js (delt med skaerm.html og Live View),
   // saa der kun er ét sted der definerer hvordan indhold ser ud.
 
@@ -3189,7 +3189,7 @@
       textDiv = document.createElement('div');
       textDiv.className = 'el-text';
       textDiv.contentEditable = canEdit ? 'true' : 'false';
-      const raaTekst = el.html != null ? stripInlineFontSize(el.html) : escapeHtml(el.text || '');
+      const raaTekst = el.html != null ? renseHtml(el.html) : escapeHtml(el.text || '');
       // Raa {{butik}}-tekst vises/redigeres KUN inde i selve "Rediger fælles skabelon" --
       // det er der (og udelukkende der) man redigerer skabelonens kildetekst. Alle andre
       // steder (en almindelig butiks egen visning -- laast-flettet ind eller butikkens eget)
@@ -3197,7 +3197,7 @@
       textDiv.innerHTML = masterEditMode ? raaTekst : indsaetButikNavn(raaTekst);
       textDiv.style.fontSize = canvasFontSizePx(el.fontSize || defaultFontSize(el.type));
       if (el.textColor) textDiv.style.color = el.textColor;
-      textDiv.addEventListener('input', () => { el.html = stripInlineFontSize(textDiv.innerHTML); });
+      textDiv.addEventListener('input', () => { el.html = renseHtml(textDiv.innerHTML); });
       body.appendChild(textDiv);
       anvendIndholdsSkala(textDiv, el);
     } else if (el.type === 'billede' || el.type === 'video') {
@@ -3542,7 +3542,7 @@
         function cmdBtn(label, cmd, extraStyle) {
           return buildFormatButton(label, extraStyle || '', () => {
             document.execCommand(cmd);
-            el.html = stripInlineFontSize(textDiv.innerHTML);
+            el.html = renseHtml(textDiv.innerHTML);
           }, textDiv);
         }
         fmtGroup.appendChild(cmdBtn('B', 'bold', 'font-weight:700;'));
