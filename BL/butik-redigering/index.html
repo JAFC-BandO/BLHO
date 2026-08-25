@@ -739,7 +739,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-08-25-master110';
+  const SCRIPT_VERSION = '2026-08-25-master111';
 
   // ---------- Debug-log ----------
   // Konsol-logningen er slaaet FRA i normal drift, saa driftsdetaljer (e-mail,
@@ -2151,11 +2151,29 @@
   // ---------- Media library ----------
 
   async function loadMedia() {
-    const { data, error } = await client
+    // Butikkens egne medier PLUS dem en superadmin har delt med alle (media.delt = true,
+    // se migration_delt_media.sql). RLS afgoer stadig hvad der faktisk kommer tilbage --
+    // dette filter er kun for ikke at haente andre butikkers private medier ned unoedigt.
+    let { data, error } = await client
       .from('media')
       .select('*')
-      .eq('butik_id', currentButikId)
+      .or('butik_id.eq.' + currentButikId + ',delt.eq.true')
       .order('oprettet_at', { ascending: false });
+
+    if (error) {
+      // Faldback til den gamle forespoergsel hvis delt-kolonnen endnu ikke findes i
+      // databasen. Uden dette ville medie-biblioteket staa TOMT i alle 16 butikker fra det
+      // sekund koden gik live og indtil migrationen var koert -- en deploy maa aldrig kunne
+      // slaa noget ud, bare fordi to ting ikke ramte samtidig.
+      const uden = await client
+        .from('media')
+        .select('*')
+        .eq('butik_id', currentButikId)
+        .order('oprettet_at', { ascending: false });
+      data = uden.data;
+      error = uden.error;
+    }
+
     if (!error && data) mediaLibrary = data;
     renderMediaGrid();
   }
@@ -2187,26 +2205,79 @@
       fname.textContent = m.filnavn || '';
       item.appendChild(fname);
 
-      // Slet-knap: RLS begraenser allerede media SELECT/DELETE til rolle='admin' i egen
-      // butik, saa denne knap kan kun nogensinde vise/ramme ting man selv har adgang til --
-      // griden her viser jo udelukkende currentButikId's eget bibliotek (se loadMedia).
-      // Sletter KUN selve biblioteks-raekken (+ filen i Storage), IKKE noget der allerede er
-      // placeret paa en side -- de gemmer deres egen url direkte, ikke en reference til denne
-      // raekke, saa eksisterende indhold paavirkes ikke af at fjerne den fra biblioteket.
-      const del = document.createElement('span');
-      del.textContent = '✕';
-      del.title = 'Fjern fra medie-biblioteket';
-      del.style.cssText = 'position:absolute; top:0; right:0; background:rgba(0,0,0,.7); color:#f88; font-size:13px; padding:3px 7px; cursor:pointer; border-radius:0 0 0 8px; z-index:2;';
-      del.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        if (!confirm('Fjern "' + (m.filnavn || 'dette medie') + '" fra medie-biblioteket? Allerede placeret indhold, der bruger det, forbliver uaendret.')) return;
-        const storagePath = m.url.split('/public/media/')[1];
-        if (storagePath) await client.storage.from('media').remove([storagePath]);
-        await client.from('media').delete().eq('id', m.id);
-        mediaLibrary = mediaLibrary.filter(x => x.id !== m.id);
-        renderMediaGrid();
-      });
-      item.appendChild(del);
+      // Ligger mediet i EN ANDEN butik, er det et delt medie vi kun har laeseadgang til.
+      // Styrer baade slet-knappen og del-knappen nedenfor.
+      const eget = m.butik_id === currentButikId;
+
+      // Tydeligt maerke paa delte medier: en butik skal kunne se hvad der kommer fra
+      // faelles-biblioteket, og ikke undre sig over filer de aldrig selv har uploadet.
+      if (m.delt) {
+        const maerke = document.createElement('div');
+        maerke.textContent = 'DELT';
+        maerke.title = 'Delt med alle butikker';
+        maerke.style.cssText = 'position:absolute; top:0; left:0; background:#040DB1; color:#fff; font-size:8px; font-weight:700; letter-spacing:.04em; padding:2px 5px; border-radius:8px 0 8px 0; z-index:2;';
+        item.appendChild(maerke);
+      }
+
+      // Del-knappen: KUN superadmin, og kun paa medier der ligger i den butik man aktuelt
+      // er inde i. Deler man fra en anden butiks bibliotek, ville filen ligge i DERES mappe,
+      // og de kunne slette den under foedderne paa alle andre.
+      if (erSuperadmin && eget) {
+        const delKnap = document.createElement('span');
+        delKnap.textContent = m.delt ? '★' : '☆';
+        delKnap.title = m.delt
+          ? 'Delt med alle butikker -- klik for at gøre den privat igen'
+          : 'Del med alle butikker';
+        delKnap.style.cssText = 'position:absolute; bottom:0; left:0; background:rgba(0,0,0,.7); color:' +
+          (m.delt ? '#ffd24d' : '#ccc') + '; font-size:13px; line-height:1; padding:3px 7px; cursor:pointer; border-radius:0 8px 0 0; z-index:3;';
+        delKnap.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const nyVaerdi = !m.delt;
+          if (!nyVaerdi && !confirm('Fjern "' + (m.filnavn || 'dette medie') + '" fra alle butikkers bibliotek?\n\nIndhold der allerede bruger filen, bliver ved med at virke -- de gemmer selve URL\'en, ikke en henvisning til biblioteket.')) return;
+          const { error: delErr } = await client.from('media').update({ delt: nyVaerdi }).eq('id', m.id);
+          if (delErr) {
+            alert('Kunne ikke ændre deling: ' + delErr.message + '\n\nEr migration_delt_media.sql kørt?');
+            return;
+          }
+          m.delt = nyVaerdi;
+          renderMediaGrid();
+        });
+        item.appendChild(delKnap);
+      }
+
+      // Slet-knap vises KUN paa butikkens egne medier -- et delt medie fra en anden butik
+      // ville RLS alligevel afvise, og en knap der bare fejler er vaerre end ingen knap.
+      //
+      // OG kun superadmin maa slette et DELT medie. Uden det andet led kunne den butik der
+      // tilfaeldigvis huser filen (fx Horsens, hvis superadmin delte den derfra) slette den
+      // under foedderne paa de 15 andre. Haandhaeves ogsaa i RLS, se migration_delt_media.sql
+      // -- dette er kun for at knappen ikke staar der og lokker.
+      if (eget && (!m.delt || erSuperadmin)) {
+        const del = document.createElement('span');
+        del.textContent = '✕';
+        del.title = 'Fjern fra medie-biblioteket';
+        del.style.cssText = 'position:absolute; top:0; right:0; background:rgba(0,0,0,.7); color:#f88; font-size:13px; padding:3px 7px; cursor:pointer; border-radius:0 0 0 8px; z-index:2;';
+        del.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          // RETTET: teksten her lovede tidligere at "allerede placeret indhold forbliver
+          // uaendret". Det passer ikke -- vi fjerner OGSAA selve filen fra Storage (linjen
+          // nedenfor), og et element gemmer netop den fils URL. Naar filen er vaek, viser
+          // sider der bruger den et braekket billede. Advarslen siger nu det der faktisk sker.
+          const delAdvarsel = m.delt
+            ? 'ADVARSEL: "' + (m.filnavn || 'dette medie') + '" er DELT med alle butikker.\n\n' +
+              'Sletter du det, forsvinder filen for ALLE 16 butikker -- ogsaa fra sider hvor andre butikker allerede har placeret det.\n\n' +
+              'Vil du kun fjerne det fra de andres bibliotek, saa brug stjernen nede i venstre hjoerne i stedet.\n\nSlet alligevel?'
+            : 'Fjern "' + (m.filnavn || 'dette medie') + '" fra medie-biblioteket?\n\n' +
+              'Selve filen slettes ogsaa, saa sider hvor du allerede har placeret den, vil vise et braekket billede.';
+          if (!confirm(delAdvarsel)) return;
+          const storagePath = m.url.split('/public/media/')[1];
+          if (storagePath) await client.storage.from('media').remove([storagePath]);
+          await client.from('media').delete().eq('id', m.id);
+          mediaLibrary = mediaLibrary.filter(x => x.id !== m.id);
+          renderMediaGrid();
+        });
+        item.appendChild(del);
+      }
 
       item.addEventListener('click', () => {
         anvendMediePaaMaal(armedEl, m.type, m.url);
