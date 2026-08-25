@@ -148,15 +148,60 @@ function sikrInstagramEmbedScript() {
 function buildInstagramNode(postUrl) {
   const wrap = document.createElement('div');
   wrap.style.cssText = 'width:100%; height:100%; overflow:hidden; display:flex; align-items:center; justify-content:center; background:#fff;';
+
+  // Egen "skalerings-boks" mellem wrap og selve indlejringen. Opslaget faar lov at have sin
+  // naturlige hoejde herinde, og vi skalerer SAA hele boksen ned til at passe i elementet.
+  // Ligger bevidst inde i wrap og ikke paa wrap selv, fordi anvendIndholdsSkala saetter sin
+  // egen transform paa wrap (Indhold-stoerrelse i Egenskaber) -- de to skal kunne ligge
+  // oveni hinanden i stedet for at overskrive hinanden.
+  const skalering = document.createElement('div');
+  skalering.style.cssText = 'width:100%; flex:0 0 auto;';
+
   const bq = document.createElement('blockquote');
   bq.className = 'instagram-media';
   bq.setAttribute('data-instgrm-permalink', postUrl);
   bq.setAttribute('data-instgrm-version', '14');
   bq.style.cssText = 'width:100% !important; min-width:auto !important; max-width:100% !important; margin:0 !important;';
-  wrap.appendChild(bq);
+  skalering.appendChild(bq);
+  wrap.appendChild(skalering);
+
+  // Staaende opslag (Instagram bruger 4:5, plus billedtekst og likes nedenunder) er hoejere
+  // end en bred boks. Foer dette blev de bare beskaaret i BAADE top og bund af wrap'ens
+  // overflow:hidden -- altsaa "hovedet skaaret af", som Vallensbaek meldte i august 2026.
+  // Nu skaleres hele opslaget i stedet ned, saa det er med fuldt ud (hvide kanter i siderne
+  // i stedet for afskaaret indhold). Vil man hellere have det stort og fyldende, kan
+  // Indhold-stoerrelse i Egenskaber stadig zoome ind ovenpaa dette.
+  //
+  // Hoejden kendes ikke med det samme: embed.js forhandler den med Instagram bagefter, og
+  // kan aendre den igen (fx naar billedet er faerdigindlaest). Derfor maales der loebende via
+  // ResizeObserver frem for én gang.
+  const tilpas = () => {
+    const boksH = wrap.clientHeight;
+    const indhH = skalering.offsetHeight; // layout-hoejde, upaavirket af vores egen transform
+    if (!boksH || !indhH) return;
+    const k = Math.min(1, boksH / indhH);
+    // Ingen transform naar der ikke skal skaleres -- et liggende/kvadratisk opslag i en hoej
+    // boks skal se PRAECIS ud som foer denne aendring.
+    skalering.style.transform = k < 1 ? 'scale(' + k + ')' : '';
+    skalering.style.transformOrigin = 'center center';
+  };
+
+  if (window.ResizeObserver) {
+    // Observerer begge: wrap (elementet aendrer stoerrelse i editoren) og skalering (Instagram
+    // justerer sin egen hoejde). transform aendrer ikke layout-stoerrelsen, saa vores egen
+    // skalering udloeser ikke observeren igen -- ingen loekke.
+    const ro = new ResizeObserver(tilpas);
+    ro.observe(wrap);
+    ro.observe(skalering);
+  }
+
   sikrInstagramEmbedScript().then(() => {
     if (window.instgrm && window.instgrm.Embeds) window.instgrm.Embeds.process();
+    tilpas();
   });
+  // Sikkerhedsnet for aeldre Android-WebViews uden ResizeObserver, og for et embed der er
+  // laenge om at falde paa plads: maal igen et par gange efter opstart.
+  [300, 800, 2000, 5000].forEach(ms => setTimeout(tilpas, ms));
   return wrap;
 }
 
