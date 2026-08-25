@@ -10,7 +10,7 @@
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
 <link rel="stylesheet" href="../render-shared.css?v=2026-07-20-32">
-<script src="../render-shared.js?v=2026-08-24-37"></script>
+<script src="../render-shared.js?v=2026-08-24-38"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -546,6 +546,30 @@
           </div>
           <div id="propsSizeHint" style="font-size:11px; color:#888; margin-top:4px;">Skriv et tal for at gøre elementet større/mindre, uden at skulle trække i det.</div>
         </div>
+        <!-- Anbefalet billedstoerrelse: elementets procent-stoerrelse omregnet til den fysiske
+             skaerms pixels, saa man kan lave filen i praecis det format i fx Canva i stedet for
+             at gaette. Oenske fra Vallensbaek (august 2026) -- de havde uploadet et coverbillede
+             i helt forkert format for at se hvad der skete, og der stod intet nogen steder. -->
+        <div id="propsBilledStoerrelseRow" style="display:none; margin-bottom:12px; background:#eef2ff; border-radius:8px; padding:10px;">
+          <label style="margin-top:0;">Anbefalet billedstørrelse</label>
+          <div id="propsBilledStoerrelse" style="font-size:16px; font-weight:700; color:#040DB1; margin-top:2px;"></div>
+          <div style="font-size:11px; color:#888; margin-top:4px;">Billeder og video <strong>strækkes</strong> ud til at fylde boksen -- der bliver ikke skåret noget fra. Laver du filen i et andet format, bliver den altså synligt trykket sammen eller trukket i langdrag. Hele skærmen er 1920x1080.</div>
+        </div>
+        <!-- Instagram-video afspiller aldrig af sig selv i en offentlig indlejring. Opslaget
+             ligger i en iframe paa instagram.com -- en anden origin -- saa browseren blokerer
+             al adgang til den indefra: vi kan hverken kalde play(), sende et klik ind eller
+             overhovedet se video-elementet. Og Instagram kraever et AEGTE brugerklik, saa selv
+             et syntetisk klik ville blive afvist. Det gaelder enhver metode, ikke kun vores.
+             Noten staar her, saa man opdager det MENS man saetter elementet op -- ikke foerst
+             naar skaermen staar i butikken med et afspil-ikon paa. -->
+        <div id="propsInstagramInfoRow" style="display:none; margin-bottom:12px; background:#fff7e6; border:1px solid #ffe0a3; border-radius:8px; padding:10px;">
+          <label style="margin-top:0;">Video afspiller ikke automatisk</label>
+          <div style="font-size:11px; color:#7a5c1e; margin-top:4px; line-height:1.5;">
+            Er opslaget en <strong>video eller reel</strong>, viser skærmen kun et stillbillede med et afspil-ikon. Instagram kræver et rigtigt klik, og det kan ingen løsning omgå.<br><br>
+            <strong>Skal videoen køre af sig selv:</strong> hent den fra Instagram og upload den som et almindeligt <strong>video-element</strong> i stedet. Så afspiller den automatisk, looper og er uden Instagram-ramme.<br><br>
+            Er opslaget et <strong>billede</strong>, virker det fint som det er.
+          </div>
+        </div>
         <div id="propAutoFyldRow" style="display:none; margin-bottom:12px; background:#eef2ff; border-radius:8px; padding:10px;">
           <label style="display:flex; align-items:center; gap:6px; margin-top:0;">
             <input type="checkbox" id="propAutoFyldRest" style="margin:0;">
@@ -659,6 +683,14 @@
           Upload nyt billede/video
           <input type="file" id="uploadInput" accept="image/*,video/*">
         </label>
+        <!-- Se ogsaa "Anbefalet billedstoerrelse" i Egenskaber, som viser det praecise
+             pixeltal for det element man har valgt. Denne generelle note staar her, fordi
+             man som regel er ved at uploade FOER man taenker paa formatet. -->
+        <div style="font-size:11px; color:#888; margin-top:6px; line-height:1.5;">
+          Skærmen er <strong>1920x1080</strong> (16:9). Et billede der skal fylde hele skærmen laves i den størrelse.<br>
+          Billedet <strong>strækkes</strong> ud til at fylde sit element -- der skæres ikke noget fra. Passer formatet ikke, bliver billedet derfor trykket sammen eller trukket i langdrag.<br>
+          Vælg et element på siden, så viser <strong>Egenskaber → Anbefalet billedstørrelse</strong> præcis hvilket pixeltal du skal lave filen i.
+        </div>
       </div>
     </div>
 
@@ -707,7 +739,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-08-24-master108';
+  const SCRIPT_VERSION = '2026-08-25-master110';
 
   // ---------- Debug-log ----------
   // Konsol-logningen er slaaet FRA i normal drift, saa driftsdetaljer (e-mail,
@@ -3647,6 +3679,25 @@
     return type === 'titel' ? '#ffffff' : '#d0d0d0';
   }
 
+  // Butiksskaermenes faktiske oploesning. Alle enheder koerer 1920x1080 (bekraeftet mod
+  // enheder-tabellens skaerm_bredde/skaerm_hoejde), og canvas er laast til 16:9 for ALLE
+  // butikker, saa ét fast tal er rigtigt her -- ikke noget der skal slaas op pr. enhed.
+  const SKAERM_BREDDE = 1920;
+  const SKAERM_HOEJDE = 1080;
+  // Kun typer hvor man reelt uploader en fil. En rotator vises ogsaa, fordi dens slides er
+  // billeder/videoer der fylder praecis samme boks.
+  const UPLOADER_FIL = { billede: 1, video: 1, rotator: 1 };
+
+  // Opdaterer KUN tallet, ikke hele panelet -- kaldes ogsaa mens man taster i Bredde/Hoejde,
+  // hvor et fuldt renderPropsPanel() ville skrive i det felt man staar i og flytte markoeren.
+  function opdaterAnbefaletBilledStoerrelse(el) {
+    const vis = !!(el && UPLOADER_FIL[el.type]);
+    document.getElementById('propsBilledStoerrelseRow').style.display = vis ? 'block' : 'none';
+    if (!vis) return;
+    document.getElementById('propsBilledStoerrelse').textContent =
+      Math.round(SKAERM_BREDDE * el.w / 100) + ' x ' + Math.round(SKAERM_HOEJDE * el.h / 100) + ' px';
+  }
+
   function renderPropsPanel() {
     const el = elements.find(e => e.id === selectedElementId);
     const panel = document.getElementById('propsPanel');
@@ -3698,6 +3749,8 @@
       : 'Størrelse/placering udregnes automatisk ud fra dine andre elementer på siden -- fylder ud til det nærmeste andet element (eller skærmens kant, hvis intet er i vejen) i alle fire retninger. Opdateres live, så denne plads aldrig kommer ud af trit igen, selv hvis du senere flytter noget den er tilpasset efter.';
     document.getElementById('propWidth').value = Math.round(el.w * 10) / 10;
     document.getElementById('propHeight').value = Math.round(el.h * 10) / 10;
+    opdaterAnbefaletBilledStoerrelse(el);
+    document.getElementById('propsInstagramInfoRow').style.display = el.type === 'instagram' ? 'block' : 'none';
     // Indhold-skala: uafhaengig af posLaast (den maa gerne bruges paa en fast plads' INDHOLD,
     // selvom selve pladsens position/stoerrelse er laast) -- kun skjult for typer der slet
     // ikke har noget visuelt indhold at skalere (en ren farvet boks, en streg).
@@ -3777,13 +3830,13 @@
     const el = elements.find(x => x.id === selectedElementId);
     if (!el) return;
     const val = parseFloat(e.target.value);
-    if (!isNaN(val) && val > 0) { el.w = val; renderCanvas(); }
+    if (!isNaN(val) && val > 0) { el.w = val; renderCanvas(); opdaterAnbefaletBilledStoerrelse(el); }
   });
   document.getElementById('propHeight').addEventListener('input', (e) => {
     const el = elements.find(x => x.id === selectedElementId);
     if (!el) return;
     const val = parseFloat(e.target.value);
-    if (!isNaN(val) && val > 0) { el.h = val; renderCanvas(); }
+    if (!isNaN(val) && val > 0) { el.h = val; renderCanvas(); opdaterAnbefaletBilledStoerrelse(el); }
   });
   document.getElementById('propContentScale').addEventListener('input', (e) => {
     const el = elements.find(x => x.id === selectedElementId);
@@ -4075,6 +4128,16 @@
         const dh = ((ev.clientY - startY) / rect.height) * 100;
         el.h = clamp(startH + dh, minSize, 100 - el.y);
         node.style.height = el.h + '%';
+      }
+      // Holder Egenskaber i trit MENS man traekker. Bredde/Hoejde-felterne stod hidtil med
+      // vaerdien fra foer trækket indtil man klikkede elementet igen; nu foelger de med, og
+      // det samme goer "Anbefalet billedstoerrelse" -- som ellers ville vise et pixeltal for
+      // en stoerrelse boksen ikke laengere har. Kun naar det er DET valgte element panelet
+      // rent faktisk viser.
+      if (el.id === selectedElementId) {
+        document.getElementById('propWidth').value = Math.round(el.w * 10) / 10;
+        document.getElementById('propHeight').value = Math.round(el.h * 10) / 10;
+        opdaterAnbefaletBilledStoerrelse(el);
       }
     }
     function onUp() {
