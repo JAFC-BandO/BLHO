@@ -319,11 +319,18 @@
   <div class="card" id="loginCard">
     <h1>Log ind</h1>
     <div class="subtitle">Rediger indholdet på din butiks skærm</div>
-    <label for="email">Email</label>
-    <input type="email" id="email" autocomplete="username">
-    <label for="password">Adgangskode</label>
-    <input type="password" id="password" autocomplete="current-password">
-    <button class="primary-btn" id="loginBtn">Log ind</button>
+    <!-- Felterne ligger i en <form> udelukkende for browserens skyld: uden den advarer
+         Chrome i konsollen ("Password field is not contained in a form") og tilbyder
+         daarligere password-manager-integration. Selve indsendelsen sker som hidtil i
+         knappens klik-handler -- formen maa ALDRIG submitte og genindlaese siden, derfor
+         type="button" paa knappen og en preventDefault paa submit i JS'en. -->
+    <form id="loginForm" style="margin:0;">
+      <label for="email">Email</label>
+      <input type="email" id="email" autocomplete="username">
+      <label for="password">Adgangskode</label>
+      <input type="password" id="password" autocomplete="current-password">
+      <button type="button" class="primary-btn" id="loginBtn">Log ind</button>
+    </form>
     <!-- Bruger email-feltet ovenfor i stedet for sit eget: ét felt mindre at udfylde, og
          man har som regel allerede skrevet sin adresse foer man opdager at man har glemt
          koden. -->
@@ -333,11 +340,21 @@
   <div class="card" id="setPasswordCard" style="display:none; margin-top:16px;">
     <h1 id="setPasswordTitel">Vælg dit password</h1>
     <div class="subtitle" id="setPasswordUndertekst">Det er første gang du logger ind — vælg et permanent password</div>
-    <label for="newPassword1">Nyt password</label>
-    <input type="password" id="newPassword1" autocomplete="new-password">
-    <label for="newPassword2">Gentag password</label>
-    <input type="password" id="newPassword2" autocomplete="new-password">
-    <button class="primary-btn" id="setPasswordBtn">Gem password</button>
+    <!-- Samme begrundelse som formen paa login-kortet ovenfor. -->
+    <form id="setPasswordForm" style="margin:0;">
+      <!-- Skrivebeskyttet brugernavn-felt. To grunde: browseren beder om det (uden det
+           advarer Chrome, og password-managere kan ikke koble det nye password til den
+           rigtige konto), OG brugeren kan se HVILKEN konto de er ved at aendre -- saerligt
+           nyttigt naar man er landet her fra et link i en mail. -->
+      <label for="setPasswordEmail">Konto</label>
+      <input type="text" id="setPasswordEmail" autocomplete="username" readonly tabindex="-1"
+             style="background:#f4f4f7; color:#666; cursor:default;">
+      <label for="newPassword1">Nyt password</label>
+      <input type="password" id="newPassword1" autocomplete="new-password">
+      <label for="newPassword2">Gentag password</label>
+      <input type="password" id="newPassword2" autocomplete="new-password">
+      <button type="button" class="primary-btn" id="setPasswordBtn">Gem password</button>
+    </form>
     <div class="msg" id="setPasswordMsg"></div>
   </div>
 </div>
@@ -743,7 +760,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-08-25-master112';
+  const SCRIPT_VERSION = '2026-08-28-master113';
 
   // ---------- Debug-log ----------
   // Konsol-logningen er slaaet FRA i normal drift, saa driftsdetaljer (e-mail,
@@ -1136,6 +1153,13 @@
     document.getElementById(id).addEventListener('keydown', (e) => {
       if (e.key === 'Enter') document.getElementById('loginBtn').click();
     });
+  });
+
+  // Sikkerhedsnet under de to <form>-elementer: knapperne er type="button" og Enter er
+  // haandteret ovenfor, saa formen boer aldrig submitte af sig selv -- men gjorde den det,
+  // ville siden genindlaese midt i et login og se ud som om intet skete.
+  ['loginForm', 'setPasswordForm'].forEach(id => {
+    document.getElementById(id).addEventListener('submit', (e) => e.preventDefault());
   });
 
   document.getElementById('logoutBtn').addEventListener('click', async () => {
@@ -2090,9 +2114,30 @@
   const erPasswordNulstilling = /[#&]type=recovery/.test(location.hash);
 
   function visSaetPasswordKort(tilstand) {
+    const nulstil = tilstand === 'nulstil';
     document.getElementById('loginCard').style.display = 'none';
     document.getElementById('setPasswordCard').style.display = 'block';
-    const nulstil = tilstand === 'nulstil';
+    // Fyld konto-feltet ud. Bevidst uden await -- kortet skal vises med det samme, og
+    // e-mailen er kun til orientering (og til password-manageren), ikke noget skaermen
+    // afhaenger af.
+    client.auth.getUser().then(({ data }) => {
+      const bruger = data && data.user;
+      if (bruger) {
+        document.getElementById('setPasswordEmail').value = bruger.email || '';
+        return;
+      }
+      // Ingen session bag et nulstillings-link betyder at det er udloebet eller allerede
+      // brugt (Supabase-links er engangs og kortlivede). Uden dette ville brugeren udfylde
+      // begge felter, trykke Gem, og FOERST der moede en kryptisk "Auth session missing"
+      // -- sig det med det samme i stedet, og fjern knappen der alligevel ikke kan virke.
+      if (nulstil) {
+        showMsg(document.getElementById('setPasswordMsg'),
+          'Linket er udløbet eller allerede brugt. Gå tilbage til Log ind og bed om et nyt.', false);
+        document.getElementById('setPasswordBtn').disabled = true;
+        document.getElementById('setPasswordEmail').value = '(ukendt)';
+      }
+    }).catch(() => {});
+
     document.getElementById('setPasswordTitel').textContent = nulstil ? 'Vælg et nyt password' : 'Vælg dit password';
     document.getElementById('setPasswordUndertekst').textContent = nulstil
       ? 'Du kom hertil fra linket i mailen — vælg et nyt password'
@@ -2133,14 +2178,24 @@
 
     showMsg(loginMsg, 'Hvis der findes en konto med den email, har vi sendt et link til at vælge et nyt password. Kig også i spamfilteret.', true);
 
-    // Simpel spaerre mod at klikke igen og igen. Supabase har sin egen rate limit, men den
-    // giver en fejl brugeren aldrig ser (se ovenfor) -- her faar de i det mindste at vide
-    // at der sker noget.
-    setTimeout(() => {
+    // Spaerre mod at klikke igen og igen -- Supabase har sin egen rate limit, men den giver
+    // en fejl brugeren aldrig ser (se ovenfor), saa her faar de i det mindste besked.
+    //
+    // Teksten skifter til en NEDTAELLING i stedet for at blive staaende paa "Sender...".
+    // Foer talte den 30 sekunder ned med "Sender..." paa skaermen, laenge efter mailen var
+    // afsendt -- det saa ud som om siden haengte, og man sad og ventede paa noget der for
+    // laengst var sket.
+    let tilbage = 30;
+    const visNedtaelling = () => { link.textContent = 'Sendt ✓ — prøv igen om ' + tilbage + ' s'; };
+    visNedtaelling();
+    const tik = setInterval(() => {
+      tilbage--;
+      if (tilbage > 0) { visNedtaelling(); return; }
+      clearInterval(tik);
       link.style.pointerEvents = '';
       link.style.opacity = '';
       link.textContent = 'Glemt adgangskode?';
-    }, 30000);
+    }, 1000);
   });
 
   client.auth.getSession().then(({ data: { session } }) => {
