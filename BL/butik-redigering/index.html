@@ -324,11 +324,15 @@
     <label for="password">Adgangskode</label>
     <input type="password" id="password" autocomplete="current-password">
     <button class="primary-btn" id="loginBtn">Log ind</button>
+    <!-- Bruger email-feltet ovenfor i stedet for sit eget: ét felt mindre at udfylde, og
+         man har som regel allerede skrevet sin adresse foer man opdager at man har glemt
+         koden. -->
+    <a href="#" id="glemtPasswordLink" style="display:inline-block; margin-top:12px; font-size:12px; color:#040DB1; text-decoration:none;">Glemt adgangskode?</a>
     <div class="msg" id="loginMsg"></div>
   </div>
   <div class="card" id="setPasswordCard" style="display:none; margin-top:16px;">
-    <h1>Vælg dit password</h1>
-    <div class="subtitle">Det er første gang du logger ind — vælg et permanent password</div>
+    <h1 id="setPasswordTitel">Vælg dit password</h1>
+    <div class="subtitle" id="setPasswordUndertekst">Det er første gang du logger ind — vælg et permanent password</div>
     <label for="newPassword1">Nyt password</label>
     <input type="password" id="newPassword1" autocomplete="new-password">
     <label for="newPassword2">Gentag password</label>
@@ -739,7 +743,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-08-25-master111';
+  const SCRIPT_VERSION = '2026-08-25-master112';
 
   // ---------- Debug-log ----------
   // Konsol-logningen er slaaet FRA i normal drift, saa driftsdetaljer (e-mail,
@@ -2076,7 +2080,71 @@
     loadLiveView();
   }
 
+  // ---------- Glemt adgangskode ----------
+  // Supabase sender et link med et recovery-token i URL'ens HASH
+  // (#access_token=...&type=recovery) og logger brugeren ind med det samme, naar de klikker.
+  // Det tjek skal ske FOER getSession() nedenfor: uden det ville checkPasswordThenProceed
+  // se en gyldig session og sende dem direkte ind i editoren, uden nogensinde at bede dem
+  // vaelge et nyt password -- altsaa et login via mail-linket alene, hvilket er stik imod
+  // hele pointen med at nulstille.
+  const erPasswordNulstilling = /[#&]type=recovery/.test(location.hash);
+
+  function visSaetPasswordKort(tilstand) {
+    document.getElementById('loginCard').style.display = 'none';
+    document.getElementById('setPasswordCard').style.display = 'block';
+    const nulstil = tilstand === 'nulstil';
+    document.getElementById('setPasswordTitel').textContent = nulstil ? 'Vælg et nyt password' : 'Vælg dit password';
+    document.getElementById('setPasswordUndertekst').textContent = nulstil
+      ? 'Du kom hertil fra linket i mailen — vælg et nyt password'
+      : 'Det er første gang du logger ind — vælg et permanent password';
+  }
+
+  // Belt and braces: hash-tjekket ovenfor fanger det normale tilfaelde, men supabase-js kan
+  // ogsaa naa at rydde hash'en foer vores kode koerer, og fyrer i saa fald denne haendelse.
+  client.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') visSaetPasswordKort('nulstil');
+  });
+
+  document.getElementById('glemtPasswordLink').addEventListener('click', async (e) => {
+    e.preventDefault();
+    const link = e.currentTarget;
+    const email = document.getElementById('email').value.trim();
+    if (!email) {
+      showMsg(loginMsg, 'Skriv din email i feltet ovenfor, så sender vi dig et link.', false);
+      document.getElementById('email').focus();
+      return;
+    }
+
+    link.style.pointerEvents = 'none';
+    link.style.opacity = '.5';
+    link.textContent = 'Sender...';
+
+    const { error } = await client.auth.resetPasswordForEmail(email, {
+      // Skal staa paa Supabases tilladte redirect-liste (Authentication -> URL
+      // Configuration), ellers naegter den at sende brugeren tilbage hertil.
+      redirectTo: location.origin + location.pathname,
+    });
+
+    // Fejlen vises BEVIDST ikke til brugeren -- hverken "findes ikke" eller "for mange
+    // forsoeg". Begge dele ville goere login-skaermen til et vaerktoej til at afsoege HVILKE
+    // e-mailadresser der har en konto hos jer. Svaret er det samme uanset hvad. Fejlen er
+    // stadig til at fejlfinde med ?debug=1.
+    if (error) dbg('resetPasswordForEmail fejlede:', error.message);
+
+    showMsg(loginMsg, 'Hvis der findes en konto med den email, har vi sendt et link til at vælge et nyt password. Kig også i spamfilteret.', true);
+
+    // Simpel spaerre mod at klikke igen og igen. Supabase har sin egen rate limit, men den
+    // giver en fejl brugeren aldrig ser (se ovenfor) -- her faar de i det mindste at vide
+    // at der sker noget.
+    setTimeout(() => {
+      link.style.pointerEvents = '';
+      link.style.opacity = '';
+      link.textContent = 'Glemt adgangskode?';
+    }, 30000);
+  });
+
   client.auth.getSession().then(({ data: { session } }) => {
+    if (erPasswordNulstilling) { visSaetPasswordKort('nulstil'); return; }
     if (session) checkPasswordThenProceed();
   });
 
@@ -2100,8 +2168,7 @@
       .single();
 
     if (bruger && bruger.skal_saette_password) {
-      document.getElementById('loginCard').style.display = 'none';
-      document.getElementById('setPasswordCard').style.display = 'block';
+      visSaetPasswordKort('foerste');
     } else {
       await loadEverything();
     }
@@ -2137,6 +2204,11 @@
       showMsg(msgEl, 'Password gemt, men kunne ikke opdatere status: ' + rpcErr.message, false);
       return;
     }
+
+    // Fjern recovery-token'et fra adressen. Ellers ville et reload (eller et bogmaerke)
+    // sende brugeren tilbage i "vaelg nyt password"-tilstand med et token der i forvejen er
+    // brugt -- og token'et ville blive liggende i browserhistorikken laengere end noedvendigt.
+    if (location.hash) history.replaceState(null, '', location.pathname + location.search);
 
     document.getElementById('setPasswordCard').style.display = 'none';
     await loadEverything();
