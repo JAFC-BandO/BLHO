@@ -430,11 +430,13 @@ async function hentVejrKoordinater(by) {
   }
 }
 
-// Vejrdata hentes ÉN GANG I DOEGNET pr. enhed. Tre lag sikrer det:
+// Vejrdata opdateres hvert 15. minut som foer -- men hentes HOEJST én gang pr. 15. minut,
+// uanset hvor tit widgeten bygges om. Tre lag sikrer det:
 //
 //   1. localStorage -- overlever genindlaesning. Det er det vigtigste lag: kiosk-visningen
 //      genindlaeses ved genstart, ved vagthundens indgreb og ved hvert sideskift, og en ren
-//      hukommelses-cache ville derfor blive nulstillet flere gange dagligt.
+//      hukommelses-cache ville blive nulstillet hver gang -- saa en nyopsat boks der
+//      genstarter nogle gange kunne selv braende kvoten, som Amager naesten naaede.
 //   2. hukommelse -- hurtigt opslag inden for samme sidevisning.
 //   3. deling af igangvaerende kald -- flere vejr-elementer der bygges samtidig deler ét kald.
 //
@@ -446,10 +448,13 @@ async function hentVejrKoordinater(by) {
 const VEJR_DATA_CACHE = {};      // "lat,lon" -> { tid, data }
 const VEJR_IGANGVAERENDE = {};   // "lat,lon" -> Promise
 const VEJR_FEJL_TID = {};        // "lat,lon" -> tidspunkt for sidste mislykkede kald
-const VEJR_CACHE_MS = 24 * 60 * 60000;   // ét doegn
-// Efter en fejl ventes en time foer der proeves igen. Uden dette ville hver ombygning af
-// widgeten starte et nyt forsoeg og goere en allerede overskredet graense endnu vaerre.
+const VEJR_CACHE_MS = 15 * 60000;   // samme friskhed som foer -- ca. 96 kald i doegnet
+// Efter en fejl ventes der foer der proeves igen, saa en overskredet graense ikke goer sig
+// selv vaerre. To laengder: har vi allerede et svar at vise, haster det ikke, og vi venter
+// laenge. Har vi ALDRIG faaet et svar (en nyopsat boks, som Amager 1. september 2026), ville
+// en time med "utilgaengelig" paa skaermen vaere for laenge -- der proeves igen efter 5 min.
 const VEJR_FEJL_PAUSE_MS = 60 * 60000;
+const VEJR_FEJL_PAUSE_UDEN_DATA_MS = 5 * 60000;
 
 // localStorage kan kaste (privat vindue, blokeret lagring) -- alt gaar derfor gennem
 // try/catch, og cachen er en optimering, aldrig en forudsaetning.
@@ -483,7 +488,8 @@ async function fetchVejrData(by) {
   if (VEJR_IGANGVAERENDE[noegle]) return VEJR_IGANGVAERENDE[noegle];
 
   const sidsteFejl = VEJR_FEJL_TID[noegle];
-  if (sidsteFejl && (nu - sidsteFejl) < VEJR_FEJL_PAUSE_MS) {
+  const pause = cachet ? VEJR_FEJL_PAUSE_MS : VEJR_FEJL_PAUSE_UDEN_DATA_MS;
+  if (sidsteFejl && (nu - sidsteFejl) < pause) {
     if (cachet) return cachet.data;
     throw new Error('Vejr-API utilgaengeligt -- venter foer nyt forsoeg');
   }
@@ -685,10 +691,11 @@ function buildVejrNode(el, registerInterval) {
     });
   };
   load();
-  // Tjekker hver time, men cachen ovenfor goer at der reelt kun hentes ÉN GANG I DOEGNET
-  // pr. enhed. Intervallet findes kun for at fange doegnskiftet og for at komme videre efter
-  // en fejl -- de oevrige gennemloeb rammer cachen og koster ingen netvaerkstrafik.
-  registerInterval(setInterval(load, 60 * 60000));
+  // Hvert 15. minut, som foer. Cachen ovenfor sikrer at ombygninger af widgeten (sideskift,
+  // rotator-slides, Live Views polling, genindlaesning efter genstart) IKKE udloeser ekstra
+  // kald -- de rammer cachen. Reelt forbrug: ca. 96 kald i doegnet pr. butik, mod en graense
+  // paa 10.000.
+  registerInterval(setInterval(load, 15 * 60000));
   return wrap;
 }
 
