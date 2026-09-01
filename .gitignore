@@ -19,3 +19,6 @@ media/
 SUPABASE.md
 ANDROID-KIOSK-SETUP.md
 REDIGERINGS-UI-GUIDE.md
+supabase/migration_session_oprydning.sql
+supabase/migration_enhed_type_windows.sql
+WINDOWS-KIOSK-SETUP.md
