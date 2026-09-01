@@ -4407,9 +4407,15 @@
       'getUser() id=', userCheck && userCheck.user && userCheck.user.id,
       'access_token (foerste 20 tegn)=', sessionCheck.session && sessionCheck.session.access_token.slice(0, 20));
 
-    let error, updatedRows;
+    // varUpdate skelner de to veje fra hinanden. Foer blev advarslen herunder udloest paa
+    // ENHVER vellykket INSERT: updatedRows saettes kun paa update-vejen, mens
+    // currentContentId lige er blevet sat fra det nye id -- saa "currentContentId &&
+    // !updatedRows" var sandt, og foerste Gem i en ny butik viste "ramte 0 raekker"
+    // selvom indsaettelsen gik perfekt. Set paa Amager 1. september 2026.
+    let error, updatedRows, varUpdate = false;
 
     if (currentContentId) {
+      varUpdate = true;
       // EKSTRA sikkerhedsnet ud over id-matchet: filtrer OGSAA paa butik_id. Rammer et evt.
       // fremtidigt stale-currentContentId-tilfaelde (som 25. juli 2026-haendelsen, se
       // loadButikData) 0 raekker i stedet for at overskrive en ANDEN butiks raekke -- koden
@@ -4432,7 +4438,7 @@
     btn.disabled = false;
     if (error) {
       showMsg(saveMsg, 'Kunne ikke gemme: ' + error.message, false);
-    } else if (currentContentId && (!updatedRows || updatedRows.length === 0)) {
+    } else if (varUpdate && (!updatedRows || updatedRows.length === 0)) {
       showMsg(saveMsg, 'ADVARSEL: Gem-kaldet ramte 0 rækker (formentlig en RLS/id-uoverensstemmelse) - intet blev reelt gemt!', false);
     } else {
       showMsg(saveMsg, 'Gemt!', true);

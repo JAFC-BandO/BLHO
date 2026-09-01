@@ -430,24 +430,70 @@ async function hentVejrKoordinater(by) {
   }
 }
 
+// Vejrdata caches pr. koordinat i 15 minutter, og samtidige kald for samme sted deler ét
+// netvaerkskald. Uden dette rammer man Open-Meteos hastighedsgraense (HTTP 429) meget
+// hurtigt: widgetens load() koeres nemlig ogsaa ved hver OMBYGNING af elementet -- ved
+// sidetskift, ved hvert rotator-slide, og ved Live Views polling -- ikke kun paa det
+// 15-minutters interval man skulle tro. Med mange skaerme og flere sider blev det til
+// snesevis af identiske kald i traek mod samme koordinat. Set i praksis 1. september 2026,
+// hvor ALLE skaerme mistede vejret samtidig med 429 i konsollen.
+const VEJR_DATA_CACHE = {};      // "lat,lon" -> { tid, data }
+const VEJR_IGANGVAERENDE = {};   // "lat,lon" -> Promise
+const VEJR_FEJL_TID = {};        // "lat,lon" -> tidspunkt for sidste mislykkede kald
+const VEJR_CACHE_MS = 15 * 60000;
+// Efter en fejl (typisk HTTP 429) ventes der 10 minutter foer der proeves igen. Uden dette
+// ville hver ombygning af widgeten starte et nyt forsoeg og goere en overskredet graense
+// endnu vaerre -- praecis det moenster der braendte hele dagskvoten 1. september 2026.
+const VEJR_FEJL_PAUSE_MS = 10 * 60000;
+
 async function fetchVejrData(by) {
   const koord = await hentVejrKoordinater(by);
+  const noegle = koord.lat + ',' + koord.lon;
+
+  const cachet = VEJR_DATA_CACHE[noegle];
+  if (cachet && (Date.now() - cachet.tid) < VEJR_CACHE_MS) return cachet.data;
+
+  // Deler et allerede igangvaerende kald i stedet for at starte endnu et. Rammer det
+  // tilfaelde hvor flere vejr-elementer (eller flere sider) bygges op i samme oejeblik.
+  if (VEJR_IGANGVAERENDE[noegle]) return VEJR_IGANGVAERENDE[noegle];
+
+  const sidsteFejl = VEJR_FEJL_TID[noegle];
+  if (sidsteFejl && (Date.now() - sidsteFejl) < VEJR_FEJL_PAUSE_MS) {
+    if (cachet) return cachet.data;
+    throw new Error('Vejr-API utilgaengeligt -- venter foer nyt forsoeg');
+  }
+
   // forecast_days=4: i dag (bruges til "nu"-visningen) plus de 3 kommende dage til
   // fremtidsudsigten -- samme kald giver baade "nu" og udsigten, saa der ikke skal to
   // separate netvaerkskald til for hver genindlaesning.
   const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + koord.lat + '&longitude=' + koord.lon +
     '&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=4';
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    if (!data.current_weather || !data.daily) throw new Error('Ufuldstaendigt vejrdata i svaret');
-    return { nu: data.current_weather, dage: data.daily };
-  } finally {
-    clearTimeout(timeoutId);
-  }
+
+  const p = (async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    try {
+      const res = await fetch(url, { signal: controller.signal });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if (!data.current_weather || !data.daily) throw new Error('Ufuldstaendigt vejrdata i svaret');
+      const resultat = { nu: data.current_weather, dage: data.daily };
+      VEJR_DATA_CACHE[noegle] = { tid: Date.now(), data: resultat };
+      return resultat;
+    } catch (e) {
+      VEJR_FEJL_TID[noegle] = Date.now();
+      // Ved 429 (eller anden fejl): behold et evt. gammelt svar og lad kalderen vise det,
+      // i stedet for at tvinge "utilgaengelig" frem paa en skaerm der havde data i forvejen.
+      if (cachet) return cachet.data;
+      throw e;
+    } finally {
+      clearTimeout(timeoutId);
+      delete VEJR_IGANGVAERENDE[noegle];
+    }
+  })();
+
+  VEJR_IGANGVAERENDE[noegle] = p;
+  return p;
 }
 
 // WMO vejrkoder (samme kodeliste som Open-Meteo bruger) mappet til korte danske beskrivelser.
