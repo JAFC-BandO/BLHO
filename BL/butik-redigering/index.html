@@ -1445,6 +1445,16 @@
     }
   }
 
+  // Enhedstypens menneskelige navn. Skal daekke ALLE vaerdier i enheder_type_check --
+  // stod foer som 'android' ? 'Android' : 'Pi', saa en windows-boks blev vist som "(Pi)".
+  // Ukendte vaerdier vises som de er, i stedet for at blive kaldt noget forkert.
+  function enhedTypeNavn(type) {
+    if (type === 'android') return 'Android';
+    if (type === 'windows') return 'Windows';
+    if (type === 'pi') return 'Pi';
+    return type || 'Ukendt';
+  }
+
   function renderEnhederListe() {
     const wrap = document.getElementById('enhederListe');
     // Bevar en igangvaerende kommando-tekst + fokus hen over et baggrunds-refresh (se
@@ -1487,7 +1497,7 @@
       const info = document.createElement('div');
       info.style.flex = '1';
       info.innerHTML =
-        '<div style="font-weight:600;">' + escapeHtml(e.navn) + ' <span style="color:#aaa; font-weight:400; font-size:11px;">(' + (e.type === 'android' ? 'Android' : 'Pi') + ')</span></div>' +
+        '<div style="font-weight:600;">' + escapeHtml(e.navn) + ' <span style="color:#aaa; font-weight:400; font-size:11px;">(' + enhedTypeNavn(e.type) + ')</span></div>' +
         '<div style="color:#888; font-size:11px;">' + escapeHtml(e.butikker ? e.butikker.navn : '?') + ' · ' +
           tidSiden(e.sidst_set_at) + (e.lokal_ip ? ' · ' + escapeHtml(e.lokal_ip) : '') +
           (e.kommando ? ' · ⏳ ' + escapeHtml(kommandoLabel(e.kommando)) + ' afventer' : '') + '</div>' +
