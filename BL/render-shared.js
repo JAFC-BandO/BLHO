@@ -430,35 +430,60 @@ async function hentVejrKoordinater(by) {
   }
 }
 
-// Vejrdata caches pr. koordinat i 15 minutter, og samtidige kald for samme sted deler ét
-// netvaerkskald. Uden dette rammer man Open-Meteos hastighedsgraense (HTTP 429) meget
-// hurtigt: widgetens load() koeres nemlig ogsaa ved hver OMBYGNING af elementet -- ved
-// sidetskift, ved hvert rotator-slide, og ved Live Views polling -- ikke kun paa det
-// 15-minutters interval man skulle tro. Med mange skaerme og flere sider blev det til
-// snesevis af identiske kald i traek mod samme koordinat. Set i praksis 1. september 2026,
-// hvor ALLE skaerme mistede vejret samtidig med 429 i konsollen.
+// Vejrdata hentes ÉN GANG I DOEGNET pr. enhed. Tre lag sikrer det:
+//
+//   1. localStorage -- overlever genindlaesning. Det er det vigtigste lag: kiosk-visningen
+//      genindlaeses ved genstart, ved vagthundens indgreb og ved hvert sideskift, og en ren
+//      hukommelses-cache ville derfor blive nulstillet flere gange dagligt.
+//   2. hukommelse -- hurtigt opslag inden for samme sidevisning.
+//   3. deling af igangvaerende kald -- flere vejr-elementer der bygges samtidig deler ét kald.
+//
+// Baggrund: foer havde fetchVejrData ingen cache overhovedet, og widgetens load() koeres ved
+// hver OMBYGNING af elementet -- sideskift, hvert rotator-slide, Live Views polling -- ikke
+// kun paa sit interval. Det blev til snesevis af identiske kald mod samme koordinat, og
+// 1. september 2026 braendte det hele dagskvoten hos Open-Meteo (10.000 kald): "Daily API
+// request limit exceeded". Alle skaerme mistede vejret resten af doegnet.
 const VEJR_DATA_CACHE = {};      // "lat,lon" -> { tid, data }
 const VEJR_IGANGVAERENDE = {};   // "lat,lon" -> Promise
 const VEJR_FEJL_TID = {};        // "lat,lon" -> tidspunkt for sidste mislykkede kald
-const VEJR_CACHE_MS = 15 * 60000;
-// Efter en fejl (typisk HTTP 429) ventes der 10 minutter foer der proeves igen. Uden dette
-// ville hver ombygning af widgeten starte et nyt forsoeg og goere en overskredet graense
-// endnu vaerre -- praecis det moenster der braendte hele dagskvoten 1. september 2026.
-const VEJR_FEJL_PAUSE_MS = 10 * 60000;
+const VEJR_CACHE_MS = 24 * 60 * 60000;   // ét doegn
+// Efter en fejl ventes en time foer der proeves igen. Uden dette ville hver ombygning af
+// widgeten starte et nyt forsoeg og goere en allerede overskredet graense endnu vaerre.
+const VEJR_FEJL_PAUSE_MS = 60 * 60000;
+
+// localStorage kan kaste (privat vindue, blokeret lagring) -- alt gaar derfor gennem
+// try/catch, og cachen er en optimering, aldrig en forudsaetning.
+function vejrLaesGemt(noegle) {
+  try {
+    const raa = localStorage.getItem('blho_vejr_' + noegle);
+    if (!raa) return null;
+    const o = JSON.parse(raa);
+    if (!o || !o.tid || !o.data) return null;
+    return o;
+  } catch (e) { return null; }
+}
+function vejrGem(noegle, data) {
+  try {
+    localStorage.setItem('blho_vejr_' + noegle, JSON.stringify({ tid: Date.now(), data: data }));
+  } catch (e) { /* fuld eller blokeret lagring -- hukommelses-cachen daekker stadig */ }
+}
 
 async function fetchVejrData(by) {
   const koord = await hentVejrKoordinater(by);
   const noegle = koord.lat + ',' + koord.lon;
+  const nu = Date.now();
 
-  const cachet = VEJR_DATA_CACHE[noegle];
-  if (cachet && (Date.now() - cachet.tid) < VEJR_CACHE_MS) return cachet.data;
+  let cachet = VEJR_DATA_CACHE[noegle];
+  if (!cachet) {
+    const gemt = vejrLaesGemt(noegle);
+    if (gemt) { cachet = gemt; VEJR_DATA_CACHE[noegle] = gemt; }
+  }
+  if (cachet && (nu - cachet.tid) < VEJR_CACHE_MS) return cachet.data;
 
-  // Deler et allerede igangvaerende kald i stedet for at starte endnu et. Rammer det
-  // tilfaelde hvor flere vejr-elementer (eller flere sider) bygges op i samme oejeblik.
   if (VEJR_IGANGVAERENDE[noegle]) return VEJR_IGANGVAERENDE[noegle];
 
   const sidsteFejl = VEJR_FEJL_TID[noegle];
-  if (sidsteFejl && (Date.now() - sidsteFejl) < VEJR_FEJL_PAUSE_MS) {
+  if (sidsteFejl && (nu - sidsteFejl) < VEJR_FEJL_PAUSE_MS) {
     if (cachet) return cachet.data;
     throw new Error('Vejr-API utilgaengeligt -- venter foer nyt forsoeg');
   }
@@ -479,11 +504,13 @@ async function fetchVejrData(by) {
       if (!data.current_weather || !data.daily) throw new Error('Ufuldstaendigt vejrdata i svaret');
       const resultat = { nu: data.current_weather, dage: data.daily };
       VEJR_DATA_CACHE[noegle] = { tid: Date.now(), data: resultat };
+      vejrGem(noegle, resultat);
+      delete VEJR_FEJL_TID[noegle];
       return resultat;
     } catch (e) {
       VEJR_FEJL_TID[noegle] = Date.now();
-      // Ved 429 (eller anden fejl): behold et evt. gammelt svar og lad kalderen vise det,
-      // i stedet for at tvinge "utilgaengelig" frem paa en skaerm der havde data i forvejen.
+      // Behold et evt. gammelt svar og vis det, frem for at tvinge "utilgaengelig" frem paa
+      // en skaerm der havde data i forvejen. Et doegngammelt vejr er bedre end ingenting.
       if (cachet) return cachet.data;
       throw e;
     } finally {
@@ -658,10 +685,10 @@ function buildVejrNode(el, registerInterval) {
     });
   };
   load();
-  // Vejret aendrer sig ikke fra minut til minut som et fejlfindings-svar -- hvert 15. minut
-  // er hyppigt nok til en "lige nu"-visning uden at overbelaste det gratis, noegle-frie API
-  // fra mange enheder samtidig.
-  registerInterval(setInterval(load, 15 * 60000));
+  // Tjekker hver time, men cachen ovenfor goer at der reelt kun hentes ÉN GANG I DOEGNET
+  // pr. enhed. Intervallet findes kun for at fange doegnskiftet og for at komme videre efter
+  // en fejl -- de oevrige gennemloeb rammer cachen og koster ingen netvaerkstrafik.
+  registerInterval(setInterval(load, 60 * 60000));
   return wrap;
 }
 
