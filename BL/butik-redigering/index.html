@@ -228,8 +228,12 @@
     gap: 3px; text-align: center; padding: 4px;
   }
   .faelles-slide-thumb .fs-ikon { font-size: 16px; line-height: 1; }
+  .faelles-slide-thumb .fs-navn {
+    font-size: 9px; font-weight: 600; color: #fff; line-height: 1.15;
+    overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
   .faelles-slide-thumb .fs-tekst {
-    font-size: 9px; font-weight: 700; color: #cdd4ff; letter-spacing: .2px; line-height: 1.2;
+    font-size: 8px; font-weight: 700; color: #9aa6ff; letter-spacing: .3px; line-height: 1.2;
   }
   .el-text {
     width: 100%; height: 100%; color: white; padding: 4px 6px; outline: none;
@@ -1719,6 +1723,8 @@
           return '';
         })();
       row.appendChild(info);
+      const omdoebLink = info.querySelector('.omdoebFaelles');
+      if (omdoebLink) omdoebLink.addEventListener('click', (ev) => { ev.stopPropagation(); omdoebFaellesSlide(i); });
       info.querySelector('.enhedIdKopier').addEventListener('click', (ev) => {
         navigator.clipboard.writeText(ev.target.dataset.id);
         ev.target.textContent = 'Kopieret!';
@@ -2393,12 +2399,15 @@
       // tomt slide stod som "9 elementer" - hvilket ikke sagde noget om hvad man havde lavet.
       const antal = s.type === 'side' ? (s.egneElementer || []).length : null;
       info.innerHTML =
-        '<div style="font-weight:600;">' + escapeHtml(s.faellesNavn || s.url || 'Uden navn') + '</div>' +
+        '<div style="font-weight:600;">' + escapeHtml(s.faellesNavn || s.url || 'Uden navn') +
+        '<span class="omdoebFaelles" data-i="' + i + '" style="color:#999; font-size:10px; text-decoration:underline; cursor:pointer; margin-left:6px; font-weight:400;">omdøb</span></div>' +
         '<div style="font-size:11px; color:' + (s.udkast ? '#b96a15' : '#1a9b4b') + ';">' +
         (s.udkast ? '● Udkast — vises ikke i butikkerne endnu' : '● Vises i alle butikkers diasshow') +
         (antal != null ? ' · ' + (antal === 0 ? 'tomt endnu' : antal + ' element' + (antal === 1 ? '' : 'er') + ' tilføjet') : '') +
         '</div>';
       row.appendChild(info);
+      const omdoebLink = info.querySelector('.omdoebFaelles');
+      if (omdoebLink) omdoebLink.addEventListener('click', (ev) => { ev.stopPropagation(); omdoebFaellesSlide(i); });
 
       // Rækkefølgen i listen ER rækkefølgen på skærmen, saa den skal kunne aendres.
       if (slides.length > 1) {
@@ -2526,6 +2535,19 @@
     logAdminHandling('faelles_slide_fjernet', s.faellesNavn || null);
   }
 
+  // Navnet vises baade her i listen OG ude i butikkernes slide-raekke, saa de kan se
+  // HVAD det ekstra slide er - ikke bare at der kommer et. Derfor er et sigende navn
+  // vaerd at kunne saette.
+  async function omdoebFaellesSlide(i) {
+    const slides = faellesSlideListe().slice();
+    const s = slides[i];
+    if (!s) return;
+    const navn = (prompt('Navn på slidet (vises også i butikkernes diasshow):', s.faellesNavn || '') || '').trim();
+    if (!navn) return;
+    slides[i] = Object.assign({}, s, { faellesNavn: navn });
+    await gemListe(slides, 'Navnet er ændret.');
+  }
+
   async function flytFaellesSlide(i, retning) {
     const slides = faellesSlideListe().slice();
     const j = i + retning;
@@ -2638,6 +2660,13 @@
     loadLiveView();
   }
 
+  // Spoerger om et navn foerste gang et slide gemmes. Falder tilbage til et nummer hvis
+  // man bare trykker OK - saa staar man aldrig med et slide uden navn.
+  function faellesSlideNyttNavn(nr) {
+    const forslag = 'Fælles slide ' + nr;
+    return (prompt('Giv slidet et navn (vises også i butikkernes diasshow):', forslag) || '').trim() || forslag;
+  }
+
   // Gemmer slidets INDHOLD i listen. Et NYT slide (index -1) tilfoejes til sidst; et
   // eksisterende opdateres paa sin plads, saa raekkefoelgen ikke hopper.
   async function saveFaellesSlideIndhold() {
@@ -2672,7 +2701,7 @@
       elements: JSON.parse(JSON.stringify(flettet)),
       egneElementer: JSON.parse(JSON.stringify(elements)),
       faellesSlide: true,
-      faellesNavn: (eksisterende && eksisterende.faellesNavn) || ('Fælles slide ' + (slides.length + 1)),
+      faellesNavn: (eksisterende && eksisterende.faellesNavn) || faellesSlideNyttNavn(slides.length + 1),
       // Et nyt slide starter altid som udkast, saa intet gaar live ved et uheld. Var det
       // allerede ude, forbliver det ude - saa en koerende kampagne kan rettes direkte.
       udkast: eksisterende ? !!eksisterende.udkast : true,
@@ -3914,8 +3943,13 @@
         const t = document.createElement('div');
         t.className = 'faelles-slide-thumb';
         const navn = sl.faellesNavn || (sl.type === 'side' ? 'Side' : sl.url) || '';
+        // Navnet vises ogsaa her, ikke kun i tooltippet. En butik der ser et ekstra slide
+        // i sit diasshow skal kunne se HVAD det er - "Sommerkampagne" siger noget,
+        // "FRA ADMIN" alene goer ikke.
+        const kort = navn.length > 22 ? navn.slice(0, 21) + '…' : navn;
         t.innerHTML =
           '<div class="fs-ikon">' + (sl.type === 'video' ? '🎬' : sl.type === 'side' ? '📄' : '🖼️') + '</div>' +
+          '<div class="fs-navn">' + escapeHtml(kort) + '</div>' +
           '<div class="fs-tekst">FRA ADMIN</div>';
         t.title = 'Fælles slide fra admin' + (navn ? ': ' + navn : '') + '.\n\n' +
           'Vises ' + (posNavn[pos] || 'sidst') + ' i diasshowet på alle butikkers skærme. ' +
