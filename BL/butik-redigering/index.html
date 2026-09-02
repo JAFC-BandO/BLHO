@@ -403,6 +403,18 @@
         Enheden "melder sig" selv med jævne mellemrum — status opdateres derfor ikke i realtid, men typisk indenfor et minut. En kommando udføres af enheden ved næste check-in.
       </div>
 
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; font-size:12px;">
+        <label for="enhederSortering" style="color:#888;">Sortér:</label>
+        <select id="enhederSortering" style="padding:5px 8px; font-size:12px;">
+          <option value="status">Online først</option>
+          <option value="butik">Butik (A-Å)</option>
+          <option value="sidst">Sidst set (nyeste først)</option>
+          <option value="hukommelse">Ledig hukommelse (mindst først)</option>
+          <option value="type">Type</option>
+        </select>
+        <span id="enhederAntal" style="color:#aaa; margin-left:auto;"></span>
+      </div>
+
       <div id="enhederListe" style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;"></div>
 
       <h2 style="font-size:14px;">Registrér ny enhed</h2>
@@ -1455,6 +1467,68 @@
     return type || 'Ukendt';
   }
 
+  // Samme graenser som enhedStatusFarve, men som et tal der kan sorteres paa. Lavere
+  // tal = mere "i orden", saa en almindelig stigende sortering giver online oeverst.
+  // 3 (aldrig set) ligger efter 2 (nede): en enhed der ALDRIG har meldt sig er typisk
+  // en der ikke er sat op endnu, ikke et akut problem som en der lige er faldet ud.
+  function enhedStatusRang(iso) {
+    if (!iso) return 3;
+    const minutter = (Date.now() - new Date(iso).getTime()) / 60000;
+    if (minutter < 3) return 0;
+    if (minutter < 15) return 1;
+    return 2;
+  }
+
+  function enhedButikNavn(e) {
+    return (e.butikker && e.butikker.navn) || '';
+  }
+
+  // Valget huskes paa tvaers af genindlaesninger -- panelet auto-opdaterer hvert 15.
+  // sekund, og man aabner det typisk mange gange i traek under en udrulning.
+  function hentEnhedSortering() {
+    try { return localStorage.getItem('blho_enheder_sortering') || 'status'; }
+    catch (e) { return 'status'; }
+  }
+  function gemEnhedSortering(v) {
+    try { localStorage.setItem('blho_enheder_sortering', v); } catch (e) { /* blokeret lagring */ }
+  }
+
+  function sorterEnheder(liste, hvordan) {
+    const kopi = liste.slice();
+    const efterNavn = (a, b) => enhedButikNavn(a).localeCompare(enhedButikNavn(b), 'da') ||
+                                (a.navn || '').localeCompare(b.navn || '', 'da');
+    switch (hvordan) {
+      case 'butik':
+        return kopi.sort(efterNavn);
+      case 'sidst':
+        // Aldrig set havner nederst i stedet for at blive regnet som "uendeligt gammel".
+        return kopi.sort((a, b) => {
+          if (!a.sidst_set_at && !b.sidst_set_at) return efterNavn(a, b);
+          if (!a.sidst_set_at) return 1;
+          if (!b.sidst_set_at) return -1;
+          return new Date(b.sidst_set_at) - new Date(a.sidst_set_at);
+        });
+      case 'hukommelse':
+        // Mindst ledig hukommelse oeverst -- det er den der er ved at komme i knibe.
+        // Enheder uden maaling nederst, ikke oeverst som en 0 ville give.
+        return kopi.sort((a, b) => {
+          const x = a.mem_available_mb, y = b.mem_available_mb;
+          if (x == null && y == null) return efterNavn(a, b);
+          if (x == null) return 1;
+          if (y == null) return -1;
+          return x - y;
+        });
+      case 'type':
+        return kopi.sort((a, b) => (a.type || '').localeCompare(b.type || '') || efterNavn(a, b));
+      case 'status':
+      default:
+        // Online oeverst, og indenfor hver gruppe alfabetisk -- saa raekkefoelgen er
+        // forudsigelig og ikke hopper rundt ved hvert auto-refresh.
+        return kopi.sort((a, b) => enhedStatusRang(a.sidst_set_at) - enhedStatusRang(b.sidst_set_at) ||
+                                   efterNavn(a, b));
+    }
+  }
+
   function renderEnhederListe() {
     const wrap = document.getElementById('enhederListe');
     // Bevar en igangvaerende kommando-tekst + fokus hen over et baggrunds-refresh (se
@@ -1470,9 +1544,25 @@
     wrap.innerHTML = '';
     if (!alleEnheder.length) {
       wrap.innerHTML = '<div style="color:#888; font-size:13px;">Ingen enheder registreret endnu.</div>';
+      const tom = document.getElementById('enhederAntal');
+      if (tom) tom.textContent = '';
       return;
     }
-    alleEnheder.forEach(e => {
+
+    const sorteringVaelger = document.getElementById('enhederSortering');
+    const hvordan = sorteringVaelger ? sorteringVaelger.value : hentEnhedSortering();
+
+    // Kort optaelling ved siden af vaelgeren -- under en udrulning er "hvor mange er oppe"
+    // det man kigger efter, og ellers skal man taelle groenne prikker manuelt.
+    const antalTaeller = document.getElementById('enhederAntal');
+    if (antalTaeller) {
+      const online = alleEnheder.filter(e => enhedStatusRang(e.sidst_set_at) === 0).length;
+      const aldrig = alleEnheder.filter(e => !e.sidst_set_at).length;
+      antalTaeller.textContent = online + ' af ' + alleEnheder.length + ' online' +
+        (aldrig ? ' · ' + aldrig + ' aldrig set' : '');
+    }
+
+    sorterEnheder(alleEnheder, hvordan).forEach(e => {
       const row = document.createElement('div');
       row.style.cssText = 'display:flex; align-items:flex-start; gap:10px; background:#f7f7fb; border-radius:8px; padding:10px 12px; font-size:13px;';
 
@@ -1725,10 +1815,18 @@
     await loadEnheder();
   }
 
+  // Sorteringsvaelgeren ligger UDEN FOR #enhederListe, saa den ikke bliver bygget om ved
+  // hvert auto-refresh -- ellers ville valget (og fokus) blive nulstillet hvert 15. sekund.
+  document.getElementById('enhederSortering').addEventListener('change', (ev) => {
+    gemEnhedSortering(ev.target.value);
+    renderEnhederListe();
+  });
+
   let enhederPollHandle = null;
   document.getElementById('enhederBtn').addEventListener('click', async () => {
     document.getElementById('superadminMenu').style.display = 'none';
     document.getElementById('enhederOverlay').style.display = 'flex';
+    document.getElementById('enhederSortering').value = hentEnhedSortering();
     await loadAlleButikkerListe();
     await loadEnheder();
     // Auto-opdatér mens panelet er åbent, så et fejlfindings-svar dukker op af sig selv
