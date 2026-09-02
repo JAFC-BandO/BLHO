@@ -416,7 +416,7 @@
   </div>
 
   <div id="faellesSlideBanner" style="display:none; align-items:center; justify-content:space-between; background:#4d5bff; color:#fff; font-weight:700; font-size:13px; padding:8px 20px;">
-    <span>Du bygger det FÆLLES SLIDE — ét slide i diasshowet, ikke en hel side. Tilføj elementer i venstre side. Det vises i alle butikkers diasshow, men skrives aldrig ind i deres indhold.</span>
+    <span>Du bygger det FÆLLES SLIDE — byg det som en helt almindelig side. Det lægges oveni alle butikkers diasshow som en ekstra visning, uden at røre deres eget indhold.</span>
     <button id="exitFaellesSlideBtn" style="padding:6px 14px; font-size:12px;">Afslut</button>
   </div>
 
@@ -2521,12 +2521,20 @@
     faellesSlideEditMode = true;
 
     const eksisterende = (masterTemplate && masterTemplate.faellesSlides || [])[0];
-    // Kun 'side'-slides kan redigeres her. Er det aktive slide et rent billede/en video,
-    // starter man forfra med en tom side i stedet for at faa noget uredigerbart ind.
-    elements = (eksisterende && eksisterende.type === 'side' && Array.isArray(eksisterende.elements))
-      ? JSON.parse(JSON.stringify(eksisterende.elements))
-      : [];
-    baggrundsfarve = (eksisterende && eksisterende.background) || '#0a0a0a';
+    if (eksisterende && eksisterende.type === 'side' && Array.isArray(eksisterende.egneElementer)) {
+      // Genoptag redigering: vi gemmer butikkens EGNE elementer separat (egneElementer),
+      // saa de laaste standard-elementer ikke bliver redigerbare kopier naar man vender
+      // tilbage. Selve slidet indeholder den faerdigflettede version til visning.
+      elements = JSON.parse(JSON.stringify(eksisterende.egneElementer));
+      baggrundsfarve = eksisterende.background || '#0a0a0a';
+    } else {
+      // Nyt slide: start praecis som addNewSide goer -- standardSideData() kloner
+      // skabelonens ULAASTE elementer, og de laaste kommer fra fletningen i
+      // displayElements, saa man ser sidebjaelke, logo, ur og de 2 felter med det samme.
+      const std = standardSideData();
+      elements = std ? std.elements : [];
+      baggrundsfarve = std ? std.background : '#0a0a0a';
+    }
 
     selectedElementId = null;
     armedElementId = null;
@@ -2569,10 +2577,28 @@
 
     const aktive = (masterTemplate.faellesSlides || []);
     const eksisterende = aktive[0];
+
+    // TO ting gemmes, og forskellen er vigtig:
+    //
+    //   elements       den FAERDIGFLETTEDE side - egne elementer PLUS skabelonens laaste
+    //                  (sidebjaelke, logo, ur, vejr, nyhedsbanner). Et slide faar nemlig
+    //                  IKKE master-fletningen naar det tegnes ude paa skaermene, saa uden
+    //                  dette ville slidet mangle hele rammen og se forkert ud.
+    //   egneElementer  kun dem superadmin selv har lagt ind. Bruges naar man aabner slidet
+    //                  igen: ellers ville de laaste elementer komme tilbage som almindelige,
+    //                  redigerbare kopier, og saa ville de blive gemt DOBBELT naeste gang.
+    //
+    // Konsekvens vaerd at kende: rammen er et oejebliksbillede. Aendrer nogen den faelles
+    // skabelon bagefter, foelger et allerede udgivet slide ikke med - det skal bygges og
+    // udgives igen.
+    const flettet = mergeMasterElements(
+      elements, masterTemplate.elements || [], null);
+
     const slide = {
       type: 'side',
       background: baggrundsfarve,
-      elements: JSON.parse(JSON.stringify(elements)),
+      elements: JSON.parse(JSON.stringify(flettet)),
+      egneElementer: JSON.parse(JSON.stringify(elements)),
       faellesSlide: true,
       faellesNavn: (eksisterende && eksisterende.faellesNavn) || 'Fælles slide',
       // Er slidet ikke udgivet endnu, bliver det liggende som udkast. Var det allerede ude,
@@ -2965,12 +2991,10 @@
   // ellers butikkens egne elementer med laaste master-elementer flettet ind (samme funktion
   // som skaerm.html og Live View bruger, se render-shared.js).
   function displayElements() {
-    // Ogsaa i faelles-slide-tilstanden vises KUN de raa elementer. Uden dette blev
-    // master-skabelonens faste vinduer (banner + hoved) flettet ind ovenpaa, saa
-    // "Vælg fra bibliotek" og resten laa bag banneret og ikke kunne rammes. Et faelles
-    // slide er en selvstaendig side i et diasshow - det har intet med butikkens faste
-    // vinduer at goere.
-    if (masterEditMode || faellesSlideEditMode) return elements;
+    // Faelles-slide-tilstanden er BEVIDST ikke undtaget her: slidet bygges som en helt
+    // almindelig side, med samme laaste standard-elementer og de samme 2 felter. Kun
+    // master-redigeringen viser de raa elementer, fordi det ER dem man redigerer der.
+    if (masterEditMode) return elements;
     const aktivSide = sider.find(s => s.id === aktivSideId);
     // BEVIDST INGEN mergeFaellesSlides her. Canvas'et er REDIGERING, ikke visning, og
     // redigerings-UI'et muterer elementerne direkte (se naeste afsnit). Blev faelles-slides
@@ -3487,9 +3511,7 @@
       // Uden for selve skabelon-redigeringen: findes der ledige faste pladser, skal det nye
       // element ind i EN af dem -- ikke ende som et loesrevet element, der senere skal
       // finjusteres i forhold til banner-/rotator-vinduet.
-      // faellesSlideEditMode tages med her: et faelles slide er en selvstaendig side uden
-      // faste pladser, saa slot-vaelgeren ville aabne paa noget der ikke findes.
-      if (FYLDER_HELE[type] && !masterEditMode && !faellesSlideEditMode) {
+      if (FYLDER_HELE[type] && !masterEditMode) {
         const ledige = tilgaengeligeSlotIds();
         if (ledige.length > 0) {
           aabnSlotVaelger(type, ledige);
@@ -3505,7 +3527,7 @@
       // desuden superadmin-only (se slotVaelgerFritBtn), saa dette er reelt den ENESTE vej en
       // almindelig admin kunne have naaet et frit element paa. I stedet for at stiltiende
       // oprette det, forklarer vi hvad de skal goere i stedet.
-      if (!erSuperadmin && !masterEditMode && !faellesSlideEditMode) {
+      if (!erSuperadmin && !masterEditMode) {
         alert('I har kun de 2 vinduer (banner og hoved). Klik først på det vindue på siden du vil ændre, og tryk så på denne knap for at erstatte dets indhold.');
         return;
       }
