@@ -400,6 +400,11 @@
     </div>
   </div>
 
+  <div id="faellesSlideBanner" style="display:none; align-items:center; justify-content:space-between; background:#4d5bff; color:#fff; font-weight:700; font-size:13px; padding:8px 20px;">
+    <span>Du bygger det FÆLLES SLIDE — det vises i alle butikkers diasshow, men skrives aldrig ind i deres indhold</span>
+    <button id="exitFaellesSlideBtn" style="padding:6px 14px; font-size:12px;">Afslut</button>
+  </div>
+
   <div id="masterEditBanner" style="display:none; align-items:center; justify-content:space-between; background:#ffd700; color:#5a4600; font-weight:700; font-size:13px; padding:8px 20px;">
     <span>Du redigerer den FÆLLES skabelon — låste elementer synkroniseres live til ALLE butikkers skærme</span>
     <button id="exitMasterEditBtn" style="padding:6px 14px; font-size:12px;">Afslut</button>
@@ -431,10 +436,13 @@
       </div>
 
       <div id="faellesSlideSideValg" style="margin-bottom:14px;">
-        <select id="faellesSlideSablon" style="width:100%; padding:8px; font-size:13px;"></select>
-        <div style="font-size:11px; color:#888; margin-top:4px;">
-          Bygget under "Skabeloner". Har du ingen endnu, så lav en side, markér den, og gem den som skabelon.
+        <button id="byggFaellesSlideBtn" style="width:100%; padding:10px; font-size:13px;">Byg / redigér slidet</button>
+        <div style="font-size:11px; color:#888; margin-top:6px; line-height:1.5;">
+          Åbner canvas'et med det fælles slide, så du bygger det med de sædvanlige værktøjer —
+          tekst, billeder, bokse. Tryk "Gem ændringer" når du er færdig, og "Afslut" for at komme tilbage
+          til butikken. Slidet vises først i butikkernes diasshow når du trykker "Vis i alle diasshow" herunder.
         </div>
+        <div id="faellesSlideIndholdStatus" style="font-size:11px; color:#666; margin-top:8px;"></div>
       </div>
 
       <div id="faellesSlideMediaValg" style="display:none; margin-bottom:14px;">
@@ -2298,27 +2306,18 @@
   // Slidet gemmes i den faelles skabelons data-objekt og flettes ind ved VISNING
   // (mergeFaellesSlides i render-shared.js). Det roerer aldrig butikkernes eget content.
 
-  let faellesSlideSabloner = [];
   let faellesSlideMedier = [];
 
   async function aabnFaellesSlidePanel() {
     document.getElementById('superadminMenu').style.display = 'none';
     document.getElementById('faellesSlideOverlay').style.display = 'flex';
-    document.getElementById('faellesSlideMsg').textContent = '';
+    // Baade tekst OG klasse skal ryddes: .msg.err har baggrund + display:block, saa en
+    // gammel fejl efterlader en tom roed kasse naeste gang panelet aabnes.
+    const msgEl = document.getElementById('faellesSlideMsg');
+    msgEl.textContent = '';
+    msgEl.className = '';
+    msgEl.style.display = 'none';
     await loadMasterTemplate();
-
-    // Side-skabeloner at vaelge imellem. Kun 'side'-typen giver mening som et helt slide,
-    // og selve faelles-skabelonen (standard=true) skal ikke kunne vaelges som slide i sig selv.
-    const { data: sabloner } = await client
-      .from('sabloner')
-      .select('id, navn, data, standard')
-      .eq('type', 'side')
-      .order('navn');
-    faellesSlideSabloner = (sabloner || []).filter(x => !x.standard && x.data && Array.isArray(x.data.elements));
-    const sablonSelect = document.getElementById('faellesSlideSablon');
-    sablonSelect.innerHTML = faellesSlideSabloner.length
-      ? faellesSlideSabloner.map(x => '<option value="' + x.id + '">' + escapeHtml(x.navn) + '</option>').join('')
-      : '<option value="">(ingen side-skabeloner endnu)</option>';
 
     // Medier. Bucket'en er public, saa en URL virker uanset hvilken butik mediet
     // oprindeligt blev uploadet til.
@@ -2334,6 +2333,7 @@
       (masterTemplate && masterTemplate.faellesSlidesPosition) || 'sidst';
 
     visFaellesSlideStatus();
+    visFaellesSlideIndholdStatus();
     visFaellesSlideRaekkevidde();
   }
 
@@ -2415,19 +2415,15 @@
 
     let slide = null;
     if (type === 'side') {
-      const id = document.getElementById('faellesSlideSablon').value;
-      const sab = faellesSlideSabloner.find(x => x.id === id);
-      if (!sab) { showMsg(msg, 'Vælg en side-skabelon først.', false); return; }
-      // En SELVSTAENDIG kopi, ikke en reference. Aendrer nogen skabelonen bagefter, aendrer
-      // det ikke det der allerede staar ude paa skaermene -- at udgive noget nyt skal vaere
-      // et bevidst klik her.
-      slide = {
-        type: 'side',
-        background: sab.data.background || '#0a0a0a',
-        elements: JSON.parse(JSON.stringify(sab.data.elements || [])),
-        faellesSlide: true,
-        faellesNavn: sab.navn,
-      };
+      // Udgiver det slide der er bygget under "Byg / redigér slidet". Det gemte udkast
+      // findes allerede -- her fjernes udkast-flaget, saa det begynder at blive flettet
+      // ind i butikkernes diasshow.
+      const bygget = ((masterTemplate && masterTemplate.faellesSlides) || [])[0];
+      if (!bygget || bygget.type !== 'side' || !(bygget.elements || []).length) {
+        showMsg(msg, 'Byg slidet først — tryk "Byg / redigér slidet", lav siden, og gem den.', false);
+        return;
+      }
+      slide = Object.assign({}, bygget, { udkast: false });
     } else {
       const id = document.getElementById('faellesSlideMedie').value;
       const m = faellesSlideMedier.find(x => x.id === id);
@@ -2437,6 +2433,7 @@
         url: m.url,
         faellesSlide: true,
         faellesNavn: m.filnavn,
+        udkast: false,
       };
     }
 
@@ -2489,6 +2486,121 @@
       document.getElementById('faellesSlideMediaValg').style.display = erSide ? 'none' : '';
     });
   });
+
+  // ---------- Byg selve det fælles slide ----------
+  // Samme mekanik som "Rediger fælles skabelon": canvas'et laanes midlertidigt, butikkens
+  // egne elementer lægges til side i en backup, og lægges tilbage naar man afslutter.
+  // Der fandtes ingen skabelon-funktion i redigeringssiden, saa slidet bygges her i stedet
+  // for at skulle vaelges fra en liste der aldrig ville have noget i sig.
+
+  let faellesSlideEditMode = false;
+  let faellesSlideBackupElements = null;
+  let faellesSlideBackupBaggrund = null;
+
+  function enterFaellesSlideEditMode() {
+    if (faellesSlideEditMode) return;
+    if (masterEditMode) exitMasterEditMode(); // undgaa to laante tilstande oven i hinanden
+    commitActiveSide();
+    faellesSlideBackupElements = elements;
+    faellesSlideBackupBaggrund = baggrundsfarve;
+    faellesSlideEditMode = true;
+
+    const eksisterende = (masterTemplate && masterTemplate.faellesSlides || [])[0];
+    // Kun 'side'-slides kan redigeres her. Er det aktive slide et rent billede/en video,
+    // starter man forfra med en tom side i stedet for at faa noget uredigerbart ind.
+    elements = (eksisterende && eksisterende.type === 'side' && Array.isArray(eksisterende.elements))
+      ? JSON.parse(JSON.stringify(eksisterende.elements))
+      : [];
+    baggrundsfarve = (eksisterende && eksisterende.background) || '#0a0a0a';
+
+    selectedElementId = null;
+    armedElementId = null;
+    canvas.style.background = baggrundsfarve;
+    document.getElementById('faellesSlideOverlay').style.display = 'none';
+    document.getElementById('faellesSlideBanner').style.display = 'flex';
+    document.getElementById('siderTabs').style.display = 'none';
+    renderCanvas();
+    renderPropsPanel();
+    renderMediaGrid();
+    loadLiveView();
+  }
+
+  function exitFaellesSlideEditMode() {
+    if (!faellesSlideEditMode) return;
+    faellesSlideEditMode = false;
+    elements = faellesSlideBackupElements;
+    baggrundsfarve = faellesSlideBackupBaggrund;
+    selectedElementId = null;
+    armedElementId = null;
+    canvas.style.background = baggrundsfarve;
+    document.getElementById('faellesSlideBanner').style.display = 'none';
+    document.getElementById('siderTabs').style.display = 'flex';
+    renderCanvas();
+    renderPropsPanel();
+    renderMediaGrid();
+    renderSiderTabs();
+    loadLiveView();
+  }
+
+  // Gemmer slidets INDHOLD. Det bliver ikke vist i butikkerne foer man trykker
+  // "Vis i alle diasshow" -- saa man kan arbejde videre paa et udkast uden at det er ude.
+  async function saveFaellesSlideIndhold() {
+    const btn = document.getElementById('saveBtn');
+    if (!masterTemplate || !masterTemplate.id) {
+      showMsg(saveMsg, 'Der findes ingen fælles skabelon endnu — opret den først under "Rediger fælles skabelon".', false);
+      return;
+    }
+    btn.disabled = true;
+
+    const aktive = (masterTemplate.faellesSlides || []);
+    const eksisterende = aktive[0];
+    const slide = {
+      type: 'side',
+      background: baggrundsfarve,
+      elements: JSON.parse(JSON.stringify(elements)),
+      faellesSlide: true,
+      faellesNavn: (eksisterende && eksisterende.faellesNavn) || 'Fælles slide',
+      // Er slidet ikke udgivet endnu, bliver det liggende som udkast. Var det allerede ude,
+      // opdateres det der staar paa skaermene med det samme -- det er hele pointen med at
+      // kunne rette en kampagne der allerede koerer.
+      udkast: eksisterende ? !!eksisterende.udkast : true,
+    };
+
+    const { error } = await client.from('sabloner').update({
+      data: {
+        elements: masterTemplate.elements,
+        background: masterTemplate.background,
+        faellesSlides: [slide],
+        faellesSlidesPosition: masterTemplate.faellesSlidesPosition || 'sidst',
+        faellesSlideUdkast: slide.udkast,
+      },
+      opdateret_at: new Date().toISOString(),
+    }).eq('id', masterTemplate.id);
+    btn.disabled = false;
+
+    if (error) { showMsg(saveMsg, 'Kunne ikke gemme slidet: ' + error.message, false); return; }
+    showMsg(saveMsg, slide.udkast
+      ? 'Slidet er gemt som udkast — tryk "Vis i alle diasshow" for at sende det ud.'
+      : 'Slidet er gemt og opdateret på alle skærme.', true);
+    logAdminHandling('faelles_slide_gemt', slide.udkast ? 'udkast' : 'live');
+    await loadMasterTemplate();
+    loadLiveView();
+  }
+
+  function visFaellesSlideIndholdStatus() {
+    const boks = document.getElementById('faellesSlideIndholdStatus');
+    if (!boks) return;
+    const s = ((masterTemplate && masterTemplate.faellesSlides) || [])[0];
+    if (!s) { boks.textContent = 'Der er ikke bygget noget slide endnu.'; return; }
+    if (s.type !== 'side') { boks.textContent = 'Det aktive slide er et billede/en video, ikke en side.'; return; }
+    const antal = (s.elements || []).length;
+    boks.textContent = 'Slidet indeholder ' + antal + ' element' + (antal === 1 ? '' : 'er') +
+      (s.udkast ? ' — gemt som udkast, ikke vist i butikkerne endnu.' : ' — vises i butikkerne nu.');
+  }
+
+  document.getElementById('byggFaellesSlideBtn').addEventListener('click', enterFaellesSlideEditMode);
+  document.getElementById('exitFaellesSlideBtn').addEventListener('click', exitFaellesSlideEditMode);
+
   // ---------- Glemt adgangskode ----------
   // Supabase sender et link med et recovery-token i URL'ens HASH
   // (#access_token=...&type=recovery) og logger brugeren ind med det samme, naar de klikker.
@@ -4772,6 +4884,7 @@
   // ---------- Save ----------
 
   document.getElementById('saveBtn').addEventListener('click', async () => {
+    if (faellesSlideEditMode) { await saveFaellesSlideIndhold(); return; }
     if (masterEditMode) { await saveMasterTemplate(); return; }
     await saveStoreContent();
   });
