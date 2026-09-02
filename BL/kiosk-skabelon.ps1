@@ -35,6 +35,77 @@ public class Vindue {
 }
 '@
 
+# ---------- Skaermtilstand ----------
+# Sikrer 1920x1080 @ 60 Hz - det format indholdet er lavet til, og det Android-boksene koerer.
+#
+# Amager var koblet paa en 4K-skaerm og koerte 3840x2160 @ 30 Hz. Boksens HDMI kan ikke
+# levere 4K ved 60 Hz, saa 4K betyder uundgaaeligt 30 billeder i sekundet - og samtidig
+# fire gange saa mange pixels at komponere ved hvert crossfade. Det foeltes som lag,
+# saerligt ved skift fra en video til et stillbillede.
+#
+# Ligger HER og ikke i check-in-scriptet, fordi det skal ske i konsol-sessionen. En
+# SYSTEM-opgave eller en SSH-session har sit eget skrivebord uden skaerm, og et kald
+# derfra aendrer ingenting.
+#
+# Hele logikken er i C#. Foerste forsoeg fyldte DEVMODE-structen fra PowerShell, og
+# EnumDisplaySettings fejlede - marshalling derfra er for skroebelig, dmSize og
+# feltjusteringen skal passe paa byten.
+#
+# Springes over hvis skaermen allerede er 1080p eller lavere med mindst 50 Hz, saa en
+# boks der er sat rigtigt op i forvejen ikke roeres.
+try {
+  if (-not ('BlhoDisplay' -as [type])) {
+    Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class BlhoDisplay {
+  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+  private struct DEVMODE {
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName;
+    public ushort dmSpecVersion; public ushort dmDriverVersion; public ushort dmSize; public ushort dmDriverExtra;
+    public uint dmFields; public int dmPositionX; public int dmPositionY;
+    public uint dmDisplayOrientation; public uint dmDisplayFixedOutput;
+    public short dmColor; public short dmDuplex; public short dmYResolution; public short dmTTOption; public short dmCollate;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName;
+    public ushort dmLogPixels;
+    public uint dmBitsPerPel; public uint dmPelsWidth; public uint dmPelsHeight;
+    public uint dmDisplayFlags; public uint dmDisplayFrequency;
+    public uint dmICMMethod; public uint dmICMIntent; public uint dmMediaType; public uint dmDitherType;
+    public uint dmReserved1; public uint dmReserved2; public uint dmPanningWidth; public uint dmPanningHeight;
+  }
+  [DllImport("user32.dll", CharSet = CharSet.Ansi)] private static extern int EnumDisplaySettings(string d, int i, ref DEVMODE m);
+  [DllImport("user32.dll", CharSet = CharSet.Ansi)] private static extern int ChangeDisplaySettings(ref DEVMODE m, uint f);
+  private static DEVMODE Ny() {
+    DEVMODE d = new DEVMODE();
+    d.dmDeviceName = new string('\0', 32); d.dmFormName = new string('\0', 32);
+    d.dmSize = (ushort)Marshal.SizeOf(typeof(DEVMODE));
+    return d;
+  }
+  public static int[] Nu() {
+    DEVMODE d = Ny();
+    if (EnumDisplaySettings(null, -1, ref d) == 0) return new int[] { 0, 0, 0 };
+    return new int[] { (int)d.dmPelsWidth, (int)d.dmPelsHeight, (int)d.dmDisplayFrequency };
+  }
+  public static int Saet(int w, int h, int hz) {
+    DEVMODE d = Ny();
+    if (EnumDisplaySettings(null, -1, ref d) == 0) return -99;
+    d.dmPelsWidth = (uint)w; d.dmPelsHeight = (uint)h; d.dmDisplayFrequency = (uint)hz;
+    d.dmFields = 0x00080000 | 0x00100000 | 0x00400000;   // width | height | frequency
+    return ChangeDisplaySettings(ref d, 0x00000001);      // CDS_UPDATEREGISTRY: overlever genstart
+  }
+}
+'@
+  }
+  $nu = [BlhoDisplay]::Nu()
+  if ($nu[0] -gt 0) {
+    $forStor = $nu[0] -gt 1920 -or $nu[1] -gt 1080
+    $forLangsom = $nu[2] -lt 50
+    if ($forStor -or $forLangsom) {
+      [void][BlhoDisplay]::Saet(1920, 1080, 60)
+      Start-Sleep -Seconds 3
+    }
+  }
+} catch { }
 $browser = if (Test-Path "C:\Program Files\Google\Chrome\Application\chrome.exe") {
   "C:\Program Files\Google\Chrome\Application\chrome.exe"
 } else {
