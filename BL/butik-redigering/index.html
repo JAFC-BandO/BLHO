@@ -4276,7 +4276,24 @@
       preview.style.cssText = 'position:relative; width:100%; height:100%; background:#000; overflow:hidden;';
       body.appendChild(preview);
 
-      if (!el.slides.length) {
+      // Forhaandsvisningen skal vise DET SAMME som skaermen kommer til at vise - altsaa
+      // ogsaa de faelles slides fra admin. Uden dem cyklede canvas'et kun butikkens egne,
+      // og man kunne ikke se hvornaar admin-slidet kommer, eller hvor i raekken det ligger.
+      // De vises som et maerkat, ikke som redigerbart indhold: de ligger ikke i butikkens
+      // eget content og kan ikke roeres herfra.
+      const faellesTilPreview = (el.slotId === 'banner' || masterEditMode || faellesSlideEditMode)
+        ? []
+        : ((masterTemplate && masterTemplate.faellesSlides) || []).filter(sl => sl && !sl.udkast)
+            .map(sl => Object.assign({}, sl, { _fraAdmin: true }));
+      let previewSlides = el.slides;
+      if (faellesTilPreview.length) {
+        const pos = (masterTemplate && masterTemplate.faellesSlidesPosition) || 'sidst';
+        if (pos === 'foerst') previewSlides = faellesTilPreview.concat(el.slides);
+        else if (pos === 'efter-foerste') previewSlides = el.slides.slice(0, 1).concat(faellesTilPreview, el.slides.slice(1));
+        else previewSlides = el.slides.concat(faellesTilPreview);
+      }
+
+      if (!previewSlides.length) {
         const ph = document.createElement('div');
         ph.style.cssText = 'width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#666; font-size:11px; text-align:center; padding:6px;';
         ph.textContent = 'Ingen slides endnu — tilføj billeder/videoer nedenfor';
@@ -4285,7 +4302,23 @@
         let idx = 0;
         const showSlide = () => {
           preview.innerHTML = '';
-          const slide = el.slides[idx];
+          const slide = previewSlides[idx];
+          if (!slide) { idx = 0; return; }
+          if (slide._fraAdmin) {
+            // Samme slags maerkat som butikkens egne side-slides faar, saa raekkefoelgen og
+            // timingen kan aflaeses direkte - bare tydeligt markeret som admins.
+            const badge = document.createElement('div');
+            badge.style.cssText = 'width:100%; height:100%; display:flex; flex-direction:column; gap:6px; align-items:center; justify-content:center; color:#cdd4ff; font-size:11px; text-align:center; padding:10px; background:#2b3170; border:2px dashed rgba(122,136,255,.9); box-sizing:border-box;';
+            badge.innerHTML =
+              '<div style="font-size:20px;">' + (slide.type === 'video' ? '🎬' : slide.type === 'side' ? '📄' : '🖼️') + '</div>' +
+              '<div style="font-weight:700; color:#fff;">' + escapeHtml(slide.faellesNavn || 'Uden navn') + '</div>' +
+              '<div style="font-size:10px; letter-spacing:.3px;">VISES NU — SLIDE FRA ADMIN</div>' +
+              '<div style="font-size:10px; color:#9aa6ff;">Ligger ikke i jeres indhold og kan ikke redigeres her</div>';
+            preview.appendChild(badge);
+            anvendIndholdsSkala(badge, el);
+            idx = (idx + 1) % previewSlides.length;
+            return;
+          }
           if (slide.type === 'side') {
             // Live-opslag som paa den rigtige skaerm: navn/antal fra sidens AKTUELLE indhold
             // hvis den stadig findes, ellers fra sidste kendte kopi.
@@ -4309,7 +4342,7 @@
             }
             preview.appendChild(badge);
             anvendIndholdsSkala(badge, el);
-            idx = (idx + 1) % el.slides.length;
+            idx = (idx + 1) % previewSlides.length;
             return;
           }
           let media;
@@ -4334,10 +4367,10 @@
           media.style.display = 'block';
           preview.appendChild(media);
           anvendIndholdsSkala(media, el);
-          idx = (idx + 1) % el.slides.length;
+          idx = (idx + 1) % previewSlides.length;
         };
         showSlide();
-        if (el.slides.length > 1) {
+        if (previewSlides.length > 1) {
           rotatorIntervals.push(setInterval(showSlide, el.intervalMs || 30000));
         }
       }
