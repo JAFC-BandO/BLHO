@@ -38,6 +38,7 @@ function Sig($t, $f = 'Gray') { Write-Host $t -ForegroundColor $f }
 # sikkerheds-id". Velkendte SID'er er sprogneutrale og virker overalt.
 $SID_ADMINS = '*S-1-5-32-544'
 $SID_SYSTEM = '*S-1-5-18'
+$SID_USERS  = '*S-1-5-32-545'
 
 $mig = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not $mig.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -102,7 +103,7 @@ Sig ''
 Sig '[1/8] Opretter C:\blho og laaser rettighederne...'
 New-Item -ItemType Directory -Path 'C:\blho\state' -Force | Out-Null
 New-Item -ItemType Directory -Path 'C:\blho\browserprofil' -Force | Out-Null
-& icacls.exe 'C:\blho' /inheritance:r /grant "${SID_ADMINS}:(OI)(CI)F" /grant "${SID_SYSTEM}:(OI)(CI)F" | Out-Null
+& icacls.exe 'C:\blho' /inheritance:r /grant "${SID_ADMINS}:(OI)(CI)F" /grant "${SID_SYSTEM}:(OI)(CI)F" /grant "${SID_USERS}:(RX)" | Out-Null
 Sig '      Klar.' 'Green'
 
 # ---------- 2. Scripts ----------
@@ -112,6 +113,20 @@ $skabCheckin.Replace('__EMAIL__', $EMAIL).Replace('__PASSWORD__', $PASSWORD).Rep
 $skabKiosk.Replace('__EMAIL__', $EMAIL).Replace('__PASSWORD__', $PASSWORD) |
   Set-Content -Path 'C:\blho\start-kiosk.ps1' -Encoding utf8
 Sig '      Skrevet.' 'Green'
+
+# Rettighederne saettes her, hvor filerne findes.
+#   browserprofil/ og start-kiosk.ps1 skal kunne tilgaas af Users: genvejen i
+#     Startup-mappen koerer med brugerens FILTREREDE token, hvor Administrators-
+#     medlemskabet er deny-only. Uden dette fejler Chrome med "can't read and write
+#     to its data directory" - set paa Aalborg 2. september 2026.
+#   checkin.ps1 forbliver kun for Administrators + SYSTEM. Den koeres af SYSTEM og
+#     indeholder skaerm-kontoens adgangskode. Paa Amager stod den ved en fejl aaben
+#     for "Godkendte brugere" med skriveret, fordi det engelske gruppenavn i den
+#     oprindelige icacls ikke findes paa dansk Windows.
+& icacls.exe 'C:\blho\browserprofil' /grant "${SID_USERS}:(OI)(CI)F" | Out-Null
+& icacls.exe 'C:\blho\start-kiosk.ps1' /grant "${SID_USERS}:(RX)" | Out-Null
+& icacls.exe 'C:\blho\checkin.ps1' /remove "${SID_USERS}" | Out-Null
+Sig '      Rettigheder sat.' 'Green'
 
 # ---------- 3. Planlagte opgaver ----------
 # schtasks i stedet for Register-ScheduledTask: sidstnaevnte fejlede TAVST paa Amager naar
