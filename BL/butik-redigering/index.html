@@ -233,9 +233,16 @@
   .el-text ul, .el-text ol { margin: 0; padding-left: 1.2em; }
   .el-text li { margin: 2px 0; }
   .el-media-fill { width: 100%; height: 100%; object-fit: fill; display: block; }
+  /* Banner-feltet er kun ca. 18% hoejt. Placeholderens tre kontroller (bibliotek /
+     upload / link) fylder mere end det, og med column-retning + overflow:hidden paa
+     .el-body blev de nederste simpelthen KLIPPET vaek - "Vælg fra bibliotek" kunne ikke
+     rammes med musen, selvom den saa ud til at vaere der. Ligger nu paa RAEKKE naar der er
+     for lidt hoejde (wrap + auto-scroll), saa alle tre altid kan naas uanset feltets form. */
   .el-placeholder {
-    width: 100%; height: 100%; display: flex; flex-direction: column; gap: 6px;
-    align-items: center; justify-content: center; color: #888; font-size: 11px; padding: 6px;
+    width: 100%; height: 100%; display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px;
+    align-items: center; justify-content: center; align-content: center;
+    color: #888; font-size: 11px; padding: 6px;
+    overflow: auto; box-sizing: border-box;
   }
   .el-placeholder button, .el-placeholder label {
     font-size: 10px; padding: 4px 8px; background: #2a2a2a; color: #ddd; border-radius: 6px; cursor: pointer;
@@ -409,7 +416,7 @@
   </div>
 
   <div id="faellesSlideBanner" style="display:none; align-items:center; justify-content:space-between; background:#4d5bff; color:#fff; font-weight:700; font-size:13px; padding:8px 20px;">
-    <span>Du bygger det FÆLLES SLIDE — det vises i alle butikkers diasshow, men skrives aldrig ind i deres indhold</span>
+    <span>Du bygger det FÆLLES SLIDE — ét slide i diasshowet, ikke en hel side. Tilføj elementer i venstre side. Det vises i alle butikkers diasshow, men skrives aldrig ind i deres indhold.</span>
     <button id="exitFaellesSlideBtn" style="padding:6px 14px; font-size:12px;">Afslut</button>
   </div>
 
