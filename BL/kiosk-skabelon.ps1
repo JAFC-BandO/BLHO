@@ -96,16 +96,23 @@ public static class BlhoDisplay {
 }
 '@
   }
-  $nu = [BlhoDisplay]::Nu()
-  if ($nu[0] -gt 0) {
-    $forStor = $nu[0] -gt 1920 -or $nu[1] -gt 1080
-    $forLangsom = $nu[2] -lt 50
-    if ($forStor -or $forLangsom) {
-      [void][BlhoDisplay]::Saet(1920, 1080, 60)
-      Start-Sleep -Seconds 3
-    }
-  }
 } catch { }
+
+# Retter skaermtilstanden hvis den er for stor eller for langsom. Returnerer $true hvis
+# der blev aendret noget.
+function RetSkaermTilstand {
+  try {
+    if (-not ('BlhoDisplay' -as [type])) { return $false }
+    $nu = [BlhoDisplay]::Nu()
+    if ($nu[0] -le 0) { return $false }
+    if ($nu[0] -le 1920 -and $nu[1] -le 1080 -and $nu[2] -ge 50) { return $false }
+    [void][BlhoDisplay]::Saet(1920, 1080, 60)
+    Start-Sleep -Seconds 3
+    return $true
+  } catch { return $false }
+}
+
+RetSkaermTilstand | Out-Null
 $browser = if (Test-Path "C:\Program Files\Google\Chrome\Application\chrome.exe") {
   "C:\Program Files\Google\Chrome\Application\chrome.exe"
 } else {
@@ -145,6 +152,7 @@ function TraekFrem {
 # ovenpaa dem i stedet for omvendt.
 Start-Sleep -Seconds 8
 
+$skaermTaeller = 0
 while ($true) {
   if (-not (Get-Process -Name $procNavn -ErrorAction SilentlyContinue)) {
     Start-Process -FilePath $browser -ArgumentList $argumenter
@@ -163,6 +171,21 @@ while ($true) {
       [Vindue]::Frem($p.MainWindowHandle)
     }
   }
+  # Tjekker ogsaa loebende, ikke kun ved opstart. Skiftes skaermen ud mens boksen koerer -
+  # eller taendes en 4K-skaerm efter boksen - saetter Windows selv den nye tilstand, og uden
+  # dette ville boksen koere 4K30 indtil naeste genstart. Kaldet er meget billigt, og naar
+  # tilstanden foerst er rigtig, goer funktionen ingenting.
+  $skaermTaeller++
+  if ($skaermTaeller -ge 8) {          # ca. hvert andet minut
+    $skaermTaeller = 0
+    if (RetSkaermTilstand) {
+      # Chrome skal genkende den nye stoerrelse - traek vinduet frem igen, ellers kan det
+      # blive haengende i den gamle geometri.
+      Start-Sleep -Seconds 2
+      TraekFrem | Out-Null
+    }
+  }
+
   Start-Sleep -Seconds 15
 }
 
