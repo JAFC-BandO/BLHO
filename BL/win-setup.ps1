@@ -13,7 +13,24 @@
 # INDEHOLDER INGEN HEMMELIGHEDER. Skaerm-kontoen indtastes naar scriptet koerer og
 # skrives kun ned lokalt i C:\blho, som laases til administratorer og SYSTEM.
 
-$ErrorActionPreference = 'Stop'
+param(
+  # Kan gives med paa kommandolinjen, saa scriptet kan koeres uden prompt - fx over SSH:
+  #   ssh blho-BUTIK "powershell -File C:\blho\win-setup.ps1 -Email x -Kode y -EnhedId z"
+  # Udelades de, spoerges der interaktivt som foer.
+  #
+  # OBS: gives adgangskoden paa kommandolinjen, havner den i skallens historik paa din pc
+  # og er kortvarigt synlig i proceslisten paa boksen. Til en engangsopsaetning er det
+  # acceptabelt - men lad vaere med at dele den kommando videre bagefter.
+  [string]$Email,
+  [string]$Kode,
+  [string]$EnhedId
+)
+
+# Continue, ikke Stop: schtasks, icacls, netsh og powercfg skriver rutinemaessigt til
+# stderr ogsaa naar alt er fint, og i Windows PowerShell 5.1 bliver native stderr til
+# ErrorRecords. Med 'Stop' stopper scriptet paa en harmloes besked - set paa Aalborg.
+# Scriptet tjekker i stedet selv efter hvert kritisk trin.
+$ErrorActionPreference = 'Continue'
 function Sig($t, $f = 'Gray') { Write-Host $t -ForegroundColor $f }
 
 # Gruppenavne er OVERSAT paa et dansk Windows - "Administrators" findes ikke, den hedder
@@ -56,17 +73,23 @@ $skabKiosk   = HentSkabelon 'kiosk-skabelon.ps1'
 if (-not $skabCheckin -or -not $skabKiosk) { return }
 
 # ---------- Indtastning ----------
-Sig 'Hent vaerdierne i Supabase Dashboard og i "Enheder"-panelet.' 'Gray'
-Sig ''
-$EMAIL = Read-Host 'Skaerm-kontoens email  (fx skaerm-amager@intern.blho)'
+if (-not ($Email -and $Kode -and $EnhedId)) {
+  Sig 'Hent vaerdierne i Supabase Dashboard og i "Enheder"-panelet.' 'Gray'
+  Sig ''
+}
+if ($Email) { $EMAIL = $Email } else { $EMAIL = Read-Host 'Skaerm-kontoens email  (fx skaerm-amager@intern.blho)' }
 if (-not $EMAIL) { Sig 'Ingen email - afbryder.' 'Red'; return }
 
-$hemmelig = Read-Host 'Skaerm-kontoens adgangskode' -AsSecureString
-$PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-  [Runtime.InteropServices.Marshal]::SecureStringToBSTR($hemmelig))
+if ($Kode) {
+  $PASSWORD = $Kode
+} else {
+  $hemmelig = Read-Host 'Skaerm-kontoens adgangskode' -AsSecureString
+  $PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+    [Runtime.InteropServices.Marshal]::SecureStringToBSTR($hemmelig))
+}
 if (-not $PASSWORD) { Sig 'Ingen adgangskode - afbryder.' 'Red'; return }
 
-$ENHED_ID = Read-Host 'Enheds-ID fra "Enheder"-panelet'
+if ($EnhedId) { $ENHED_ID = $EnhedId } else { $ENHED_ID = Read-Host 'Enheds-ID fra "Enheder"-panelet' }
 if ($ENHED_ID -notmatch '^[0-9a-fA-F-]{36}$') {
   Sig 'Det ligner ikke et enheds-ID (36 tegn) - afbryder.' 'Red'; return
 }
@@ -95,14 +118,19 @@ Sig '      Skrevet.' 'Green'
 # .Repetition blev sat paa en AtStartup-udloeser. schtasks /SC MINUTE goer det samme i ét
 # kald og er langt mere robust.
 Sig '[3/8] Registrerer opgaverne...'
-& schtasks.exe /Delete /TN 'BLHO-Checkin' /F 2>&1 | Out-Null
+# cmd /c sluger stderr HELT. Uden det braekker scriptet paa en frisk boks: schtasks
+# /Delete skriver "ERROR: The system cannot find the file specified" til stderr naar
+# opgaven ikke findes endnu, og med ErrorActionPreference='Stop' bliver den harmloese
+# besked til en terminerende PowerShell-fejl. Ramt paa Aalborg 2. september 2026, hvor
+# opsaetningen stoppede midt i trin 3.
+& cmd.exe /c 'schtasks /Delete /TN "BLHO-Checkin" /F >nul 2>&1'
 & schtasks.exe /Create /TN 'BLHO-Checkin' /SC MINUTE /MO 1 /RU 'SYSTEM' /RL HIGHEST /F `
-  /TR 'powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\blho\checkin.ps1' 2>&1 |
+  /TR 'powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\blho\checkin.ps1' |
   ForEach-Object { Sig "      $_" 'DarkGray' }
 
-& schtasks.exe /Delete /TN 'BLHO-Kiosk' /F 2>&1 | Out-Null
+& cmd.exe /c 'schtasks /Delete /TN "BLHO-Kiosk" /F >nul 2>&1'
 & schtasks.exe /Create /TN 'BLHO-Kiosk' /SC ONLOGON /RL HIGHEST /F `
-  /TR 'powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\blho\start-kiosk.ps1' 2>&1 |
+  /TR 'powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\blho\start-kiosk.ps1' |
   ForEach-Object { Sig "      $_" 'DarkGray' }
 
 # ---------- 4. Genvej i Startup ----------
