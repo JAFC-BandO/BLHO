@@ -209,7 +209,7 @@
   #liveViewBox .el-text { padding: 1cqw; background: transparent; overflow: hidden; outline: none; }
 
   .el-body { flex: 1; overflow: hidden; position: relative; }
-  /* Fælles slide fra superadmin, vist som en ekstra thumbnail i diasshowets slide-raekke.
+  /* Fælles slide fra admin, vist som en ekstra thumbnail i diasshowets slide-raekke.
      Bevidst uden fjern-knap: slidet ligger ikke i butikkens indhold og kan derfor hverken
      redigeres eller slettes herfra. Den stiplede kant signalerer "ikke din". */
   .faelles-slide-thumb {
@@ -3833,7 +3833,7 @@
       slideRow.appendChild(thumb);
     });
 
-    // Fælles slide fra superadmin, vist blandt butikkens egne slides paa den plads det
+    // Fælles slide fra admin, vist blandt butikkens egne slides paa den plads det
     // reelt faar paa skaermen. Det ligger IKKE i butikkens indhold - det flettes ind naar
     // skaermen tegner - og kan derfor hverken redigeres eller fjernes herfra. Den stiplede
     // kant og teksten er der udelukkende for at en butik kan SE hvorfor der kommer et slide
@@ -3853,7 +3853,7 @@
         t.innerHTML =
           '<div class="fs-ikon">' + (sl.type === 'video' ? '🎬' : sl.type === 'side' ? '📄' : '🖼️') + '</div>' +
           '<div class="fs-tekst">FRA ADMIN</div>';
-        t.title = 'Fælles slide fra superadmin' + (navn ? ': ' + navn : '') + '.\n\n' +
+        t.title = 'Fælles slide fra admin' + (navn ? ': ' + navn : '') + '.\n\n' +
           'Vises ' + (posNavn[pos] || 'sidst') + ' i diasshowet på alle butikkers skærme. ' +
           'Det ligger ikke i jeres eget indhold og kan ikke redigeres eller fjernes herfra — ' +
           'det forsvinder af sig selv når admin fjerner det igen.';
