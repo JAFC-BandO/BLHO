@@ -428,10 +428,7 @@
 
   <div id="faellesSlideBanner" style="display:none; align-items:center; justify-content:space-between; background:#4d5bff; color:#fff; font-weight:700; font-size:13px; padding:8px 20px;">
     <span id="faellesSlideBannerTekst">Du bygger et FÆLLES SLIDE — byg det som en helt almindelig side.</span>
-    <span style="display:flex; gap:8px; flex-shrink:0;">
-      <button id="tilbageFaellesSlideBtn" style="padding:6px 14px; font-size:12px;">← Tilbage til slides</button>
-      <button id="exitFaellesSlideBtn" style="padding:6px 14px; font-size:12px;">Afslut</button>
-    </span>
+    <button id="exitFaellesSlideBtn" style="padding:6px 14px; font-size:12px; flex-shrink:0;">← Tilbage til slides</button>
   </div>
 
   <div id="masterEditBanner" style="display:none; align-items:center; justify-content:space-between; background:#ffd700; color:#5a4600; font-weight:700; font-size:13px; padding:8px 20px;">
@@ -2702,11 +2699,9 @@
   }
 
   document.getElementById('byggFaellesSlideBtn').addEventListener('click', () => enterFaellesSlideEditMode(-1));
-  document.getElementById('exitFaellesSlideBtn').addEventListener('click', exitFaellesSlideEditMode);
-  // Tilbage til listen: afslutter byg-tilstanden OG aabner panelet igen, saa man kan
-  // bygge det naeste slide eller udgive det man lige har lavet, uden at gaa gennem
-  // admin-menuen forfra.
-  document.getElementById('tilbageFaellesSlideBtn').addEventListener('click', async () => {
+  // Man kom FRA panelet, saa det er dér man skal tilbage til - ikke helt ud til butikken.
+  // Derfra lukker man med krydset, hvis man er faerdig. Én knap i stedet for to veje ud.
+  document.getElementById('exitFaellesSlideBtn').addEventListener('click', async () => {
     exitFaellesSlideEditMode();
     await aabnFaellesSlidePanel();
   });
