@@ -3779,11 +3779,19 @@
     // raekker thumbnails det indeholder. Det var det, der manglede foer: en vh-procent taeller
     // ikke med at panelet ALLEREDE starter 16px fra bunden, saa det kunne stadig blive skaaret
     // af/kraeve scroll foer det reelt ramte skaermkanten.
-    // Bredere (900px, ikke 460) saa flere thumbnails staar paa SAMME raekke i stedet for at
-    // pakke sig i flere raekker ovenpaa hinanden -- det var det, der stadig udloeste en
-    // (unoedvendig) lodret scrollbar: nok raekker thumbnails + tilfoej-kontrollerne kunne
-    // stadig samlet blive hoejere end skaermen, selv med korrekt udregnet max-height.
-    slideOverlayNode.style.cssText = 'position:fixed; z-index:1000; bottom:16px; left:50%; transform:translateX(-50%); width:900px; max-width:96vw; max-height:calc(100vh - 32px); overflow-y:auto; background:#111; border-radius:8px; padding:12px; box-shadow:0 8px 24px rgba(0,0,0,.45);';
+    // Justeret efter CANVAS'ET, ikke efter vinduet. Panelet var centreret med left:50% +
+    // translateX(-50%), altsaa midt i browservinduet - men canvas'et sidder forskudt til
+    // hoejre bag sidebjaelken paa 260px, saa panelet stod synligt skaevt under det. Nu
+    // foelger det canvas'ets egen midte og bredde, saa de to flugter.
+    const cRect = canvas.getBoundingClientRect();
+    const bredde = Math.max(320, Math.min(cRect.width, window.innerWidth - 24));
+    const venstre = Math.max(12, Math.min(
+      cRect.left + cRect.width / 2 - bredde / 2,
+      window.innerWidth - bredde - 12));
+    slideOverlayNode.style.cssText = 'position:fixed; z-index:1000; bottom:16px;' +
+      ' left:' + Math.round(venstre) + 'px; width:' + Math.round(bredde) + 'px;' +
+      ' max-height:calc(100vh - 32px); overflow-y:auto; background:#111; border-radius:8px;' +
+      ' padding:12px; box-shadow:0 8px 24px rgba(0,0,0,.45); box-sizing:border-box;';
     const titel = document.createElement('div');
     titel.textContent = 'Slides — ' + (el.slotId ? el.slotId : 'diasshow');
     titel.style.cssText = 'color:#aaa; font-size:12px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px;';
@@ -3791,6 +3799,11 @@
     slideOverlayNode.appendChild(buildRotatorManageBar(el));
     document.body.appendChild(slideOverlayNode);
   }
+
+  // Panelet er positioneret ud fra canvas'ets rect, saa den skal genberegnes naar
+  // canvas'et flytter sig - ellers staar det skaevt igen efter en scroll eller et
+  // vinduesskift, praecis det problem den nye placering loeser.
+  window.addEventListener('scroll', () => { if (slideOverlayNode) updateSlideOverlay(); }, { passive: true });
 
   let resizeTimer = null;
   window.addEventListener('resize', () => {
