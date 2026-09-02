@@ -237,7 +237,22 @@ async function synkroniserUrOffset() {
   }
 }
 synkroniserUrOffset();
-setInterval(synkroniserUrOffset, 10 * 60 * 1000);
+// Hvert 2. minut, ikke hvert 10. Offsettet ligger i localStorage og laegges oven paa
+// enhedens eget ur - retter enheden sit ur imens (Windows' tidstjeneste, en NTP-synk
+// eller bare en baerbar der vaagner fra dvale), er det CACHEDE offset pludselig forkert
+// med praecis det beloeb uret blev rettet. Med 10 minutter mellem synkroniseringerne
+// kunne uret derfor vise flere minutter forkert i op til 10 minutter ad gangen.
+setInterval(synkroniserUrOffset, 2 * 60 * 1000);
+
+// Og med det samme naar fanen bliver synlig igen. En baerbar der har sovet vaagner med
+// et ur der lige er blevet rettet, og uden dette ville uret vaere forkert indtil naeste
+// planlagte synk. Rammer redigeringssiden, hvor man skifter faner hele tiden - skaermene
+// staar altid synlige og er derfor ikke afhaengige af det her.
+if (typeof document !== 'undefined' && document.addEventListener) {
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) synkroniserUrOffset();
+  });
+}
 
 function buildUrNode(registerInterval) {
   const wrap = document.createElement('div');
