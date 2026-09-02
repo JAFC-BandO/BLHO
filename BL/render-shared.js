@@ -781,6 +781,40 @@ function mergeMasterElements(storeElements, masterElements, sideName) {
   return lockedFast.concat(slotFyldt).concat(ownOnly);
 }
 
+// Faelles slides: et ekstra slide som superadmin kan skyde ind i ALLE butikkers
+// diasshow (rotator-elementer) paa én gang -- fx en kampagne eller en driftsbesked.
+//
+// Ligesom mergeMasterElements er dette en REN funktion der koerer ved VISNING. Slidet
+// bliver aldrig skrevet ind i en butiks gemte content. Det betyder tre ting, som alle
+// er hele pointen:
+//
+//   1. Ingen butiks eget indhold kan overskrives eller gaa tabt.
+//   2. Fjernes slidet fra skabelonen, forsvinder det af sig selv overalt ved naeste
+//      opdatering. Der er intet at rydde op i, og ingen risiko for at en butik sidder
+//      tilbage med en gammel kampagne.
+//   3. Butikker med forskelligt indhold paavirkes ikke forskelligt -- hver rotator faar
+//      praecis ét ekstra slide, uanset hvad den ellers indeholder.
+//
+// Butikker UDEN et rotator-element ser ikke slidet. Det er bevidst: alternativet ville
+// vaere at tvinge et nyt element ind i deres layout, hvilket ER at aendre deres side.
+function mergeFaellesSlides(elements, faellesSlides, position) {
+  if (!Array.isArray(faellesSlides) || !faellesSlides.length) return elements || [];
+  return (elements || []).map(el => {
+    if (el.type !== 'rotator' || !Array.isArray(el.slides) || !el.slides.length) return el;
+    let nye;
+    if (position === 'foerst') {
+      nye = faellesSlides.concat(el.slides);
+    } else if (position === 'efter-foerste') {
+      nye = el.slides.slice(0, 1).concat(faellesSlides, el.slides.slice(1));
+    } else {
+      nye = el.slides.concat(faellesSlides);   // 'sidst' er standard
+    }
+    // Nyt objekt, ikke en mutation: den kaldende kode (canvas'et i redigeringssiden)
+    // arbejder videre paa butikkens EGNE elementer, og de maa ikke faa slidet med sig.
+    return Object.assign({}, el, { slides: nye });
+  });
+}
+
 function buildMediaNode(spec) {
   let media;
   if (spec.type === 'video' && spec.kind === 'youtube') {
