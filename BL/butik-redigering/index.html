@@ -2340,8 +2340,20 @@
     document.getElementById('faellesSlideMediaValg').style.display = 'none';
     await loadMasterTemplate();
 
-    const { data: medier } = await client
-      .from('media').select('id, type, url, filnavn').order('oprettet_at', { ascending: false }).limit(200);
+    // Samme filter som mediebiblioteket: den aktuelle butiks egne plus dem der er delt
+    // med alle. Uden det saa man ALLE butikkers medier paa én lang liste - 161 filer paa
+    // tvaers af 16 butikker - hvilket er ubrugeligt at vaelge i, og heller ikke noget en
+    // faelles kampagne boer traekke paa.
+    let { data: medier } = await client
+      .from('media').select('id, type, url, filnavn, delt')
+      .or('butik_id.eq.' + currentButikId + ',delt.eq.true')
+      .order('oprettet_at', { ascending: false });
+    if (!medier) {
+      // Falder tilbage hvis delt-kolonnen ikke findes (samme moenster som renderMediaGrid)
+      const r = await client.from('media').select('id, type, url, filnavn')
+        .eq('butik_id', currentButikId).order('oprettet_at', { ascending: false });
+      medier = r.data;
+    }
     faellesSlideMedier = medier || [];
     const medieSelect = document.getElementById('faellesSlideMedie');
     medieSelect.innerHTML = faellesSlideMedier.length
@@ -2376,12 +2388,15 @@
 
       const info = document.createElement('div');
       info.style.flex = '1';
-      const antal = s.type === 'side' ? (s.elements || []).length : null;
+      // Taeller admins EGNE elementer, ikke de flettede. elements indeholder ogsaa
+      // skabelonens 9 laaste (sidebjaelke, logo, ur, vejr, nyhedsbanner osv.), saa et helt
+      // tomt slide stod som "9 elementer" - hvilket ikke sagde noget om hvad man havde lavet.
+      const antal = s.type === 'side' ? (s.egneElementer || []).length : null;
       info.innerHTML =
         '<div style="font-weight:600;">' + escapeHtml(s.faellesNavn || s.url || 'Uden navn') + '</div>' +
         '<div style="font-size:11px; color:' + (s.udkast ? '#b96a15' : '#1a9b4b') + ';">' +
         (s.udkast ? '● Udkast — vises ikke i butikkerne endnu' : '● Vises i alle butikkers diasshow') +
-        (antal != null ? ' · ' + antal + ' element' + (antal === 1 ? '' : 'er') : '') +
+        (antal != null ? ' · ' + (antal === 0 ? 'tomt endnu' : antal + ' element' + (antal === 1 ? '' : 'er') + ' tilføjet') : '') +
         '</div>';
       row.appendChild(info);
 
