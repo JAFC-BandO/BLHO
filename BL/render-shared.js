@@ -797,6 +797,36 @@ function mergeMasterElements(storeElements, masterElements, sideName) {
 //
 // Butikker UDEN et rotator-element ser ikke slidet. Det er bevidst: alternativet ville
 // vaere at tvinge et nyt element ind i deres layout, hvilket ER at aendre deres side.
+// Er et element reelt tomt -- altsaa uden noget at vise? Bruges til at afgoere om
+// butikkens eget indhold skal traede i stedet i et faelles slide.
+function erTomtElement(el) {
+  if (!el) return true;
+  if (el.type === 'tom') return true;
+  if ((el.type === 'billede' || el.type === 'video') && !el.url) return true;
+  if (el.type === 'rotator' && (!Array.isArray(el.slides) || !el.slides.length)) return true;
+  if ((el.type === 'titel' || el.type === 'tekst') && !el.text && !el.html) return true;
+  return false;
+}
+
+// Lader butikkens eget indhold fylde de felter superadmin har ladet staa tomme i det
+// faelles slide. Uden dette ville en kampagne, hvor kun "hoved" er udfyldt, vise et sort
+// hul hvor butikkens eget banner plejer at vaere -- det ser ud som en fejl, og butikken
+// mister sin egen visning uden grund.
+//
+// Geometrien kommer fra slidet, indholdet fra butikken. Rotatorer springes bevidst over:
+// det faelles slide vises SELV inde i en rotator, saa at putte butikkens rotator ind i
+// slidet ville nagle den samme rotator inde i sig selv.
+function udfyldTommeSlots(slideElementer, butikElementer) {
+  if (!Array.isArray(slideElementer)) return slideElementer;
+  return slideElementer.map(sl => {
+    if (!sl.slotId || !erTomtElement(sl)) return sl;
+    const eget = (butikElementer || []).find(e =>
+      e.slotId === sl.slotId && !erTomtElement(e) && e.type !== 'rotator');
+    if (!eget) return sl;
+    return Object.assign({}, eget, { x: sl.x, y: sl.y, w: sl.w, h: sl.h, slotId: sl.slotId });
+  });
+}
+
 function mergeFaellesSlides(elements, faellesSlides, position) {
   if (!Array.isArray(faellesSlides) || !faellesSlides.length) return elements || [];
   // Udkast filtreres fra HER, i selve fletningen, i stedet for hos hver enkelt kalder.
@@ -805,7 +835,14 @@ function mergeFaellesSlides(elements, faellesSlides, position) {
   // det, uden at butikkerne ser noget.
   const udgivne = faellesSlides.filter(sl => sl && !sl.udkast);
   if (!udgivne.length) return elements || [];
-  faellesSlides = udgivne;
+  // Felter superadmin har ladet staa tomme i slidet fyldes med butikkens eget indhold, saa
+  // en kampagne der kun bruger "hoved" ikke efterlader et sort hul hvor butikkens banner
+  // plejer at vaere. Sker pr. butik ved visning -- samme slide ser derfor lidt forskelligt
+  // ud fra butik til butik, hvilket er hele meningen.
+  faellesSlides = udgivne.map(sl =>
+    sl.type === 'side'
+      ? Object.assign({}, sl, { elements: udfyldTommeSlots(sl.elements, elements) })
+      : sl);
   return (elements || []).map(el => {
     if (el.type !== 'rotator' || !Array.isArray(el.slides) || !el.slides.length) return el;
     let nye;
