@@ -209,15 +209,19 @@
   #liveViewBox .el-text { padding: 1cqw; background: transparent; overflow: hidden; outline: none; }
 
   .el-body { flex: 1; overflow: hidden; position: relative; }
-  /* Maerkat paa diasshow der faar et ekstra slide fra superadmin. pointer-events:none, saa
-     det aldrig staar i vejen for at klikke/traekke i selve elementet. */
-  .faelles-slide-maerkat {
-    position: absolute; top: 4px; right: 4px; z-index: 6;
-    background: rgba(77, 91, 255, 0.92); color: #fff;
-    font-size: 10px; font-weight: 600; letter-spacing: 0.2px;
-    padding: 2px 7px; border-radius: 10px;
-    pointer-events: none; white-space: nowrap;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+  /* Fælles slide fra superadmin, vist som en ekstra thumbnail i diasshowets slide-raekke.
+     Bevidst uden fjern-knap: slidet ligger ikke i butikkens indhold og kan derfor hverken
+     redigeres eller slettes herfra. Den stiplede kant signalerer "ikke din". */
+  .faelles-slide-thumb {
+    position: relative; width: 76px; height: 76px; flex-shrink: 0;
+    border-radius: 4px; overflow: hidden; cursor: help;
+    background: #2b3170; border: 2px dashed rgba(122,136,255,.9);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; text-align: center; padding: 4px;
+  }
+  .faelles-slide-thumb .fs-ikon { font-size: 16px; line-height: 1; }
+  .faelles-slide-thumb .fs-tekst {
+    font-size: 9px; font-weight: 700; color: #cdd4ff; letter-spacing: .2px; line-height: 1.2;
   }
   .el-text {
     width: 100%; height: 100%; color: white; padding: 4px 6px; outline: none;
@@ -237,9 +241,13 @@
     font-size: 10px; padding: 4px 8px; background: #2a2a2a; color: #ddd; border-radius: 6px; cursor: pointer;
   }
   .el-placeholder input[type="file"] { display: none; }
+  /* Nederst til VENSTRE. Laa foer oeverst til hoejre, hvor den forsvandt bag
+     banner-elementet der ligger ovenpaa, saa den ikke kunne rammes med musen.
+     Nederst til hoejre er optaget af resize-haandtaget. */
   .el-change-btn {
-    position: absolute; top: 2px; right: 2px; font-size: 9px; padding: 2px 6px;
+    position: absolute; bottom: 2px; left: 2px; font-size: 9px; padding: 2px 6px;
     background: rgba(0,0,0,.6); color: white; border-radius: 4px; cursor: pointer;
+    z-index: 7;
   }
   .resize-handle {
     position: absolute; right: 0; bottom: 0; width: 14px; height: 14px;
@@ -2950,7 +2958,12 @@
   // ellers butikkens egne elementer med laaste master-elementer flettet ind (samme funktion
   // som skaerm.html og Live View bruger, se render-shared.js).
   function displayElements() {
-    if (masterEditMode) return elements;
+    // Ogsaa i faelles-slide-tilstanden vises KUN de raa elementer. Uden dette blev
+    // master-skabelonens faste vinduer (banner + hoved) flettet ind ovenpaa, saa
+    // "Vælg fra bibliotek" og resten laa bag banneret og ikke kunne rammes. Et faelles
+    // slide er en selvstaendig side i et diasshow - det har intet med butikkens faste
+    // vinduer at goere.
+    if (masterEditMode || faellesSlideEditMode) return elements;
     const aktivSide = sider.find(s => s.id === aktivSideId);
     // BEVIDST INGEN mergeFaellesSlides her. Canvas'et er REDIGERING, ikke visning, og
     // redigerings-UI'et muterer elementerne direkte (se naeste afsnit). Blev faelles-slides
@@ -3467,7 +3480,9 @@
       // Uden for selve skabelon-redigeringen: findes der ledige faste pladser, skal det nye
       // element ind i EN af dem -- ikke ende som et loesrevet element, der senere skal
       // finjusteres i forhold til banner-/rotator-vinduet.
-      if (FYLDER_HELE[type] && !masterEditMode) {
+      // faellesSlideEditMode tages med her: et faelles slide er en selvstaendig side uden
+      // faste pladser, saa slot-vaelgeren ville aabne paa noget der ikke findes.
+      if (FYLDER_HELE[type] && !masterEditMode && !faellesSlideEditMode) {
         const ledige = tilgaengeligeSlotIds();
         if (ledige.length > 0) {
           aabnSlotVaelger(type, ledige);
@@ -3483,7 +3498,7 @@
       // desuden superadmin-only (se slotVaelgerFritBtn), saa dette er reelt den ENESTE vej en
       // almindelig admin kunne have naaet et frit element paa. I stedet for at stiltiende
       // oprette det, forklarer vi hvad de skal goere i stedet.
-      if (!erSuperadmin && !masterEditMode) {
+      if (!erSuperadmin && !masterEditMode && !faellesSlideEditMode) {
         alert('I har kun de 2 vinduer (banner og hoved). Klik først på det vindue på siden du vil ændre, og tryk så på denne knap for at erstatte dets indhold.');
         return;
       }
@@ -3789,6 +3804,42 @@
       slideRow.appendChild(thumb);
     });
 
+    // Fælles slide fra superadmin, vist blandt butikkens egne slides paa den plads det
+    // reelt faar paa skaermen. Det ligger IKKE i butikkens indhold - det flettes ind naar
+    // skaermen tegner - og kan derfor hverken redigeres eller fjernes herfra. Den stiplede
+    // kant og teksten er der udelukkende for at en butik kan SE hvorfor der kommer et slide
+    // de ikke selv har lavet; ellers ligner det en fejl.
+    //
+    // Udkast vises ikke: de er ikke ude paa skaermene endnu, og skal derfor heller ikke
+    // staa her som om de var.
+    const faellesUdgivne = ((masterTemplate && masterTemplate.faellesSlides) || [])
+      .filter(sl => sl && !sl.udkast);
+    if (faellesUdgivne.length && !masterEditMode && !faellesSlideEditMode) {
+      const posNavn = { sidst: 'sidst', foerst: 'først', 'efter-foerste': 'efter det første' };
+      const pos = (masterTemplate && masterTemplate.faellesSlidesPosition) || 'sidst';
+      faellesUdgivne.forEach(sl => {
+        const t = document.createElement('div');
+        t.className = 'faelles-slide-thumb';
+        const navn = sl.faellesNavn || (sl.type === 'side' ? 'Side' : sl.url) || '';
+        t.innerHTML =
+          '<div class="fs-ikon">' + (sl.type === 'video' ? '🎬' : sl.type === 'side' ? '📄' : '🖼️') + '</div>' +
+          '<div class="fs-tekst">FRA ADMIN</div>';
+        t.title = 'Fælles slide fra superadmin' + (navn ? ': ' + navn : '') + '.\n\n' +
+          'Vises ' + (posNavn[pos] || 'sidst') + ' i diasshowet på alle butikkers skærme. ' +
+          'Det ligger ikke i jeres eget indhold og kan ikke redigeres eller fjernes herfra — ' +
+          'det forsvinder af sig selv når admin fjerner det igen.';
+        // Indsat paa den plads det faktisk faar paa skaermen, saa baren viser den rigtige
+        // raekkefoelge frem for altid at haenge slidet paa til sidst.
+        if (pos === 'foerst') {
+          slideRow.insertBefore(t, slideRow.firstChild);
+        } else if (pos === 'efter-foerste' && slideRow.children.length > 1) {
+          slideRow.insertBefore(t, slideRow.children[1]);
+        } else {
+          slideRow.appendChild(t);
+        }
+      });
+    }
+
     // Egen "tilfoej"-raekke med 3 tydeligt navngivne veje ind (bibliotek / link / side) --
     // stod tidligere ublandet imellem selve slide-thumbnailsne uden nogen forklaring paa
     // HVAD hver kontrol goer, saa det var let at overse eller forveksle med endnu en slide.
@@ -3917,23 +3968,6 @@
     }
     if (canEdit) {
       node.addEventListener('click', () => selectElement(el.id));
-    }
-
-    // Faelles slide fra admin: vises som et lille maerkat, IKKE som et redigerbart slide.
-    // Selve slidet flettes foerst ind ved visning (skaerm.html og Live View), saa det kan
-    // hverken redigeres, slettes eller ved et uheld gemmes ind i butikkens eget indhold.
-    // Maerkatet er der udelukkende for at en butik kan SE hvorfor der kommer et ekstra
-    // slide de ikke selv har lavet -- ellers ser det ud som en fejl.
-    const antalFaelles = (masterTemplate && masterTemplate.faellesSlides || []).length;
-    if (el.type === 'rotator' && antalFaelles && !masterEditMode &&
-        Array.isArray(el.slides) && el.slides.length) {
-      const maerkat = document.createElement('div');
-      maerkat.className = 'faelles-slide-maerkat';
-      maerkat.textContent = '+' + antalFaelles + ' fra admin';
-      maerkat.title = 'Superadmin viser ' + (antalFaelles === 1 ? 'et ekstra slide' : antalFaelles + ' ekstra slides') +
-        ' i alle butikkers diasshow. Det ligger ikke i jeres indhold og kan ikke redigeres herfra — ' +
-        'det vises kun på skærmen, og forsvinder af sig selv når admin fjerner det.';
-      node.appendChild(maerkat);
     }
     const body = document.createElement('div');
     body.className = 'el-body';
