@@ -799,6 +799,13 @@ function mergeMasterElements(storeElements, masterElements, sideName) {
 // vaere at tvinge et nyt element ind i deres layout, hvilket ER at aendre deres side.
 function mergeFaellesSlides(elements, faellesSlides, position) {
   if (!Array.isArray(faellesSlides) || !faellesSlides.length) return elements || [];
+  // Udkast filtreres fra HER, i selve fletningen, i stedet for hos hver enkelt kalder.
+  // Saa kan et halvfaerdigt slide ikke ved et uheld gaa live fordi ét af de tre
+  // tegne-steder glemte tjekket. Superadmin kan gemme et udkast og arbejde videre paa
+  // det, uden at butikkerne ser noget.
+  const udgivne = faellesSlides.filter(sl => sl && !sl.udkast);
+  if (!udgivne.length) return elements || [];
+  faellesSlides = udgivne;
   return (elements || []).map(el => {
     if (el.type !== 'rotator' || !Array.isArray(el.slides) || !el.slides.length) return el;
     let nye;
