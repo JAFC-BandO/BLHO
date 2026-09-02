@@ -128,6 +128,14 @@
   .canvas {
     position: relative;
     width: 100%;
+    /* Uden dette bliver canvas'et lige saa bredt som vinduet tillader, og med fast 16:9
+       bliver det saa hoejere end skaermen - man ser kun toppen og kan ikke "zoome ud",
+       for der er ingen zoom-kontrol. max-width binder bredden til den plads der reelt er
+       i hoejden, saa hele siden altid kan ses paa én gang.
+       320px er afsat til topbar, sidefaner og luft omkring. */
+    max-width: calc((100vh - 320px) * 16 / 9);
+    min-width: 480px;
+    margin: 0 auto;
     aspect-ratio: 16 / 9;
     background: #0a0a0a;
     border-radius: 8px;
@@ -331,6 +339,9 @@
     .topbar-actions { flex-wrap: wrap; gap: 8px; }
     #superadminMenu { width: min(280px, calc(100vw - 32px)); }
     .sidebar, .canvas-outer { padding: 12px; }
+    /* Paa en smal skaerm er bredden det bindende, ikke hoejden - lad canvas'et fylde
+       det den kan, i stedet for at min-width tvinger vandret scroll frem. */
+    .canvas { min-width: 0; max-width: 100%; }
     .add-btn { padding: 9px 12px; font-size: 13px; }
   }
 </style>

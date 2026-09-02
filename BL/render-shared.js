@@ -813,15 +813,23 @@ function erTomtElement(el) {
 // hul hvor butikkens eget banner plejer at vaere -- det ser ud som en fejl, og butikken
 // mister sin egen visning uden grund.
 //
-// Geometrien kommer fra slidet, indholdet fra butikken. Rotatorer springes bevidst over:
-// det faelles slide vises SELV inde i en rotator, saa at putte butikkens rotator ind i
-// slidet ville nagle den samme rotator inde i sig selv.
+// Geometrien kommer fra slidet, indholdet fra butikken.
+//
+// En butiks banner ER typisk en rotator - det er saadan skabelonen definerer feltet - saa
+// den skal kunne laanes. Det er trygt, fordi faelles-slidet aldrig laegges i banneret (se
+// mergeFaellesSlides). Hovedvinduet er derimod netop dét slidet ligger i, saa en rotator
+// DER ville nagle den samme rotator inde i sig selv og loebe uendeligt.
 function udfyldTommeSlots(slideElementer, butikElementer) {
   if (!Array.isArray(slideElementer)) return slideElementer;
   return slideElementer.map(sl => {
     if (!sl.slotId || !erTomtElement(sl)) return sl;
-    const eget = (butikElementer || []).find(e =>
-      e.slotId === sl.slotId && !erTomtElement(e) && e.type !== 'rotator');
+    const eget = (butikElementer || []).find(e => {
+      if (e.slotId !== sl.slotId || erTomtElement(e)) return false;
+      // Kun banner-rotatoren maa laanes. Enhver anden rotator ville vaere den slidet
+      // selv ligger i.
+      if (e.type === 'rotator' && sl.slotId !== 'banner') return false;
+      return true;
+    });
     if (!eget) return sl;
     return Object.assign({}, eget, { x: sl.x, y: sl.y, w: sl.w, h: sl.h, slotId: sl.slotId });
   });
@@ -845,6 +853,11 @@ function mergeFaellesSlides(elements, faellesSlides, position) {
       : sl);
   return (elements || []).map(el => {
     if (el.type !== 'rotator' || !Array.isArray(el.slides) || !el.slides.length) return el;
+    // Banner-striben springes over: det faelles slide er et helt sidelayout, og det giver
+    // ingen mening presset ned i et 18% hoejt baand. Det hoerer hjemme i hovedvinduet.
+    // Det fjerner samtidig risikoen for at butikkens banner-rotator - som slidet selv kan
+    // laane indhold fra - ender inde i et slide der ligger i den samme rotator.
+    if (el.slotId === 'banner') return el;
     let nye;
     if (position === 'foerst') {
       nye = faellesSlides.concat(el.slides);
