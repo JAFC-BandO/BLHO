@@ -209,6 +209,16 @@
   #liveViewBox .el-text { padding: 1cqw; background: transparent; overflow: hidden; outline: none; }
 
   .el-body { flex: 1; overflow: hidden; position: relative; }
+  /* Maerkat paa diasshow der faar et ekstra slide fra superadmin. pointer-events:none, saa
+     det aldrig staar i vejen for at klikke/traekke i selve elementet. */
+  .faelles-slide-maerkat {
+    position: absolute; top: 4px; right: 4px; z-index: 6;
+    background: rgba(77, 91, 255, 0.92); color: #fff;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.2px;
+    padding: 2px 7px; border-radius: 10px;
+    pointer-events: none; white-space: nowrap;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+  }
   .el-text {
     width: 100%; height: 100%; color: white; padding: 4px 6px; outline: none;
     line-height: 1.3; overflow: auto; background: transparent;
@@ -370,11 +380,14 @@
           <label style="font-size:11px; color:#888; display:block; margin-bottom:3px;">Skift butik (redigér som)</label>
           <select id="skiftButikSelect" style="width:100%; padding:6px; font-size:13px; margin-bottom:10px;"></select>
           <button id="masterEditBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Rediger fælles skabelon</button>
+          <button id="faellesSlideBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Fælles slide i alle diasshow</button>
           <button id="enhederBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Enheder / Fjernsupport</button>
           <button id="aktivitetslogBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Aktivitetslog</button>
           <button id="feedbackAdminBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Feedback fra butikker</button>
           <div style="font-size:11px; color:#666; line-height:1.5;">
             <b>Fælles skabelon:</b> ét layout du redigerer ét sted. Elementer du låser der (lås-knappen i Egenskaber) vises identisk og skrivebeskyttet på ALLE butikkers skærme med det samme.
+            <br><br>
+            <b>Fælles slide:</b> ét ekstra slide der lægges ind i alle butikkers diasshow. Det skrives aldrig ind i butikkernes indhold — det vises kun, og forsvinder overalt når du fjerner det igen.
           </div>
         </div>
       </div>
@@ -392,6 +405,63 @@
     <button id="exitMasterEditBtn" style="padding:6px 14px; font-size:12px;">Afslut</button>
   </div>
 
+  <div id="faellesSlideOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:2000; align-items:center; justify-content:center;">
+    <div style="background:white; border-radius:10px; padding:24px; width:min(680px, 92vw); max-height:85vh; overflow-y:auto;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+        <h2 style="margin:0;">Fælles slide i alle diasshow</h2>
+        <span id="faellesSlideCloseBtn" style="cursor:pointer; font-size:20px; color:#888; line-height:1;">✕</span>
+      </div>
+
+      <div style="font-size:12px; color:#666; line-height:1.6; background:#f4f6ff; border-radius:8px; padding:12px; margin-bottom:18px;">
+        Lægger ét ekstra slide ind i <b>alle butikkers diasshow</b> på én gang — fx en kampagne eller en driftsbesked.
+        <br><br>
+        Slidet gemmes <b>aldrig</b> i butikkernes eget indhold. Det flettes ind når skærmen tegner, så ingen butiks
+        indhold kan blive overskrevet eller gå tabt. Fjerner du det igen, forsvinder det af sig selv overalt —
+        der er intet at rydde op i.
+        <br><br>
+        Butikker uden et diasshow ser ingenting. Tilføjer de et senere, dukker slidet op af sig selv.
+      </div>
+
+      <div id="faellesSlideStatus" style="font-size:13px; margin-bottom:18px;"></div>
+
+      <h2 style="font-size:14px; margin-bottom:8px;">Vælg hvad der skal vises</h2>
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <label style="font-size:12px;"><input type="radio" name="faellesSlideType" value="side" checked> En gemt side-skabelon</label>
+        <label style="font-size:12px;"><input type="radio" name="faellesSlideType" value="media"> Et billede eller en video</label>
+      </div>
+
+      <div id="faellesSlideSideValg" style="margin-bottom:14px;">
+        <select id="faellesSlideSablon" style="width:100%; padding:8px; font-size:13px;"></select>
+        <div style="font-size:11px; color:#888; margin-top:4px;">
+          Bygget under "Skabeloner". Har du ingen endnu, så lav en side, markér den, og gem den som skabelon.
+        </div>
+      </div>
+
+      <div id="faellesSlideMediaValg" style="display:none; margin-bottom:14px;">
+        <select id="faellesSlideMedie" style="width:100%; padding:8px; font-size:13px;"></select>
+        <div style="font-size:11px; color:#888; margin-top:4px;">
+          Fra mediebiblioteket. Del mediet med alle butikker først, hvis det ikke allerede er delt.
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:18px;">
+        <label for="faellesSlidePosition" style="font-size:12px; color:#666;">Hvor i rækkefølgen:</label>
+        <select id="faellesSlidePosition" style="padding:6px 8px; font-size:12px;">
+          <option value="sidst">Sidst — efter butikkens egne slides</option>
+          <option value="foerst">Først — vises før butikkens egne</option>
+          <option value="efter-foerste">Efter det første slide</option>
+        </select>
+      </div>
+
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button id="faellesSlideGemBtn" style="padding:9px 18px; font-size:13px;">Vis i alle diasshow</button>
+        <button id="faellesSlideFjernBtn" style="padding:9px 18px; font-size:13px; background:#fff; border:1px solid #c0392b; color:#c0392b;">Fjern igen</button>
+        <span id="faellesSlideMsg" style="font-size:12px;"></span>
+      </div>
+
+      <div id="faellesSlideRaekkevidde" style="font-size:11px; color:#888; margin-top:16px; line-height:1.6;"></div>
+    </div>
+  </div>
   <div id="enhederOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:2000; align-items:center; justify-content:center;">
     <div style="background:white; border-radius:10px; padding:24px; width:min(720px, 92vw); max-height:85vh; overflow-y:auto;">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
@@ -2190,7 +2260,18 @@
   async function saveMasterTemplate() {
     const btn = document.getElementById('saveBtn');
     btn.disabled = true;
-    const payload = { data: { elements, background: baggrundsfarve }, opdateret_at: new Date().toISOString() };
+    // Faelles slides ligger i SAMME data-objekt, men redigeres et andet sted (panelet
+    // "Fælles slide i alle diasshow"). Uden at bevare dem her ville et almindeligt gem af
+    // skabelonen slette et aktivt faelles slide hos alle butikker uden varsel.
+    const payload = {
+      data: {
+        elements,
+        background: baggrundsfarve,
+        faellesSlides: (masterTemplate && masterTemplate.faellesSlides) || [],
+        faellesSlidesPosition: (masterTemplate && masterTemplate.faellesSlidesPosition) || 'sidst',
+      },
+      opdateret_at: new Date().toISOString(),
+    };
     let error;
     if (masterTemplate && masterTemplate.id) {
       const res = await client.from('sabloner').update(payload).eq('id', masterTemplate.id);
@@ -2212,6 +2293,202 @@
     loadLiveView();
   }
 
+
+  // ---------- Fælles slide i alle diasshow ----------
+  // Slidet gemmes i den faelles skabelons data-objekt og flettes ind ved VISNING
+  // (mergeFaellesSlides i render-shared.js). Det roerer aldrig butikkernes eget content.
+
+  let faellesSlideSabloner = [];
+  let faellesSlideMedier = [];
+
+  async function aabnFaellesSlidePanel() {
+    document.getElementById('superadminMenu').style.display = 'none';
+    document.getElementById('faellesSlideOverlay').style.display = 'flex';
+    document.getElementById('faellesSlideMsg').textContent = '';
+    await loadMasterTemplate();
+
+    // Side-skabeloner at vaelge imellem. Kun 'side'-typen giver mening som et helt slide,
+    // og selve faelles-skabelonen (standard=true) skal ikke kunne vaelges som slide i sig selv.
+    const { data: sabloner } = await client
+      .from('sabloner')
+      .select('id, navn, data, standard')
+      .eq('type', 'side')
+      .order('navn');
+    faellesSlideSabloner = (sabloner || []).filter(x => !x.standard && x.data && Array.isArray(x.data.elements));
+    const sablonSelect = document.getElementById('faellesSlideSablon');
+    sablonSelect.innerHTML = faellesSlideSabloner.length
+      ? faellesSlideSabloner.map(x => '<option value="' + x.id + '">' + escapeHtml(x.navn) + '</option>').join('')
+      : '<option value="">(ingen side-skabeloner endnu)</option>';
+
+    // Medier. Bucket'en er public, saa en URL virker uanset hvilken butik mediet
+    // oprindeligt blev uploadet til.
+    const { data: medier } = await client
+      .from('media').select('id, type, url, filnavn').order('oprettet_at', { ascending: false }).limit(200);
+    faellesSlideMedier = medier || [];
+    const medieSelect = document.getElementById('faellesSlideMedie');
+    medieSelect.innerHTML = faellesSlideMedier.length
+      ? faellesSlideMedier.map(m => '<option value="' + m.id + '">' + escapeHtml(m.filnavn) + ' (' + m.type + ')</option>').join('')
+      : '<option value="">(ingen medier)</option>';
+
+    document.getElementById('faellesSlidePosition').value =
+      (masterTemplate && masterTemplate.faellesSlidesPosition) || 'sidst';
+
+    visFaellesSlideStatus();
+    visFaellesSlideRaekkevidde();
+  }
+
+  function visFaellesSlideStatus() {
+    const boks = document.getElementById('faellesSlideStatus');
+    const aktive = (masterTemplate && masterTemplate.faellesSlides) || [];
+    if (!aktive.length) {
+      boks.innerHTML = '<span style="color:#888;">Der vises ingen fælles slides lige nu.</span>';
+      return;
+    }
+    const s = aktive[0];
+    const navn = escapeHtml(s.faellesNavn || s.url || 'uden navn');
+    const hvad = s.type === 'side'
+      ? 'side-skabelonen "' + navn + '"'
+      : (s.type === 'video' ? 'videoen ' : 'billedet ') + navn;
+    const posTekst = { sidst: 'sidst', foerst: 'først', 'efter-foerste': 'efter det første slide' };
+    boks.innerHTML =
+      '<div style="background:#e8f6ec; border-left:3px solid #1a9b4b; padding:10px 12px; border-radius:6px;">' +
+      '<b>Aktivt lige nu:</b> ' + hvad +
+      ' — vises ' + (posTekst[(masterTemplate && masterTemplate.faellesSlidesPosition)] || 'sidst') +
+      ' i alle butikkers diasshow.</div>';
+  }
+
+  // Hvor mange butikker ser det reelt? Der skal findes et diasshow i butikkens viste
+  // layout, ellers sker der ingenting hos dem. Det skal kunne ses FOER man udgiver noget,
+  // saa man ikke gaar og tror en besked er ude hos alle.
+  async function visFaellesSlideRaekkevidde() {
+    const boks = document.getElementById('faellesSlideRaekkevidde');
+    boks.textContent = 'Tjekker hvor mange butikker der har et diasshow...';
+    const { data, error } = await client
+      .from('content')
+      .select('butik_id, layout, butikker(navn)')
+      .order('opdateret_at', { ascending: false });
+    if (error) { boks.textContent = ''; return; }
+
+    // Én raekke pr. butik -- den nyeste, som er den der reelt vises.
+    const nyeste = {};
+    (data || []).forEach(r => { if (!nyeste[r.butik_id]) nyeste[r.butik_id] = r; });
+    const raekker = Object.keys(nyeste).map(k => nyeste[k]);
+
+    const medDiasshow = [], uden = [];
+    raekker.forEach(r => {
+      const l = r.layout || {};
+      const el = Array.isArray(l.elements) ? l.elements : [];
+      const navn = (r.butikker && r.butikker.navn) || 'Ukendt';
+      const fundet = el.some(e => e.type === 'rotator' && Array.isArray(e.slides) && e.slides.length);
+      if (fundet) { medDiasshow.push(navn); } else { uden.push(navn); }
+    });
+
+    boks.innerHTML =
+      '<b>' + medDiasshow.length + ' af ' + raekker.length + '</b> butikker med gemt indhold har et diasshow og vil se slidet.' +
+      (uden.length
+        ? '<br>Uden diasshow (ser ingenting, indtil de selv tilføjer et): ' + escapeHtml(uden.sort().join(', '))
+        : '');
+  }
+
+  // Skriver KUN slides-delen. Skabelonens egne elementer og baggrund skrives tilbage
+  // uaendret, saa panelet her aldrig kan komme til at aendre selve faelles-skabelonen.
+  async function skrivFaellesSlides(slides, position) {
+    return client.from('sabloner').update({
+      data: {
+        elements: masterTemplate.elements,
+        background: masterTemplate.background,
+        faellesSlides: slides,
+        faellesSlidesPosition: position,
+      },
+      opdateret_at: new Date().toISOString(),
+    }).eq('id', masterTemplate.id);
+  }
+
+  async function gemFaellesSlide() {
+    const msg = document.getElementById('faellesSlideMsg');
+    if (!masterTemplate || !masterTemplate.id) {
+      showMsg(msg, 'Der findes ingen fælles skabelon endnu — opret den først under "Rediger fælles skabelon".', false);
+      return;
+    }
+    const type = document.querySelector('input[name="faellesSlideType"]:checked').value;
+    const position = document.getElementById('faellesSlidePosition').value;
+
+    let slide = null;
+    if (type === 'side') {
+      const id = document.getElementById('faellesSlideSablon').value;
+      const sab = faellesSlideSabloner.find(x => x.id === id);
+      if (!sab) { showMsg(msg, 'Vælg en side-skabelon først.', false); return; }
+      // En SELVSTAENDIG kopi, ikke en reference. Aendrer nogen skabelonen bagefter, aendrer
+      // det ikke det der allerede staar ude paa skaermene -- at udgive noget nyt skal vaere
+      // et bevidst klik her.
+      slide = {
+        type: 'side',
+        background: sab.data.background || '#0a0a0a',
+        elements: JSON.parse(JSON.stringify(sab.data.elements || [])),
+        faellesSlide: true,
+        faellesNavn: sab.navn,
+      };
+    } else {
+      const id = document.getElementById('faellesSlideMedie').value;
+      const m = faellesSlideMedier.find(x => x.id === id);
+      if (!m) { showMsg(msg, 'Vælg et medie først.', false); return; }
+      slide = {
+        type: m.type === 'video' ? 'video' : 'billede',
+        url: m.url,
+        faellesSlide: true,
+        faellesNavn: m.filnavn,
+      };
+    }
+
+    const btn = document.getElementById('faellesSlideGemBtn');
+    btn.disabled = true;
+    const { error } = await skrivFaellesSlides([slide], position);
+    btn.disabled = false;
+
+    if (error) { showMsg(msg, 'Kunne ikke gemme: ' + error.message, false); return; }
+    showMsg(msg, 'Vises nu i alle butikkers diasshow.', true);
+    logAdminHandling('faelles_slide_vist', slide.faellesNavn || slide.url || null);
+    await loadMasterTemplate();
+    visFaellesSlideStatus();
+    renderCanvas();
+    loadLiveView();
+  }
+
+  async function fjernFaellesSlide() {
+    const msg = document.getElementById('faellesSlideMsg');
+    if (!masterTemplate || !masterTemplate.id) return;
+    if (!((masterTemplate.faellesSlides || []).length)) { showMsg(msg, 'Der er ingen at fjerne.', false); return; }
+    const spoergsmaal = 'Fjern det fælles slide fra alle butikkers diasshow?\n\n' +
+      'Butikkernes eget indhold røres ikke — slidet har aldrig ligget i det.';
+    if (!confirm(spoergsmaal)) return;
+
+    const btn = document.getElementById('faellesSlideFjernBtn');
+    btn.disabled = true;
+    const { error } = await skrivFaellesSlides([], masterTemplate.faellesSlidesPosition || 'sidst');
+    btn.disabled = false;
+
+    if (error) { showMsg(msg, 'Kunne ikke fjerne: ' + error.message, false); return; }
+    showMsg(msg, 'Fjernet — forsvinder fra alle skærme ved næste opdatering.', true);
+    logAdminHandling('faelles_slide_fjernet', null);
+    await loadMasterTemplate();
+    visFaellesSlideStatus();
+    renderCanvas();
+    loadLiveView();
+  }
+
+  document.getElementById('faellesSlideBtn').addEventListener('click', aabnFaellesSlidePanel);
+  document.getElementById('faellesSlideCloseBtn').addEventListener('click', () => {
+    document.getElementById('faellesSlideOverlay').style.display = 'none';
+  });
+  document.getElementById('faellesSlideGemBtn').addEventListener('click', gemFaellesSlide);
+  document.getElementById('faellesSlideFjernBtn').addEventListener('click', fjernFaellesSlide);
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="faellesSlideType"]'), function (r) {
+    r.addEventListener('change', function () {
+      const erSide = document.querySelector('input[name="faellesSlideType"]:checked').value === 'side';
+      document.getElementById('faellesSlideSideValg').style.display = erSide ? '' : 'none';
+      document.getElementById('faellesSlideMediaValg').style.display = erSide ? 'none' : '';
+    });
+  });
   // ---------- Glemt adgangskode ----------
   // Supabase sender et link med et recovery-token i URL'ens HASH
   // (#access_token=...&type=recovery) og logger brugeren ind med det samme, naar de klikker.
@@ -2544,7 +2821,16 @@
       .maybeSingle();
     if (error) { masterTemplate = null; return; }
     masterTemplate = data
-      ? { id: data.id, elements: (data.data && data.data.elements) || [], background: (data.data && data.data.background) || '#0a0a0a', opdateret_at: data.opdateret_at }
+      ? {
+          id: data.id,
+          elements: (data.data && data.data.elements) || [],
+          background: (data.data && data.data.background) || '#0a0a0a',
+          // Faelles slides ligger i SAMME raekke som den faelles skabelon, saa der ikke skal
+          // en ekstra tabel og en ekstra RLS-politik til. Kun superadmin kan skrive i den.
+          faellesSlides: (data.data && data.data.faellesSlides) || [],
+          faellesSlidesPosition: (data.data && data.data.faellesSlidesPosition) || 'sidst',
+          opdateret_at: data.opdateret_at,
+        }
       : null;
   }
 
@@ -2554,6 +2840,14 @@
   function displayElements() {
     if (masterEditMode) return elements;
     const aktivSide = sider.find(s => s.id === aktivSideId);
+    // BEVIDST INGEN mergeFaellesSlides her. Canvas'et er REDIGERING, ikke visning, og
+    // redigerings-UI'et muterer elementerne direkte (se naeste afsnit). Blev faelles-slides
+    // flettet ind her, ville en admin kunne staa og rette i et slide der slet ikke er
+    // butikkens -- og i vaerste fald faa det gemt ind i butikkens eget content, hvilket er
+    // praecis det denne funktion skal umuliggoere. I stedet vises et lille maerkat paa
+    // diasshow-elementer (se buildElementNode), saa man kan SE at der kommer et ekstra
+    // slide fra admin, uden at kunne roere det. skaerm.html og Live View fletter det ind
+    // for alvor -- det er dér det skal ses.
     const merged = mergeMasterElements(elements, masterTemplate ? masterTemplate.elements : [], aktivSide ? aktivSide.navn : null);
     // mergeMasterElements() er en ren funktion (bruges ogsaa read-only af skaerm.html/Live
     // View) og bygger derfor et HELT NYT objekt for hver fast plads (slot) ved hvert kald --
@@ -2918,7 +3212,10 @@
     saetAktuelleSider(harSider ? data.layout.sider : []);
 
     box.style.background = data.layout.background || '#0a0a0a';
-    const merged = mergeMasterElements(data.layout.elements, masterTemplate ? masterTemplate.elements : [], aktiv ? aktiv.navn : null);
+    const merged = mergeFaellesSlides(
+      mergeMasterElements(data.layout.elements, masterTemplate ? masterTemplate.elements : [], aktiv ? aktiv.navn : null),
+      masterTemplate ? masterTemplate.faellesSlides : [],
+      masterTemplate ? masterTemplate.faellesSlidesPosition : 'sidst');
     merged.forEach(el => box.appendChild(buildElNode(el, id => liveViewIntervals.push(id))));
 
     if (harSider) {
@@ -3510,6 +3807,22 @@
       node.addEventListener('click', () => selectElement(el.id));
     }
 
+    // Faelles slide fra admin: vises som et lille maerkat, IKKE som et redigerbart slide.
+    // Selve slidet flettes foerst ind ved visning (skaerm.html og Live View), saa det kan
+    // hverken redigeres, slettes eller ved et uheld gemmes ind i butikkens eget indhold.
+    // Maerkatet er der udelukkende for at en butik kan SE hvorfor der kommer et ekstra
+    // slide de ikke selv har lavet -- ellers ser det ud som en fejl.
+    const antalFaelles = (masterTemplate && masterTemplate.faellesSlides || []).length;
+    if (el.type === 'rotator' && antalFaelles && !masterEditMode &&
+        Array.isArray(el.slides) && el.slides.length) {
+      const maerkat = document.createElement('div');
+      maerkat.className = 'faelles-slide-maerkat';
+      maerkat.textContent = '+' + antalFaelles + ' fra admin';
+      maerkat.title = 'Superadmin viser ' + (antalFaelles === 1 ? 'et ekstra slide' : antalFaelles + ' ekstra slides') +
+        ' i alle butikkers diasshow. Det ligger ikke i jeres indhold og kan ikke redigeres herfra — ' +
+        'det vises kun på skærmen, og forsvinder af sig selv når admin fjerner det.';
+      node.appendChild(maerkat);
+    }
     const body = document.createElement('div');
     body.className = 'el-body';
     let textDiv = null;
