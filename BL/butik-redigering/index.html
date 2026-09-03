@@ -1236,6 +1236,11 @@
 
     await loadButikData(brugerRow.butik_id, brugerRow.butikker.navn);
 
+    // Efter loadButikData: currentButikId skal vaere sat foer forespoergslen kan filtreres.
+    // Bevidst ikke await'et - en langsom eller fejlende forespoergsel maa aldrig forsinke
+    // eller blokere selve redigeringssiden.
+    tjekOfflineSkaerme();
+
     // Foerste-gangs-guide: vist automatisk én gang pr. browser, derefter kun paa
     // forespoergsel via "?"-knappen. Et lokalt flag (ikke i databasen) er bevidst simpelt --
     // skifter en admin browser/enhed, ser de bare guiden igen, hvilket er en harmlos gentagelse.
@@ -2323,6 +2328,105 @@
   }
 
 
+
+
+  // ---------- Advarsel om skærme der er faldet af ----------
+  // Vises én gang ved login. En butik opdager ellers foerst at deres skaerm er nede naar
+  // nogen tilfaeldigvis gaar forbi den - og en skaerm der har staaet sort i tre dage er
+  // vaerre end en der har staaet sort i en time.
+  //
+  // Enheder der ALDRIG har meldt sig springes over. De er ikke "nede", de er bare ikke
+  // sat op endnu, og en advarsel om dem ville vaere stoej der laerte folk at ignorere
+  // beskeden - praecis den vane man ikke vil have naar det en dag ER alvorligt.
+  const OFFLINE_MINUTTER = 15;
+
+  function minutterSiden(iso) {
+    return (Date.now() - new Date(iso).getTime()) / 60000;
+  }
+
+  function offlineVarighed(iso) {
+    const min = minutterSiden(iso);
+    if (min < 90) return 'i ' + Math.round(min) + ' minutter';
+    const timer = min / 60;
+    if (timer < 36) return 'i ' + Math.round(timer) + ' timer';
+    return 'i ' + Math.round(timer / 24) + ' dage';
+  }
+
+  async function tjekOfflineSkaerme() {
+    let q = client.from('enheder').select('navn, sidst_set_at, butik_id, butikker(navn)');
+    // En almindelig admin ser alligevel kun sin egen butiks enheder via RLS, men filteret
+    // goer det eksplicit - og sparer superadmin for at hente alt naar de kigger paa én butik.
+    if (!erSuperadmin) q = q.eq('butik_id', currentButikId);
+    const { data, error } = await q;
+    if (error || !data) return;
+
+    const nede = data.filter(e => e.sidst_set_at && minutterSiden(e.sidst_set_at) > OFFLINE_MINUTTER);
+    if (!nede.length) return;
+
+    // Én advarsel pr. hændelse, ikke pr. login. Noeglen indeholder hvilke enheder der er
+    // nede, saa en NY nedgang giver en ny advarsel - men den samme, allerede kvitterede,
+    // ikke goer det hver gang man logger ind i loebet af dagen.
+    const noegle = 'blho_offline_set_' + nede.map(e => e.navn).sort().join('|');
+    try { if (sessionStorage.getItem(noegle)) return; } catch (e) { /* blokeret lagring */ }
+
+    visOfflineVarsel(nede, noegle);
+  }
+
+  function visOfflineVarsel(nede, noegle) {
+    const gammel = document.getElementById('offlineVarsel');
+    if (gammel) gammel.remove();
+
+    const bar = document.createElement('div');
+    bar.id = 'offlineVarsel';
+    bar.style.cssText = 'display:flex; align-items:flex-start; justify-content:space-between; gap:16px;' +
+      ' background:#fdecea; color:#7d1c0c; border-bottom:1px solid #f5c6c0; padding:12px 20px; font-size:13px; line-height:1.55;';
+
+    const tekst = document.createElement('div');
+    if (erSuperadmin) {
+      const liste = nede.map(e =>
+        '<li><b>' + escapeHtml((e.butikker && e.butikker.navn) || e.navn) + '</b> — ikke set ' +
+        escapeHtml(offlineVarighed(e.sidst_set_at)) + '</li>').join('');
+      tekst.innerHTML =
+        '<b>' + nede.length + ' skærm' + (nede.length === 1 ? '' : 'e') + ' svarer ikke</b>' +
+        '<ul style="margin:6px 0 0 18px; padding:0;">' + liste + '</ul>' +
+        '<div style="margin-top:6px; font-size:12px;">Se "Enheder / Fjernsupport" for detaljer. ' +
+        'Enheder der aldrig har meldt sig er ikke talt med — de er ikke sat op endnu.</div>';
+    } else {
+      // Butikkens egen besked: ingen tekniske begreber, og konkret hvad de selv kan goere.
+      // De kan ikke fejlsoege noget alligevel, saa beskeden skal fortaelle hvad der virker
+      // i praksis og hvornaar de skal give op og ringe.
+      tekst.innerHTML =
+        '<b>Vi kan ikke se jeres skærm lige nu</b> — den har ikke meldt sig ' +
+        escapeHtml(offlineVarighed(nede[0].sidst_set_at)) + '.' +
+        '<div style="margin-top:6px;">Indholdet her bliver gemt som normalt, men det kommer ikke ud på skærmen ' +
+        'før den er online igen. Tjek gerne at:' +
+        '<ul style="margin:6px 0 0 18px; padding:0;">' +
+        '<li>skærmen og den lille boks bag den har strøm</li>' +
+        '<li>boksen er på butikkens wifi</li>' +
+        '<li>en tur i stikket på boksen — det løser det som regel</li>' +
+        '</ul></div>' +
+        '<div style="margin-top:6px; font-size:12px;">Der går et par minutter før den melder sig igen. ' +
+        'Virker det ikke, så sig til — så kigger vi på den herfra.</div>';
+    }
+    bar.appendChild(tekst);
+
+    const luk = document.createElement('button');
+    luk.textContent = 'OK';
+    luk.style.cssText = 'flex-shrink:0; padding:6px 16px; font-size:12px; cursor:pointer;';
+    luk.addEventListener('click', () => {
+      try { sessionStorage.setItem(noegle, '1'); } catch (e) { /* blokeret lagring */ }
+      bar.remove();
+    });
+    bar.appendChild(luk);
+
+    // Lige under topbaren. Bindes til selve .topbar-elementet og ikke til firstChild,
+    // som kan vaere en tekstnode med mellemrum - saa ville banneret havne OVER topbaren.
+    const app = document.getElementById('app');
+    const topbar = app.querySelector('.topbar');
+    if (topbar && topbar.nextSibling) app.insertBefore(bar, topbar.nextSibling);
+    else if (topbar) app.appendChild(bar);
+    else app.insertBefore(bar, app.firstChild);
+  }
 
   // ---------- Fælles slides i alle diasshow ----------
   // Slidene gemmes i den faelles skabelons data-objekt og flettes ind ved VISNING
