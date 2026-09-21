@@ -403,6 +403,12 @@
   <div class="topbar">
     <div style="display:flex; align-items:center;">
       <div class="butik-badge" id="butikNavn"></div>
+      <!-- Kun for almindelige admins med adgang til flere butikker (bruger_butikker) --
+           erstatter badget ovenfor, som saa skjules. Se loadMineButikker/skiftMinButik. -->
+      <span id="mineButikkerWrap" style="display:none; align-items:center; gap:6px;">
+        <label for="mineButikkerSelect" style="font-size:12px; color:#888;">Skift butik:</label>
+        <select id="mineButikkerSelect" class="butik-badge" style="border:none; cursor:pointer;"></select>
+      </span>
       <div style="position:relative; display:inline-block; margin-left:8px;">
         <span id="superadminBadge" style="display:none; background:#ffd700; color:#5a4600; font-weight:700; font-size:12px; padding:4px 10px; border-radius:20px; cursor:pointer; user-select:none;">Admin ▾</span>
         <div id="superadminMenu" style="display:none; position:absolute; top:100%; left:0; margin-top:6px; background:white; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.2); padding:14px; width:280px; z-index:1000;">
@@ -1098,6 +1104,7 @@
     saetAktuelButikNavn(butikNavn); // {{butik}}-tag i Live View skal matche den viste butik
     const skiftSelect = document.getElementById('skiftButikSelect');
     if (skiftSelect) skiftSelect.value = butikId;
+    document.getElementById('mineButikkerSelect').value = butikId;
     opdaterSkaermVisLink();
 
     selectedElementId = null;
@@ -1192,6 +1199,36 @@
     skiftTilButik(e.target.value);
   });
 
+  // Almindelig admin med flere butikker (supabase/migration_flere_butikker.sql): i modsaetning
+  // til superadmin har de intet RLS-bypass, saa selve brugere.butik_id skal flyttes server-side
+  // (skift_butik tjekker adgangen) FOeR data for den nye butik kan hentes. Valget gemmes
+  // dermed ogsaa til naeste login.
+  let mineButikker = [];
+  async function loadMineButikker() {
+    const { data, error } = await client.rpc('mine_butikker');
+    mineButikker = (!error && data) ? data : [];
+    const select = document.getElementById('mineButikkerSelect');
+    const flere = mineButikker.length > 1;
+    select.innerHTML = mineButikker.map(b => '<option value="' + b.id + '">' + escapeHtml(b.navn) + '</option>').join('');
+    document.getElementById('mineButikkerWrap').style.display = flere ? 'inline-flex' : 'none';
+    document.getElementById('butikNavn').style.display = flere ? 'none' : '';
+  }
+  async function skiftMinButik(butikId) {
+    const butik = mineButikker.find(b => b.id === butikId);
+    if (!butik) return;
+    const { error } = await client.rpc('skift_butik', { p_butik_id: butikId });
+    if (error) {
+      document.getElementById('mineButikkerSelect').value = currentButikId;
+      showMsg(saveMsg, 'Kunne ikke skifte butik: ' + error.message, false);
+      return;
+    }
+    await loadButikData(butik.id, butik.navn);
+    tjekOfflineSkaerme();
+  }
+  document.getElementById('mineButikkerSelect').addEventListener('change', (e) => {
+    skiftMinButik(e.target.value);
+  });
+
   async function loadEverything() {
     const { data: { user } } = await client.auth.getUser();
     if (!user) return;
@@ -1226,6 +1263,7 @@
       : 'I har 2 faste vinduer på siden (banner og hoved). Vælg det vindue du vil ændre, og klik så på Billede, Video eller Diasshow.';
 
     if (erSuperadmin) await loadAlleButikkerListe();
+    else await loadMineButikker();
 
     // #app (og dermed canvas) er stadig display:none her, saa canvas.getBoundingClientRect()
     // ville give bredde 0 -- vis appen FOeR vi tegner, ellers bliver skriftstoerrelsen 0px
