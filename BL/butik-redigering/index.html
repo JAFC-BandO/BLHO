@@ -493,10 +493,8 @@
   html[data-tema="moerk"] .tema-knap { background: var(--ui-flade-blaa); color: var(--ui-brand-tekst); }
   html[data-tema="moerk"] .tema-knap:hover { background: #313866; }
   .tema-knap-login { position: fixed; top: 16px; right: 16px; z-index: 10; }
-  /* Tema-skift: det nye tema toerres ned over hele siden (inkl. vagtplan-fanen) oppefra */
+  /* Tema-skift: det nye tema vokser ud i en cirkel fra tema-knappen (animeres fra skiftTema) */
   ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
-  ::view-transition-new(root) { animation: tema-swipe .65s cubic-bezier(.65, 0, .35, 1) both; }
-  @keyframes tema-swipe { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
 </style>
 </head>
 <body>
@@ -1172,14 +1170,22 @@
       knap.setAttribute('aria-label', tekst);
     });
   }
-  function skiftTema() {
-    try { localStorage.setItem('blho-tema', TEMA_NAESTE[temaValg()]); } catch (e) { /* blokeret -- saa skifter den ikke */ }
-    // Det nye tema "toerres" ned over siden oppefra (View Transitions, se ::view-transition
-    // i CSS'en). Uden browser-understoettelse, eller naar man har bedt om faerre animationer,
-    // skiftes der bare med det samme.
+  function skiftTema(e) {
+    try { localStorage.setItem('blho-tema', TEMA_NAESTE[temaValg()]); } catch (err) { /* blokeret -- saa skifter den ikke */ }
+    // Det nye tema vokser ud i en cirkel fra den knap man trykkede paa, til det daekker hele
+    // siden (View Transitions). Uden browser-understoettelse, eller naar man har bedt om
+    // faerre animationer, skiftes der bare med det samme.
     const faerreAnimationer = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (document.startViewTransition && !faerreAnimationer) document.startViewTransition(anvendTema);
-    else anvendTema();
+    if (!document.startViewTransition || faerreAnimationer) { anvendTema(); return; }
+    const knap = e && e.currentTarget && e.currentTarget.getBoundingClientRect ? e.currentTarget.getBoundingClientRect() : null;
+    const x = knap ? knap.left + knap.width / 2 : innerWidth - 40, y = knap ? knap.top + knap.height / 2 : 30;
+    const r = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+    const overgang = document.startViewTransition(anvendTema);
+    overgang.ready.then(() => {
+      document.documentElement.animate(
+        { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${r}px at ${x}px ${y}px)`] },
+        { duration: 650, easing: 'cubic-bezier(.65, 0, .35, 1)', pseudoElement: '::view-transition-new(root)' });
+    }).catch(() => {});
   }
   anvendTema();
   document.getElementById('temaKnap').addEventListener('click', skiftTema);
