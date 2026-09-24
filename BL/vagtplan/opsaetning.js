@@ -3,7 +3,7 @@
 // den ligger kun i Supabase.
 //
 // Én medarbejder i modellen:
-//   { id, navn, type: 'L'|'S'|'U',
+//   { id, navn, email, type: 'L'|'S'|'F'|'U',
 //     dage: 7 x (null = kan ikke | [fra, til]) -- mandag..soendag,
 //     timer: { art: 'ingen' } | { art: 'min', t } (snit over 4 uger) | { art: 'praecis', t, fridag }
 //            | { art: 'oenske', t } (gerne mindst t hver uge),
@@ -49,7 +49,7 @@
       const vagter = faste.filter(x => x.p == p.id).map(x => ({ d: x.d, s: x.s, e: x.e, hold: x.rotation == null ? null : x.rotation }))
         .concat(...rot.map((hold, h) => hold.filter(x => x.p == p.id).map(x => ({ d: x.d, s: x.s, e: x.e, hold: h }))));
       return {
-        id: p.id, navn: p.navn, type: p.type,
+        id: p.id, navn: p.navn, email: p.email || '', type: p.type,
         dage: [0, 1, 2, 3, 4, 5, 6].map(d => tilgaengelig(t, d)),
         timer, kunFaste: !!p.kunFaste, fordeles: fyld.includes(p.id), vagter,
       };
@@ -63,7 +63,8 @@
     const personer = model.map(m => {
       const tid = kompakt(m.dage);
       const p = Object.assign({}, gammel[m.id] || {}, { id: m.id, navn: m.navn, type: m.type });
-      delete p.tid; delete p.kunFaste;
+      delete p.tid; delete p.kunFaste; delete p.email;
+      if (m.email) p.email = m.email;
       if (Object.keys(tid).length) p.tid = tid;
       if (m.kunFaste) p.kunFaste = true;
       return p;
