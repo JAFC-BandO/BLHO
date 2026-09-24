@@ -325,7 +325,11 @@
         g.forEach(p => { spredning += (snit[p] - ga) ** 2; });
       });
       (C.maalTimer || []).forEach(x => { if (tim[x.p]) tim[x.p].forEach(h => { maal += Math.max(0, x.timer - h); }); });
-      const point = hard * 1e6 + soft * STRAF.oenske + ukT * STRAF.ekstraTime + maerk * STRAF.maerkelig
+      // "For mange ekstra personer" er ét regelbrud i listen, men planlaeggeren skal kunne se
+      // forskel paa 1 og 3 for mange -- ellers kan den frit bruge endnu flere, naar graensen
+      // foerst er overskredet.
+      const forMange = M.EKSTRA != null ? Math.max(0, nx - M.EKSTRA - 1) : 0;
+      const point = (hard + forMange) * 1e6 + soft * STRAF.oenske + ukT * STRAF.ekstraTime + maerk * STRAF.maerkelig
         + sving * STRAF.sving + spredning * STRAF.spredning + maal * STRAF.maal + (M.T2 == 915 ? STRAF.fra1515 : 0);
       return { point, hard, soft, ukT, nx, maerk, sving, spredning, maal };
     }
@@ -392,10 +396,31 @@
       }
       alle.forEach((x, i) => { x.p = bedstP[i]; });
     }
+    // Samler ekstra-vagter paa samme dag til én (fx 10-13 + 14:15-17:15 -> 10-17:15), naar det
+    // goer planen bedre -- to korte ekstra-vagter samme dag kraever ellers to ekstra personer.
+    // Opstaar isaer naar en medarbejder er fjernet, og der er et hul hvor hun/han stod.
+    function saml() {
+      for (let bedre = true; bedre;) {
+        bedre = false;
+        const nu = vurder().point, grupper = {};
+        M.S.forEach(x => { if (x.p == 'uk') (grupper[x.w * 7 + x.d] = grupper[x.w * 7 + x.d] || []).push(x); });
+        for (const g of Object.values(grupper)) {
+          g.sort((a, b) => a.s - b.s);
+          for (let i = 0; i + 1 < g.length && !bedre; i++) {
+            const a = g[i], b = g[i + 1], gl = [a.s, a.e], j = M.S.indexOf(b);
+            a.s = Math.min(a.s, b.s); a.e = Math.max(a.e, b.e); M.S.splice(j, 1);
+            if (vurder().point < nu) bedre = true;
+            else { M.S.splice(j, 0, b); a.s = gl[0]; a.e = gl[1]; }
+          }
+          if (bedre) break;
+        }
+      }
+    }
     function foreslaa(runder) {
       let vinder = null;
       for (const t2 of [900, 915]) {
-        M.T2 = t2; gen(); forbedr(runder == null ? 2500 : runder);
+        const r = runder == null ? 2500 : runder;
+        M.T2 = t2; gen(); saml(); forbedr(r); saml(); forbedr(Math.round(r / 4));
         const v = vurder();
         if (!vinder || v.point < vinder.v.point) vinder = { t2, S: M.S.map(x => ({ ...x })), v };
       }
