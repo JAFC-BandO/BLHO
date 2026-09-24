@@ -23,13 +23,13 @@ window.addEventListener('storage', e => { if (e.key === 'blho-tema') saetTema();
 if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('change', saetTema);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="motor.js?v=2026-09-24-6"></script>
-<script src="opsaetning.js?v=2026-09-24-6"></script>
+<script src="motor.js?v=2026-09-24-9"></script>
+<script src="opsaetning.js?v=2026-09-24-9"></script>
 <style>
 /* Farverne ligger som variabler, saa lys/moerk tilstand styres ét sted. Temaet vaelges med
    knappen i butik-redigerings topbar og deles via localStorage 'blho-tema' (se <head>). */
-:root{--bg:#f4f4f2;--fg:#1a1a1a;--mut:#6c6577;--card:#fff;--bd:#e2e2e2;--felt:#ddd;--L:#7355c7;--S:#1f8f83;--U:#d9822b;--bad:#c93a3a;--ok:#2b8a4f;--brand:#040DB1;--brand-tekst:#040DB1;--badge:#eef0fd;--fejl-bg:#fdecea;--fejl:#b92a15;color-scheme:light}
-:root[data-tema="moerk"]{--bg:#15161b;--fg:#e8e8ee;--mut:#9a9cab;--card:#1e2029;--bd:#3a3d4a;--felt:#4a4d5a;--L:#a68cf0;--S:#4fc4b6;--U:#f0a14f;--bad:#ff7a7a;--ok:#6fd49a;--brand:#3d47e0;--brand-tekst:#9aa6ff;--badge:#262b4d;--fejl-bg:#3a2023;--fejl:#ff7b6b;color-scheme:dark}
+:root{--bg:#f4f4f2;--fg:#1a1a1a;--mut:#6c6577;--card:#fff;--bd:#e2e2e2;--felt:#ddd;--L:#7355c7;--S:#1f8f83;--U:#d9822b;--F:#2f7fc1;--bad:#c93a3a;--ok:#2b8a4f;--brand:#040DB1;--brand-tekst:#040DB1;--badge:#eef0fd;--fejl-bg:#fdecea;--fejl:#b92a15;--ok-bg:#e6f4ea;--weekend:#f6f7fd;color-scheme:light}
+:root[data-tema="moerk"]{--bg:#15161b;--fg:#e8e8ee;--mut:#9a9cab;--card:#1e2029;--bd:#3a3d4a;--felt:#4a4d5a;--L:#a68cf0;--S:#4fc4b6;--U:#f0a14f;--F:#6fb3f0;--bad:#ff7a7a;--ok:#6fd49a;--brand:#3d47e0;--brand-tekst:#9aa6ff;--badge:#262b4d;--fejl-bg:#3a2023;--fejl:#ff7b6b;--ok-bg:#1d3326;--weekend:#1b1e2c;color-scheme:dark}
 *{box-sizing:border-box}[hidden]{display:none!important}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);margin:0;padding:0;color:var(--fg);font-size:15px;line-height:1.4}
 /* Topbar og login er de samme som i butik-redigering. Inde i butik-redigerings vagtplan-fane
@@ -58,29 +58,59 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .laeser{text-align:center;color:var(--mut);padding:20vh 0}
 
 /* Selve vagtplanen -- som den oprindelige, bare i sidens farver. */
-.indhold h1{font-size:20px;margin:0 0 2px;color:var(--brand-tekst)}p.s,.s{margin:0 0 12px;color:var(--mut)}
-.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 4px;font-variant-numeric:tabular-nums}
+.indhold h1{font-size:20px;margin:0 0 2px;color:var(--brand-tekst)}
+/* Sidehoved: titel til venstre, "Medarbejdere" til hoejre -- adskilt fra knapperne der
+   arbejder paa selve planen. */
+.sidehoved{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:flex-start;justify-content:space-between}
+.indhold .md-aabn{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-color:var(--brand-tekst);color:var(--brand-tekst);font-weight:600}
+.md-aabn svg{width:17px;height:17px;flex:none}
+.hrs-hoved{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}.hrs-hoved .s{margin:0;font-size:13px}p.s,.s{margin:0 0 12px;color:var(--mut)}
+.bar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;margin:14px 0 8px;font-variant-numeric:tabular-nums}
+.handlinger{display:flex;flex-wrap:wrap;gap:8px}
+/* Uge-vaelgeren: samme pill-stil som fanerne i topbaren */
+.uger{display:inline-flex;flex-wrap:wrap;gap:2px;padding:3px;border-radius:20px;background:var(--badge)}
+.indhold .uger .tab{border:0;background:none;border-radius:16px;padding:5px 12px;color:var(--brand-tekst);font-weight:600;font-size:13px}
+.indhold .uger .tab:hover{background:rgba(4,13,177,.08)}
+.indhold .uger .tab.on{background:var(--brand);color:#fff}
+/* Indstillinger for forslaget: én rolig linje under uge-vaelgeren */
+.indstillinger{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;font-size:14px;color:var(--mut);margin:0 0 10px}
+.indstillinger label{display:inline-flex;align-items:center;gap:6px}
+.indstillinger select{font:inherit;font-size:14px;padding:4px 6px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--fg)}
 /* Knapper hvis tekst skifter (fx "Beregner…") har fast bredde, og ⚠ paa uge-fanerne har altid
    sin plads -- saa intet i vaerktoejslinjen hopper, naar man trykker paa noget. Alt der
    skifter (status, gem, hint) ligger paa statuslinjen nedenunder. */
 .indhold #gen{width:10.5em;text-align:center}
-.indhold .tab .adv{display:inline-block;width:1.1em;text-align:right}.indhold .tab .adv.ingen{visibility:hidden}
+.indhold .tab .adv{display:inline-block;width:6px;height:6px;margin-left:6px;border-radius:50%;background:var(--bad);vertical-align:middle}.indhold .tab .adv.ingen{visibility:hidden}
 .statuslinje{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;min-height:22px;margin:0 0 10px;font-size:14px}
 .statuslinje .s{margin:0}
+.status-maerke{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:20px;font-weight:600;font-size:13px}
+.status-maerke.ok{background:var(--ok-bg);color:var(--ok)}.status-maerke.bad{background:var(--fejl-bg);color:var(--bad)}
+#ugemtTekst{color:var(--brand-tekst);font-weight:600}
+#lokaleKnapper{display:none;gap:6px}#lokaleKnapper.synlig{display:inline-flex}
+.forklaring{display:flex;flex-wrap:wrap;gap:4px 16px;margin:8px 0 0;font-size:12px;color:var(--mut)}
+.forklaring span{display:inline-flex;align-items:center;gap:6px}
+.forklaring i{display:inline-block;width:14px;height:10px;border-left:4px solid;background:var(--bg);border-radius:2px}
+.forklaring i.uk{border:1px dashed var(--mut);border-left:4px dashed var(--mut)}
+.to-kol{display:grid;grid-template-columns:1fr;gap:0 32px}
+@media (min-width:980px){.to-kol{grid-template-columns:1fr 1fr}}
 .indhold button,dialog button{font:inherit;font-size:14px;cursor:pointer;border:1px solid var(--bd);background:var(--card);color:var(--fg);border-radius:8px;padding:6px 12px}
 button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--brand-tekst);outline-offset:1px}
 .indhold .tab.on{background:var(--brand);color:#fff;border-color:var(--brand)}.indhold .pri,dialog .pri{background:var(--brand);color:#fff;border-color:var(--brand)}
 .bad{color:var(--bad)}.ok{color:var(--ok)}#stat{margin-left:auto}
 .wrap{overflow-x:auto;padding-bottom:6px}.grid{display:grid;grid-template-columns:repeat(7,minmax(158px,1fr));gap:8px;min-width:1150px}
-.day{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:8px}.day.err{border-color:var(--bad)}
+.day{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:8px}.day.weekend{background:var(--weekend)}.day.err{border-color:var(--bad)}
 .day h3{margin:0 0 6px;font-size:15px}.blk{border-top:1px solid var(--bd);padding:4px 0}.bh{font-size:12px;color:var(--mut);margin-bottom:3px}
 .indhold .chip{display:block;width:100%;text-align:left;margin:2px 0;padding:4px 8px;border:0;border-left:5px solid;border-radius:6px;font-size:13px;background:var(--bg)}
-.indhold .chip.rL{border-color:var(--L)}.indhold .chip.rS{border-color:var(--S)}.indhold .chip.rU{border-color:var(--U)}.indhold .chip.uk{border-style:dashed;border-width:1px 1px 1px 5px;border-color:var(--mut);color:var(--mut)}
+.indhold .chip.rL{border-color:var(--L)}.indhold .chip.rS{border-color:var(--S)}.indhold .chip.rU{border-color:var(--U)}.indhold .chip.rF{border-color:var(--F)}.indhold .chip.uk{border-style:dashed;border-width:1px 1px 1px 5px;border-color:var(--mut);color:var(--mut)}
 .indhold .add{width:100%;margin-top:6px;border-style:dashed;color:var(--mut);font-size:13px}.di{font-size:12px;color:var(--bad);margin-top:5px}
 .indhold h2{font-size:16px;margin:18px 0 6px}ul.is{list-style:none;padding:0;margin:0}ul.is li{padding:4px 0;border-bottom:1px solid var(--bd)}.indhold ul.is button{border:0;background:none;padding:0;text-align:left;color:var(--bad)}
 table{border-collapse:collapse;background:var(--card)}td,th{border:1px solid var(--bd);padding:4px 10px;text-align:right}th:first-child,td:first-child{text-align:left}td.w{color:var(--bad);font-weight:700}
 dialog{border:1px solid var(--bd);border-radius:12px;background:var(--card);color:var(--fg);max-width:min(440px,92vw);width:100%;font-family:inherit}
 dialog::backdrop{background:rgba(0,0,0,.45)}
+/* Luk = et ✕ i hjoernet af hver dialog (ingen "Luk"/"Annullér"-knapper) */
+dialog{position:relative}dialog h3{padding-right:36px}
+dialog .luk-x{position:absolute;top:10px;right:10px;width:32px;height:32px;padding:0;border:0;border-radius:50%;background:none;color:var(--mut);font-size:18px;line-height:32px;text-align:center;cursor:pointer}
+dialog .luk-x:hover{background:var(--bg);color:var(--fg)}
 dialog label{display:block;margin:8px 0}dialog select,dialog input,textarea{width:100%;font:inherit;padding:6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--fg)}
 textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .ekstra-valg{font-size:14px;display:inline-flex;align-items:center;gap:6px}.ekstra-valg select{font:inherit;font-size:14px;padding:5px 6px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--fg)}
@@ -149,37 +179,47 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
   <div class="topbar-actions"><span id="gemStatus"></span><span class="logout" id="logud">Log ud</span></div>
 </div>
 <div class="indhold">
+<div class="sidehoved"><div>
 <h1 id="titel">Vagtplan</h1>
-<p class="s">Rullende 4-ugers plan. Klik på en vagt for at rette den, eller på "+ vagt" for at tilføje. Reglerne tjekkes automatisk.</p>
-<div class="konflikt" id="konflikt">Planen er blevet ændret af en anden, siden du åbnede den. Din seneste ændring er <b>ikke</b> gemt. <button id="genindlaes">Hent den nyeste plan</button></div>
-<div class="bar"><span id="tabs"></span><button id="t2" title="Tidspunkt hvor der skal være 2 på arbejde igen">2 pers. fra 15:00</button><label class="ekstra-valg">Ekstra personer <select id="ekstra" title="Hvor mange ekstra personer planen må bruge. Ekstra personer overtager søndagen for dem, der ellers skal arbejde både lørdag og søndag."></select></label><label class="ekstra-valg">Ekstra må arbejde <select id="ekstraRegel" title="Hvor tit de ekstra personer må arbejde weekend. Alle weekend-ønsker kræver ca. 13 timers weekendarbejde om ugen fra ekstra folk — jo sjældnere hver enkelt må arbejde, jo flere ekstra personer skal der til.">
+<p class="s">Rullende 6-ugers plan. Klik på en vagt for at rette den, eller på "+ vagt" for at tilføje. Reglerne tjekkes automatisk, og intet gemmes før du trykker "Gem vagtplan".</p>
+</div><button id="medarbejdere" class="md-aabn" type="button" title="Tilføj, ret eller fjern medarbejdere og deres timer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Medarbejdere</button></div>
+<div class="konflikt" id="konflikt">Planen er blevet gemt af en anden, siden du åbnede den, så dine ændringer er ikke gemt. <button id="genindlaes">Hent den nyeste plan</button> (dine ændringer forkastes)</div>
+<div class="bar">
+  <nav class="uger" id="tabs" aria-label="Vælg uge"></nav>
+  <div class="handlinger"><button id="gen">Foreslå ny plan</button><button id="rules">Regler</button><button class="pri" id="exp">Kopiér til SmartPlan</button></div>
+</div>
+<div class="indstillinger">
+  <label>2 personer fra <select id="t2" title="Hvornår der skal være 2 på arbejde igen om eftermiddagen"><option value="900">15:00</option><option value="915">15:15</option></select></label>
+  <label>Ekstra personer <select id="ekstra" title="Hvor mange ekstra personer planen må bruge. De overtager den ene weekenddag for dem, der ellers skal arbejde både lørdag og søndag."></select></label>
+  <label>Ekstra må arbejde <select id="ekstraRegel" title="Hvor tit de ekstra personer må arbejde weekend. Alle weekend-ønsker kræver ca. 13 timers weekendarbejde om ugen fra ekstra folk — jo sjældnere hver enkelt må arbejde, jo flere ekstra personer skal der til.">
 <option value="3-0">hver 3. weekend, én dag</option><option value="3-1">hver 3. weekend, begge dage</option>
 <option value="2-0">hver 2. weekend, én dag</option><option value="2-1">hver 2. weekend, begge dage</option>
-<option value="1-0">hver weekend, én dag</option><option value="1-1">hver weekend, begge dage</option></select></label><button id="gen">Foreslå ny plan</button><button id="medarbejdere" title="Tilføj, ret eller fjern medarbejdere og deres timer">Medarbejdere</button><button id="rules">Regler</button><button class="pri" id="exp">Kopiér til SmartPlan</button></div>
-<div class="statuslinje" id="statuslinje"><span id="stat"></span><span id="ekstraHint" class="s" hidden>Tryk "Foreslå ny plan" for at bruge de nye indstillinger.</span></div>
+<option value="1-0">hver weekend, én dag</option><option value="1-1">hver weekend, begge dage</option></select></label>
+</div>
+<div class="statuslinje" id="statuslinje"><span id="stat"></span><span id="ekstraHint" class="s" hidden>Tryk "Foreslå ny plan" for at bruge de nye indstillinger.</span><span id="ugemtTekst" hidden>Ikke gemte ændringer</span><span id="lokaleKnapper"><button id="lokalFortryd" type="button" title="Fortryd (Ctrl+Z)">Fortryd</button><button id="lokalGentag" type="button" title="Gentag (Ctrl+Y)">Gentag</button><button id="lokalGem" class="pri" type="button" title="Gem vagtplan (Ctrl+S)">Gem vagtplan</button></span></div>
 <div class="wrap"><div class="grid" id="grid"></div></div>
-<h2>Problemer</h2><ul class="is" id="iss"></ul>
-<h2>Ønsker der ikke er opfyldt</h2><ul class="is" id="soft"></ul>
-<h2>Timer pr. uge</h2><div class="wrap" id="hrs"></div>
+<div class="forklaring" id="forklaring"></div>
+<div class="to-kol"><div><h2>Problemer</h2><ul class="is" id="iss"></ul></div><div><h2>Ønsker der ikke er opfyldt</h2><ul class="is" id="soft"></ul></div></div>
+<div class="hrs-hoved"><h2>Timer pr. uge</h2><span class="s">Klik på et navn for at rette medarbejderen.</span></div><div class="wrap" id="hrs"></div>
 </div>
 </div>
 
-<dialog id="dlg"><h3 id="dt">Vagt</h3>
+<dialog id="dlg"><button type="button" class="luk-x" aria-label="Luk" title="Luk">✕</button><h3 id="dt">Vagt</h3>
 <label>Medarbejder<select id="dp"></select></label>
 <label>Start<input id="ds" type="time" step="900"></label>
 <label>Slut<input id="de" type="time" step="900"></label>
 <div class="di" id="dm"></div>
-<div class="row"><button class="pri" id="dsave">Gem</button><button id="ddel">Slet</button><button id="dcx">Annullér</button></div></dialog>
-<dialog id="md" aria-labelledby="mdTitel"><h3 id="mdTitel">Medarbejdere</h3>
+<div class="row"><button class="pri" id="dsave">Gem</button><button id="ddel">Slet</button></div></dialog>
+<dialog id="md" aria-labelledby="mdTitel"><button type="button" class="luk-x" aria-label="Luk" title="Luk">✕</button><h3 id="mdTitel">Medarbejdere</h3>
 <div id="mdListeVis">
-  <p class="md-hjaelp">Her styrer du, hvem planen regner med. Ændringer bruges næste gang du trykker "Foreslå ny plan".</p>
+  <p class="md-hjaelp">Her styrer du, hvem planen regner med. Ændringer gemmes, når du trykker "Gem vagtplan", og bruges næste gang du trykker "Foreslå ny plan".</p>
   <ul id="mdListe"></ul>
-  <div class="row"><button class="pri" id="mdNy" type="button">+ Tilføj medarbejder</button><button id="mdLuk" type="button">Luk</button></div>
+  <div class="row"><button class="pri" id="mdNy" type="button">+ Tilføj medarbejder</button></div>
 </div>
 <div id="mdFormVis" hidden>
   <label>Navn<input id="mdNavn" type="text" autocomplete="off" maxlength="40"></label>
-  <label>Jobtype<select id="mdType"><option value="L">Daglig leder</option><option value="S">Salgsassistent</option><option value="U">Ungarbejder</option></select></label>
-  <p class="md-hjaelp">Ungarbejdere kan ikke stå alene og tæller ikke som ansvarlig.</p>
+  <label>Jobtype<select id="mdType"></select></label>
+  <p class="md-hjaelp">Ungarbejdere kan ikke stå alene og tæller ikke som ansvarlig. Alle andre jobtyper tæller som ansvarlig.</p>
   <fieldset><legend>Hvornår kan personen arbejde?</legend>
     <div class="md-linje"><label><input type="checkbox" id="mdHverdagJa"> Hverdage</label>
       <span class="md-linje" id="mdHverdagTider">fra <input type="time" step="900" id="mdHverdagFra" aria-label="Hverdage fra"> til <input type="time" step="900" id="mdHverdagTil" aria-label="Hverdage til"></span></div>
@@ -211,11 +251,11 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
   <div class="row"><button class="pri" id="mdGem" type="button">Gem medarbejder</button><button id="mdAnnuller" type="button">Tilbage</button></div>
 </div>
 </dialog>
-<dialog id="rd" style="max-width:min(680px,94vw)"><h3>Regler i planen</h3><div id="rt" style="max-height:62vh;overflow:auto;font-size:14px"></div><div class="row"><button id="rx">Luk</button></div></dialog>
-<dialog id="xd"><h3>Kopiér til SmartPlan</h3>
+<dialog id="rd" style="max-width:min(680px,94vw)"><button type="button" class="luk-x" aria-label="Luk" title="Luk">✕</button><h3>Regler i planen</h3><div id="rt" style="max-height:62vh;overflow:auto;font-size:14px"></div></dialog>
+<dialog id="xd"><button type="button" class="luk-x" aria-label="Luk" title="Luk">✕</button><h3>Kopiér til SmartPlan</h3>
 <div class="row"><button id="xt">Denne uge (tekst)</button><button id="xc">Alle uger (CSV)</button></div>
 <textarea id="xa" readonly></textarea>
-<div class="row"><button class="pri" id="xcopy">Kopiér</button><button id="xx">Luk</button></div></dialog>
+<div class="row"><button class="pri" id="xcopy">Kopiér</button></div></dialog>
 
 <script>
 // Al persondata (navne, vagtregler pr. person) og selve planen ligger i Supabase-tabellen
@@ -235,7 +275,7 @@ let planer = [];        // de vagtplan-raekker brugeren kan se (i praksis kun Ho
 let raekke = null;      // den valgte raekke: { id, opdateret_at, ... }
 let M = null;           // motoren for den valgte raekkes opsaetning
 let W = 0, armed = false, E = null;
-let gemKaede = Promise.resolve(), konflikt = false;
+let konflikt = false;
 
 function vis(id) { ['laeserVis', 'loginVis', 'ingenAdgangVis', 'app'].forEach(x => { $('#' + x).hidden = x != id; }); }
 
@@ -275,17 +315,13 @@ function vaelgPlan(r) {
   const pl = lesPlan(r.plan);
   M = lavVagtplanMotor(r.opsaetning); M.T2 = pl.t2; M.EKSTRA = pl.ekstra; M.EKSTRA_REGEL = pl.ekstraRegel;
   M.S = pl.vagter.filter(x => M.P[x.p]); // vagter for folk der er fjernet fra medarbejderlisten
-  $('#ekstraRegel').value = M.EKSTRA_REGEL.afstand + '-' + (M.EKSTRA_REGEL.begge ? 1 : 0);
-  // 0 op til det antal der fjerner alle dobbelt-weekender (flere giver ingen mening)
-  const maxE = Math.max(M.maxAflastning, M.EKSTRA);
-  $('#ekstra').innerHTML = Array.from({ length: maxE + 1 }, (_, n) => `<option value="${n}">${n}</option>`).join('');
-  $('#ekstra').value = M.EKSTRA; $('#ekstraHint').hidden = true;
-  $('#t2').textContent = '2 pers. fra ' + M.f(M.T2);
+  opdaterKontroller(); $('#ekstraHint').hidden = true;
   $('#butikNavn').textContent = butikNavn(r);
   $('#titel').textContent = r.opsaetning.titel || 'Vagtplan';
   document.title = r.opsaetning.titel || 'Vagtplan';
   $('#rt').innerHTML = reglerHtml(r.opsaetning);
   gemStatus('');
+  nulstilHistorik();
   if (!M.S.length) { foreslaa(); return; }
   render();
 }
@@ -302,24 +338,80 @@ async function logud() { await client.auth.signOut(); location.href = '../butik-
 $('#logud').onclick = logud; $('#logudIngenAdgang').onclick = logud;
 $('#planValg').onchange = e => vaelgPlan(planer.find(p => p.id == e.target.value));
 
-// ---------- Gem ----------
-// Hele planen gemmes ved hver aendring (den er lille). Opdateringen sker kun, hvis raekken
-// stadig har det opdateret_at vi sidst saa -- har en anden (JC/MP) gemt imens, rammer den 0
-// raekker, og vi viser en advarsel i stedet for stille at overskrive deres aendringer.
+// ---------- Kladde, fortryd og gem ----------
+// Alle aendringer (vagter, indstillinger, medarbejdere) er en kladde, indtil man trykker
+// "Gem vagtplan". Hver aendring laegges i en historik, saa man kan fortryde og gentage.
+// Gem-knappen og fortryd/gentag sidder i butik-redigerings topbar (paa den plads hvor
+// "Gem ændringer" sidder paa butiks-fanen) -- vi melder vores tilstand derop.
+// Gemningen sker kun, hvis raekken stadig har det opdateret_at vi sidst saa: har en anden
+// (JC/MP) gemt imens, overskriver vi ikke deres plan, men viser en advarsel.
+let historik = [], hpos = 0, gemtSnap = null, gemmer = false;
+const snap = () => JSON.stringify({ plan: { t2: M.T2, ekstra: M.EKSTRA, ekstraRegel: M.EKSTRA_REGEL, vagter: M.S }, opsaetning: raekke.opsaetning });
+const ugemt = () => historik[hpos] !== gemtSnap;
 function gemStatus(t, cls) { $('#gemStatus').textContent = t; $('#gemStatus').className = cls || ''; }
-function save(medOpsaetning) {
-  if (konflikt) return;
-  const r = raekke, plan = { t2: M.T2, ekstra: M.EKSTRA, ekstraRegel: M.EKSTRA_REGEL, vagter: JSON.parse(JSON.stringify(M.S)) };
-  gemStatus('Gemmer…');
-  gemKaede = gemKaede.then(async () => {
-    if (konflikt || r != raekke) return;
-    const aendr = medOpsaetning ? { plan, opsaetning: r.opsaetning } : { plan };
-    const { data, error } = await client.from('vagtplan').update(aendr).eq('id', r.id).eq('opdateret_at', r.opdateret_at).select('opdateret_at');
-    if (error) { gemStatus('⚠ Kunne ikke gemme – prøv igen', 'bad'); return; }
-    if (!data || !data.length) { konflikt = true; $('#konflikt').style.display = 'block'; gemStatus('⚠ Ikke gemt', 'bad'); return; }
-    r.opdateret_at = data[0].opdateret_at; r.plan = plan;
-    gemStatus('Gemt ✓', 'ok');
-  });
+function nulstilHistorik() { historik = [snap()]; hpos = 0; gemtSnap = historik[0]; meld(); }
+function aendret() {
+  const s = snap();
+  if (s !== historik[hpos]) {
+    historik = historik.slice(0, hpos + 1); historik.push(s);
+    if (historik.length > 200) historik.shift();
+    hpos = historik.length - 1;
+  }
+  gemStatus(''); meld();
+}
+function gaaTil(i) {
+  if (i < 0 || i >= historik.length || i == hpos) return;
+  hpos = i;
+  const o = JSON.parse(historik[i]);
+  if (JSON.stringify(o.opsaetning) !== JSON.stringify(raekke.opsaetning)) genopbygMotor(o.opsaetning);
+  M.T2 = o.plan.t2; M.EKSTRA = o.plan.ekstra; M.EKSTRA_REGEL = o.plan.ekstraRegel;
+  M.S = o.plan.vagter.filter(x => M.P[x.p]);
+  opdaterKontroller(); render(); meld();
+}
+const fortryd = () => gaaTil(hpos - 1), gentag = () => gaaTil(hpos + 1);
+async function gem() {
+  if (gemmer || konflikt || !ugemt()) return;
+  const r = raekke, s = historik[hpos], o = JSON.parse(s);
+  gemmer = true; meld();
+  const { data, error } = await client.from('vagtplan').update({ plan: o.plan, opsaetning: o.opsaetning })
+    .eq('id', r.id).eq('opdateret_at', r.opdateret_at).select('opdateret_at');
+  gemmer = false;
+  if (error) gemStatus('Planen blev ikke gemt. Tjek forbindelsen og prøv igen.', 'bad');
+  else if (!data || !data.length) { konflikt = true; $('#konflikt').style.display = 'block'; gemStatus(''); }
+  else { r.opdateret_at = data[0].opdateret_at; r.plan = o.plan; gemtSnap = s; gemStatus('Gemt ✓', 'ok'); setTimeout(() => { if ($('#gemStatus').textContent == 'Gemt ✓') gemStatus(''); }, 3000); }
+  meld();
+}
+// Meld tilstanden til topbaren (eller vis egne knapper, hvis topbaren er en aeldre udgave)
+function meld() {
+  const st = { kanFortryde: hpos > 0, kanGentage: hpos < historik.length - 1, ugemt: ugemt(), gemmer, konflikt };
+  $('#ugemtTekst').hidden = !st.ugemt || konflikt;
+  let topbar = null;
+  try { topbar = window.parent !== window && window.parent.vagtplanTilstand; } catch (e) {}
+  if (topbar) topbar(st);
+  $('#lokaleKnapper').classList.toggle('synlig', !topbar);
+  $('#lokalFortryd').disabled = !st.kanFortryde; $('#lokalGentag').disabled = !st.kanGentage;
+  $('#lokalGem').disabled = !st.ugemt || gemmer || konflikt;
+}
+window.vagtplanApi = { fortryd, gentag, gem, ugemt: () => ugemt() };
+$('#lokalFortryd').onclick = fortryd; $('#lokalGentag').onclick = gentag; $('#lokalGem').onclick = gem;
+// Ctrl+Z / Ctrl+Y (eller Ctrl+Shift+Z) / Ctrl+S -- men ikke inde i tekstfelter og dialoger,
+// hvor browserens egen fortryd skal virke.
+document.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey) || !M) return;
+  const t = e.target, felt = t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName);
+  const k = e.key.toLowerCase();
+  if (k == 's') { e.preventDefault(); gem(); return; }
+  if (felt || document.querySelector('dialog[open]')) return;
+  if (k == 'z' && !e.shiftKey) { e.preventDefault(); fortryd(); }
+  else if (k == 'y' || (k == 'z' && e.shiftKey)) { e.preventDefault(); gentag(); }
+});
+// Indstillings-felterne afspejler motorens tilstand (ogsaa efter fortryd/gentag)
+function opdaterKontroller() {
+  $('#t2').value = M.T2;
+  const maxE = Math.max(M.maxAflastning, M.EKSTRA);
+  $('#ekstra').innerHTML = Array.from({ length: maxE + 1 }, (_, n) => `<option value="${n}">${n}</option>`).join('');
+  $('#ekstra').value = M.EKSTRA;
+  $('#ekstraRegel').value = M.EKSTRA_REGEL.afstand + '-' + (M.EKSTRA_REGEL.begge ? 1 : 0);
 }
 async function hentIgen() {
   const { data } = await client.from('vagtplan').select('id, butik_id, opsaetning, plan, opdateret_at, butikker(navn)').eq('id', raekke.id).maybeSingle();
@@ -331,8 +423,7 @@ $('#genindlaes').onclick = hentIgen;
 // Kommer man tilbage til fanen, og har den anden gemt imens, hentes den nyeste plan -- men kun
 // hvis der ikke er noget af ens eget undervejs, og ingen dialog er aaben.
 document.addEventListener('visibilitychange', async () => {
-  if (document.visibilityState != 'visible' || !raekke || konflikt || document.querySelector('dialog[open]')) return;
-  await gemKaede;
+  if (document.visibilityState != 'visible' || !raekke || konflikt || ugemt() || gemmer || document.querySelector('dialog[open]')) return;
   const { data } = await client.from('vagtplan').select('opdateret_at').eq('id', raekke.id).maybeSingle();
   if (data && data.opdateret_at != raekke.opdateret_at) hentIgen();
 });
@@ -369,9 +460,9 @@ function foreslaa() {
   setTimeout(() => {
     try {
       M.foreslaa();
-      $('#t2').textContent = '2 pers. fra ' + M.f(M.T2);
+      opdaterKontroller();
       $('#ekstraHint').hidden = true;
-      save();
+      aendret();
     } finally {
       knap.disabled = false; knap.textContent = 'Foreslå ny plan';
       render();
@@ -385,12 +476,15 @@ function render() {
   const { P, R, D, f, WK, NW } = M;
   M.ext(); const EX = M.EX;
   const A = M.check(), I = A.filter(i => !i.soft), Q = A.filter(i => i.soft);
-  $('#tabs').innerHTML = WK.map(w => `<button class="tab ${w == W ? 'on' : ''}" data-w="${w}">Uge ${w + 1}<span class="adv ${I.some(i => i.w == w) ? '' : 'ingen'}">⚠</span></button>`).join(' ');
+  $('#tabs').innerHTML = WK.map(w => { const p = I.some(i => i.w == w); return `<button class="tab ${w == W ? 'on' : ''}" data-w="${w}" aria-pressed="${w == W}"${p ? ' title="Ugen har problemer"' : ''}>Uge ${w + 1}<span class="adv ${p ? '' : 'ingen'}" aria-hidden="true"></span></button>`; }).join('');
   const uh = M.S.filter(x => x.p == 'uk').reduce((a, x) => a + (x.e - x.s) / 60, 0);
-  $('#stat').innerHTML = (I.length ? `<b class="bad">⚠ ${I.length} problemer</b>` : `<b class="ok">✓ Planen går op</b>`) + (uh ? ` <span class="s">· bruger ${Math.max(0, ...EX.filter(Boolean))} af ${M.EKSTRA} ekstra (${uh} t på 6 uger)</span>` : '');
+  $('#stat').innerHTML = (I.length ? `<span class="status-maerke bad">${I.length} ${I.length == 1 ? 'problem' : 'problemer'}</span>` : `<span class="status-maerke ok">✓ Planen går op</span>`) + (uh ? ` <span class="s">Bruger ${Math.max(0, ...EX.filter(Boolean))} af ${M.EKSTRA} ekstra ${M.EKSTRA == 1 ? 'person' : 'personer'} (${uh} timer på 6 uger)</span>` : '');
+  // Farveforklaring: kun de jobtyper der er i planen
+  const typer = [...new Set(Object.keys(P).filter(p => p != 'uk').map(p => P[p][1]))];
+  $('#forklaring').innerHTML = typer.map(t => `<span><i style="border-color:var(--${esc(t)},var(--mut))"></i>${esc(R[t] || t)}</span>`).join('') + '<span><i class="uk"></i>Ekstra person</span>';
   $('#grid').innerHTML = D.map((n, d) => {
     const di = I.filter(i => i.w == W && i.d == d);
-    return `<div class="day ${di.length ? 'err' : ''}"><h3>${n}</h3>${grp(W, d).map(a => `<div class="blk"><div class="bh">${f(a[0].s)} - ${f(a[0].e)}</div>${a.map(x => `<button class="chip r${P[x.p][1]} ${x.p == 'uk' ? 'uk' : ''}" data-i="${x.i}">${x.p == 'uk' ? 'Ekstra person' : esc(P[x.p][0])}</button>`).join('')}</div>`).join('')}<button class="add" data-add="${d}">+ vagt</button>${di.map(i => `<div class="di">${esc(i.t)}</div>`).join('')}</div>`;
+    return `<div class="day ${d > 4 ? 'weekend' : ''} ${di.length ? 'err' : ''}"><h3>${n}</h3>${grp(W, d).map(a => `<div class="blk"><div class="bh">${f(a[0].s)} - ${f(a[0].e)}</div>${a.map(x => `<button class="chip r${P[x.p][1]} ${x.p == 'uk' ? 'uk' : ''}" data-i="${x.i}">${x.p == 'uk' ? 'Ekstra person' : esc(P[x.p][0])}</button>`).join('')}</div>`).join('')}<button class="add" data-add="${d}">+ vagt</button>${di.map(i => `<div class="di">${esc(i.t)}</div>`).join('')}</div>`;
   }).join('');
   $('#soft').innerHTML = Q.length ? Q.map(i => `<li>Uge ${i.w + 1}: ${esc(i.t)}</li>`).join('') : '<li>Ingen.</li>';
   $('#iss').innerHTML = I.length ? I.map(i => `<li><button data-w="${i.w < 0 ? W : i.w}">${i.w < 0 ? 'Alle uger' : 'Uge ' + (i.w + 1)}${i.d >= 0 ? ' ' + D[i.d] : ''}: ${esc(i.t)}</button></li>`).join('') : '<li class="ok">Ingen problemer.</li>';
@@ -421,23 +515,23 @@ function openE(i, d) {
 $('#dsave').onclick = () => {
   const s = pm($('#ds').value || '0:0'), e = pm($('#de').value || '0:0');
   if (e - s < 180) { $('#dm').textContent = 'En vagt skal være mindst 3 timer.'; return; }
-  const x = { w: W, d: E.d, p: $('#dp').value, s, e }; if (E.i != null) M.S[E.i] = x; else M.S.push(x); save(); $('#dlg').close(); render();
+  const x = { w: W, d: E.d, p: $('#dp').value, s, e }; if (E.i != null) M.S[E.i] = x; else M.S.push(x); $('#dlg').close(); render(); aendret();
 };
-$('#ddel').onclick = () => { M.S.splice(E.i, 1); save(); $('#dlg').close(); render(); };
-$('#dcx').onclick = () => $('#dlg').close();
+$('#ddel').onclick = () => { M.S.splice(E.i, 1); $('#dlg').close(); render(); aendret(); };
+// ✕ i hjoernet lukker den dialog den sidder i
+document.querySelectorAll('dialog .luk-x').forEach(b => { b.onclick = () => b.closest('dialog').close(); });
 $('#gen').onclick = e => {
   if (!armed) { armed = true; e.target.textContent = 'Sikker? Klik igen'; e.target.title = 'Overskriver hele den nuværende plan'; setTimeout(() => { armed = false; $('#gen').textContent = 'Foreslå ny plan'; $('#gen').title = ''; }, 4000); return; }
   armed = false; e.target.textContent = 'Foreslå ny plan'; foreslaa();
 };
-$('#ekstra').onchange = e => { M.EKSTRA = +e.target.value; $('#ekstraHint').hidden = false; save(); render(); };
-$('#ekstraRegel').onchange = e => { const [a, b] = e.target.value.split('-').map(Number); M.EKSTRA_REGEL = { afstand: a, begge: b == 1 }; $('#ekstraHint').hidden = false; save(); render(); };
+$('#ekstra').onchange = e => { M.EKSTRA = +e.target.value; $('#ekstraHint').hidden = false; render(); aendret(); };
+$('#ekstraRegel').onchange = e => { const [a, b] = e.target.value.split('-').map(Number); M.EKSTRA_REGEL = { afstand: a, begge: b == 1 }; $('#ekstraHint').hidden = false; render(); aendret(); };
 const txt = w => M.D.map((n, d) => n + '\n' + (grp(w, d).map(a => M.f(a[0].s) + ' - ' + M.f(a[0].e) + ': ' + a.map(x => M.nmi(x.i) + ' (' + M.R[M.P[x.p][1]] + ')').join(', ')).join('\n') || '–')).join('\n\n');
 const csv = () => 'Uge;Dag;Start;Slut;Medarbejder;Jobtype\n' + M.S.map((x, i) => ({ ...x, i })).sort((a, b) => a.w - b.w || a.d - b.d || a.s - b.s).map(x => [x.w + 1, M.D[x.d], M.f(x.s), M.f(x.e), M.nmi(x.i), M.R[M.P[x.p][1]]].join(';')).join('\n');
-$('#t2').onclick = () => { M.T2 = M.T2 == 900 ? 915 : 900; $('#t2').textContent = '2 pers. fra ' + M.f(M.T2); save(); render(); };
-$('#rules').onclick = () => $('#rd').showModal(); $('#rx').onclick = () => $('#rd').close();
+$('#t2').onchange = e => { M.T2 = +e.target.value; render(); aendret(); };
+$('#rules').onclick = () => $('#rd').showModal();
 $('#exp').onclick = () => { $('#xa').value = txt(W); $('#xd').showModal(); };
 $('#xt').onclick = () => $('#xa').value = txt(W); $('#xc').onclick = () => $('#xa').value = csv();
-$('#xx').onclick = () => $('#xd').close();
 $('#xcopy').onclick = () => { const a = $('#xa'); a.select(); try { navigator.clipboard.writeText(a.value); } catch (e) { document.execCommand('copy'); } $('#xcopy').textContent = 'Kopieret ✓'; setTimeout(() => $('#xcopy').textContent = 'Kopiér', 1500); };
 
 // Indlejret i butik-redigering: dens topbar erstatter vores, saa gem-status flyttes ned paa
@@ -448,5 +542,5 @@ if (window.top !== window) {
   start().catch(() => vis('loginVis'));
 }
 </script>
-<script src="medarbejdere.js?v=2026-09-24-6"></script>
+<script src="medarbejdere.js?v=2026-09-24-9"></script>
 </body></html>

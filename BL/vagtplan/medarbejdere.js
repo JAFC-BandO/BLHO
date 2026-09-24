@@ -1,11 +1,12 @@
 // Medarbejder-dialogen: tilfoej, ret og fjern medarbejdere og deres timer/regler.
-// Indlaeses EFTER vagtplanens eget script og bruger dets variabler (M, raekke, save, render,
+// Indlaeses EFTER vagtplanens eget script og bruger dets variabler (M, raekke, aendret, render,
 // $, esc, genopbygMotor). Selve oversaettelsen til planlaeggerens opsaetning ligger i
 // opsaetning.js (VagtplanOpsaetning).
 (function () {
   const O = window.VagtplanOpsaetning;
   const DAGE = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
-  const JOB = { L: 'Daglig leder', S: 'Salgsassistent', U: 'Ungarbejder' };
+  // Jobtyperne kommer fra opsaetningen (fx Daglig leder, Salgsassistent, Flexjob, Ungarbejder)
+  const job = t => (raekke.opsaetning.jobtyper || {})[t] || t;
   const kl = m => String(m / 60 | 0).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
   const tid = v => { const [a, b] = String(v || '').split(':').map(Number); return isNaN(a) ? NaN : a * 60 + (b || 0); };
   const luk = d => d > 4 ? O.LUK_WEEKEND : O.LUK_HVERDAG;
@@ -18,7 +19,7 @@
     $('#mdTitel').textContent = 'Medarbejdere';
     $('#mdListeVis').hidden = false; $('#mdFormVis').hidden = true;
     $('#mdListe').innerHTML = model.length ? model.map(m => `<li>
-      <div class="md-navn"><b>${esc(m.navn)}</b> <span class="md-job">${esc(JOB[m.type])}</span></div>
+      <div class="md-navn"><b>${esc(m.navn)}</b> <span class="md-job">${esc(job(m.type))}</span></div>
       <div class="md-resume">${esc(O.beskriv(m))}</div>
       <div class="md-knapper"><button type="button" data-md-ret="${esc(m.id)}">Ret</button><button type="button" class="md-fjern" data-md-fjern="${esc(m.id)}">Fjern</button></div>
     </li>`).join('') : '<li class="s">Ingen medarbejdere endnu.</li>';
@@ -41,6 +42,9 @@
     $('#mdListeVis').hidden = true; $('#mdFormVis').hidden = false;
     const a = aaben;
     $('#mdNavn').value = a.navn;
+    // Fast raekkefoelge (databasen gemmer jobtyperne alfabetisk efter noegle)
+    const orden = k => { const i = ['L', 'S', 'F', 'U'].indexOf(k); return i < 0 ? 99 : i; };
+    $('#mdType').innerHTML = Object.keys(raekke.opsaetning.jobtyper || {}).sort((x, y) => orden(x) - orden(y)).map(k => `<option value="${esc(k)}">${esc(job(k))}</option>`).join('');
     $('#mdType').value = a.type;
     $('#mdHverdagJa').checked = !!a.hverdag;
     $('#mdHverdagFra').value = kl((a.hverdag || [O.AABEN])[0]); $('#mdHverdagTil').value = kl((a.hverdag || [0, O.LUK_HVERDAG])[1]);
@@ -155,7 +159,6 @@
     visListe();
   });
   $('#mdNy').onclick = () => visForm(null);
-  $('#mdLuk').onclick = () => $('#md').close();
 
   // Gemmer den nye opsaetning, fjerner vagter for folk der ikke findes mere, og tegner planen
   // igen med de nye regler. Den eksisterende plan roeres ellers ikke -- "Foreslå ny plan"
@@ -163,8 +166,8 @@
   function anvend() {
     const C = O.fraModel(model, raekke.opsaetning);
     genopbygMotor(C);
-    save(true);
     $('#ekstraHint').hidden = false;
     render();
+    aendret();
   }
 })();

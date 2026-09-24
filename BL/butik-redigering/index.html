@@ -134,9 +134,24 @@
   body.fane-vagtplan #app > .main,
   body.fane-vagtplan #faellesSlideBanner,
   body.fane-vagtplan #masterEditBanner { display: none !important; }
-  /* "Gem ændringer" gemmer skaermindholdet, ikke vagtplanen (den gemmer selv). Skjult paa
-     vagtplan-fanen, men med sin plads bevaret, saa ikonerne ikke flytter sig. */
-  body.fane-vagtplan #saveBtn, body.fane-vagtplan #saveMsg { visibility: hidden; }
+  /* Gem-pladsen: paa butiks-fanen "Gem ændringer" (skaermindholdet), paa vagtplan-fanen
+     Fortryd/Gentag/"Gem vagtplan". Pladsen har fast bredde, saa ?- og tema-knappen staar
+     samme sted paa begge faner. */
+  .gem-plads { display: flex; justify-content: flex-end; align-items: center; gap: 6px; width: 226px; }
+  #saveBtn, #vpGem { min-width: 140px; }
+  .vp-handlinger { display: none; align-items: center; gap: 6px; }
+  body.fane-vagtplan .vp-handlinger { display: flex; }
+  body.fane-vagtplan #saveBtn { display: none; }
+  body.fane-vagtplan #saveMsg { visibility: hidden; }
+  .vp-ikon { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0;
+    border-radius: 8px; background: var(--ui-flade-blaa); color: var(--ui-brand-tekst); }
+  .vp-ikon svg { width: 17px; height: 17px; }
+  .vp-ikon:hover:not(:disabled) { background: var(--ui-kant-blaa); }
+  .vp-ikon:disabled { background: var(--ui-flade-blaa); color: var(--ui-brand-tekst); opacity: .35; cursor: default; }
+  /* "Gem vagtplan": udfyldt naar der er noget at gemme, stille "Gemt ✓" naar alt er gemt */
+  #vpGem { padding: 8px 14px; }
+  #vpGem:disabled { background: transparent; color: var(--ui-tekst-888); border: 1px solid var(--ui-kant); cursor: default; }
+  @media (max-width: 760px) { .gem-plads { width: auto; } }
   body.fane-vagtplan #vagtplanVisning { display: block; flex: 1; min-height: 0; }
   #vagtplanVisning iframe { width: 100%; height: 100%; border: 0; display: block; }
 
@@ -566,7 +581,14 @@
       <div class="msg" id="saveMsg" style="display:none;"></div>
       <span id="guideOpenBtn" title="Se guiden til systemet" style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:var(--ui-flade-blaa); color:var(--ui-brand-tekst); font-weight:700; font-size:14px; cursor:pointer; user-select:none;">?</span>
       <button type="button" class="tema-knap" id="temaKnap"></button>
-      <button id="saveBtn">Gem ændringer</button>
+      <div class="gem-plads">
+        <button id="saveBtn">Gem ændringer</button>
+        <span class="vp-handlinger">
+          <button type="button" class="vp-ikon" id="vpFortryd" title="Fortryd (Ctrl+Z)" aria-label="Fortryd" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+          <button type="button" class="vp-ikon" id="vpGentag" title="Gentag (Ctrl+Y)" aria-label="Gentag" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
+          <button type="button" id="vpGem" title="Gem vagtplan (Ctrl+S)" disabled>Gemt ✓</button>
+        </span>
+      </div>
       <div class="logout" id="logoutBtn">Log ud</div>
     </div>
   </div>
@@ -1509,7 +1531,7 @@
         ramme.title = 'Vagtplan';
         // ?v= skal bumpes naar vagtplan/index.html aendres -- ellers kan browseren/GitHub
         // Pages' cache (op til 10 min) give den gamle side inde i fanen.
-        ramme.src = '../vagtplan/?indlejret=1&v=2026-09-24-6';
+        ramme.src = '../vagtplan/?indlejret=1&v=2026-09-24-9';
         ramme.addEventListener('load', anvendTema);
         vis.appendChild(ramme);
       }
@@ -1520,6 +1542,42 @@
     }
   }
   document.querySelectorAll('.hovedfane').forEach(b => b.addEventListener('click', () => skiftFane(b.dataset.fane)));
+
+  // ---------- Vagtplanens gem/fortryd i topbaren ----------
+  // Vagtplanen (iframen) melder sin tilstand hertil via vagtplanTilstand, og knapperne kalder
+  // dens vagtplanApi. Samme domaene, saa det er direkte funktionskald.
+  let vagtplanUgemt = false;
+  window.vagtplanTilstand = (st) => {
+    vagtplanUgemt = !!st.ugemt;
+    document.getElementById('vpFortryd').disabled = !st.kanFortryde;
+    document.getElementById('vpGentag').disabled = !st.kanGentage;
+    const gem = document.getElementById('vpGem');
+    gem.disabled = !st.ugemt || st.gemmer || st.konflikt;
+    gem.textContent = st.gemmer ? 'Gemmer…' : st.ugemt ? 'Gem vagtplan' : 'Gemt ✓';
+  };
+  const vagtplanApi = () => {
+    const ramme = document.querySelector('#vagtplanVisning iframe');
+    try { return ramme && ramme.contentWindow && ramme.contentWindow.vagtplanApi; } catch (e) { return null; }
+  };
+  document.getElementById('vpFortryd').addEventListener('click', () => { const a = vagtplanApi(); if (a) a.fortryd(); });
+  document.getElementById('vpGentag').addEventListener('click', () => { const a = vagtplanApi(); if (a) a.gentag(); });
+  document.getElementById('vpGem').addEventListener('click', () => { const a = vagtplanApi(); if (a) a.gem(); });
+  // Genveje, naar fokus er i topbaren (inde i vagtplanen haandterer den dem selv)
+  document.addEventListener('keydown', (e) => {
+    if (aktivFane !== 'vagtplan' || !(e.ctrlKey || e.metaKey)) return;
+    const t = e.target;
+    if (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return;
+    const a = vagtplanApi(), k = e.key.toLowerCase();
+    if (!a) return;
+    if (k === 's') { e.preventDefault(); a.gem(); }
+    else if (k === 'z' && !e.shiftKey) { e.preventDefault(); a.fortryd(); }
+    else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); a.gentag(); }
+  });
+  // Advar, foer en ikke-gemt vagtplan forsvinder (luk fane / genindlaes / naviger vaek)
+  window.addEventListener('beforeunload', (e) => {
+    if (!vagtplanUgemt) return;
+    e.preventDefault(); e.returnValue = '';
+  });
   // Det der arbejder direkte paa canvas'et (faelles skabelon/slide og guiden, som peger paa
   // elementer i redigeringsfladen) skifter foerst tilbage til Butik-redigering. Capture-fasen
   // sikrer at fanen er skiftet, foer knappens egen handling koerer.
@@ -1556,11 +1614,21 @@
     document.getElementById(id).addEventListener('submit', (e) => e.preventDefault());
   });
 
+  let logudTrods = 0;
+  document.getElementById('logoutBtn').addEventListener('click', (e) => {
+    if (!vagtplanUgemt || Date.now() - logudTrods < 6000) return;
+    e.stopImmediatePropagation();
+    logudTrods = Date.now();
+    skiftFane('vagtplan');
+    const ramme = document.querySelector('#vagtplanVisning iframe');
+    try { ramme.contentWindow.gemStatus('Du har ændringer, der ikke er gemt. Tryk "Gem vagtplan", eller klik "Log ud" igen for at logge ud uden at gemme.', 'bad'); } catch (err) {}
+  }, true);
   document.getElementById('logoutBtn').addEventListener('click', async () => {
     await client.auth.signOut();
     skiftFane('butik');
     document.getElementById('hovedfaner').classList.remove('synlig');
     document.getElementById('vagtplanVisning').innerHTML = ''; // vagtplanen maa ikke overleve et log ud
+    vagtplanUgemt = false;
     app.style.display = 'none';
     loginWrap.style.display = 'flex';
     loginMsg.className = 'msg';
