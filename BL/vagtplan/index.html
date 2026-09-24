@@ -5,7 +5,7 @@
 <title>Vagtplan</title>
 <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=4">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="motor.js?v=2026-09-24-1"></script>
+<script src="motor.js?v=2026-09-24-2"></script>
 <style>
 /* Topbar, login og grundstil er de samme som i butik-redigering, saa de to sider ser ens ud. */
 *{box-sizing:border-box}[hidden]{display:none!important}
@@ -51,6 +51,7 @@ table{border-collapse:collapse;background:var(--card)}td,th{border:1px solid var
 dialog{border:1px solid var(--bd);border-radius:12px;background:var(--card);color:var(--fg);max-width:min(440px,92vw);width:100%;font-family:inherit}
 dialog label{display:block;margin:8px 0}dialog select,dialog input,textarea{width:100%;font:inherit;padding:6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--fg)}
 textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.ekstra-valg{font-size:14px;display:inline-flex;align-items:center;gap:6px}.ekstra-valg select{font:inherit;font-size:14px;padding:5px 6px;border:1px solid var(--bd);border-radius:8px;background:var(--card)}
 .konflikt{display:none;background:#fdecea;border-radius:8px;padding:10px 12px;margin:8px 0;color:#b92a15}
 </style></head><body>
 
@@ -94,7 +95,7 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
 <h1 id="titel">Vagtplan</h1>
 <p class="s">Rullende 4-ugers plan. Klik på en vagt for at rette den, eller på "+ vagt" for at tilføje. Reglerne tjekkes automatisk.</p>
 <div class="konflikt" id="konflikt">Planen er blevet ændret af en anden, siden du åbnede den. Din seneste ændring er <b>ikke</b> gemt. <button id="genindlaes">Hent den nyeste plan</button></div>
-<div class="bar"><span id="tabs"></span><button id="t2" title="Tidspunkt hvor der skal være 2 på arbejde igen">2 pers. fra 15:00</button><button id="gen">Foreslå ny plan</button><button id="rules">Regler</button><button class="pri" id="exp">Kopiér til SmartPlan</button><span id="stat"></span></div>
+<div class="bar"><span id="tabs"></span><button id="t2" title="Tidspunkt hvor der skal være 2 på arbejde igen">2 pers. fra 15:00</button><label class="ekstra-valg">Ekstra personer <select id="ekstra" title="Hvor mange ekstra personer planen må bruge. Ekstra personer overtager søndagen for dem, der ellers skal arbejde både lørdag og søndag."></select></label><button id="gen">Foreslå ny plan</button><span id="ekstraHint" class="s" hidden>← tryk "Foreslå ny plan" for at bruge det nye antal</span><button id="rules">Regler</button><button class="pri" id="exp">Kopiér til SmartPlan</button><span id="stat"></span></div>
 <div class="wrap"><div class="grid" id="grid"></div></div>
 <h2>Problemer</h2><ul class="is" id="iss"></ul>
 <h2>Ønsker der ikke er opfyldt</h2><ul class="is" id="soft"></ul>
@@ -136,10 +137,14 @@ let gemKaede = Promise.resolve(), konflikt = false;
 
 function vis(id) { ['laeserVis', 'loginVis', 'ingenAdgangVis', 'app'].forEach(x => { $('#' + x).hidden = x != id; }); }
 
-// `plan` i databasen: { t2, vagter: [{w,d,p,s,e}, ...] }. t2 er "2 pers. fra"-knappen, som
-// skal gemmes sammen med planen -- en plan lavet til 15:15 giver ellers "problemer", naar
-// siden aabnes igen og knappen er tilbage paa 15:00. (Aeldre format: bare listen af vagter.)
-const lesPlan = p => Array.isArray(p) ? { t2: 900, vagter: p } : p && Array.isArray(p.vagter) ? { t2: p.t2 == 915 ? 915 : 900, vagter: p.vagter } : { t2: 900, vagter: [] };
+// `plan` i databasen: { t2, ekstra, vagter: [{w,d,p,s,e}, ...] }. t2 er "2 pers. fra"-knappen
+// og ekstra er "Ekstra personer"-dropdown'en -- begge gemmes sammen med planen, ellers passer
+// planen ikke til indstillingerne, naar siden aabnes igen. (Aeldre format: bare vagt-listen.)
+const EKSTRA_STANDARD = 1; // I ansaetter 1 ekstra person nu
+const lesPlan = p => {
+  const o = Array.isArray(p) ? { vagter: p } : p && Array.isArray(p.vagter) ? p : { vagter: [] };
+  return { t2: o.t2 == 915 ? 915 : 900, ekstra: Number.isInteger(o.ekstra) ? o.ekstra : EKSTRA_STANDARD, vagter: o.vagter };
+};
 
 // ---------- Login / adgang ----------
 async function start() {
@@ -161,7 +166,11 @@ async function start() {
 function vaelgPlan(r) {
   raekke = r; konflikt = false; $('#konflikt').style.display = 'none';
   const pl = lesPlan(r.plan);
-  M = lavVagtplanMotor(r.opsaetning); M.T2 = pl.t2; M.S = pl.vagter;
+  M = lavVagtplanMotor(r.opsaetning); M.T2 = pl.t2; M.EKSTRA = pl.ekstra; M.S = pl.vagter;
+  // 0 op til det antal der fjerner alle dobbelt-weekender (flere giver ingen mening)
+  const maxE = Math.max(M.maxAflastning, M.EKSTRA);
+  $('#ekstra').innerHTML = Array.from({ length: maxE + 1 }, (_, n) => `<option value="${n}">${n}</option>`).join('');
+  $('#ekstra').value = M.EKSTRA; $('#ekstraHint').hidden = true;
   $('#t2').textContent = '2 pers. fra ' + M.f(M.T2);
   $('#butikNavn').textContent = butikNavn(r);
   $('#titel').textContent = r.opsaetning.titel || 'Vagtplan';
@@ -191,7 +200,7 @@ $('#planValg').onchange = e => vaelgPlan(planer.find(p => p.id == e.target.value
 function gemStatus(t, cls) { $('#gemStatus').textContent = t; $('#gemStatus').className = cls || ''; }
 function save() {
   if (konflikt) return;
-  const r = raekke, plan = { t2: M.T2, vagter: JSON.parse(JSON.stringify(M.S)) };
+  const r = raekke, plan = { t2: M.T2, ekstra: M.EKSTRA, vagter: JSON.parse(JSON.stringify(M.S)) };
   gemStatus('Gemmer…');
   gemKaede = gemKaede.then(async () => {
     if (konflikt || r != raekke) return;
@@ -226,7 +235,7 @@ function render() {
   const A = M.check(), I = A.filter(i => !i.soft), Q = A.filter(i => i.soft);
   $('#tabs').innerHTML = WK.map(w => `<button class="tab ${w == W ? 'on' : ''}" data-w="${w}">Uge ${w + 1}${I.some(i => i.w == w) ? ' ⚠' : ''}</button>`).join(' ');
   const uh = M.S.filter(x => x.p == 'uk').reduce((a, x) => a + (x.e - x.s) / 60, 0);
-  $('#stat').innerHTML = (I.length ? `<b class="bad">⚠ ${I.length} problemer</b>` : `<b class="ok">✓ Planen går op</b>`) + (uh ? ` <span class="s">· mangler ${Math.max(0, ...EX.filter(Boolean))} ekstra personer (${uh} t)</span>` : '');
+  $('#stat').innerHTML = (I.length ? `<b class="bad">⚠ ${I.length} problemer</b>` : `<b class="ok">✓ Planen går op</b>`) + (uh ? ` <span class="s">· bruger ${Math.max(0, ...EX.filter(Boolean))} af ${M.EKSTRA} ekstra (${uh} t på 6 uger)</span>` : '');
   $('#grid').innerHTML = D.map((n, d) => {
     const di = I.filter(i => i.w == W && i.d == d);
     return `<div class="day ${di.length ? 'err' : ''}"><h3>${n}</h3>${grp(W, d).map(a => `<div class="blk"><div class="bh">${f(a[0].s)} - ${f(a[0].e)}</div>${a.map(x => `<button class="chip r${P[x.p][1]} ${x.p == 'uk' ? 'uk' : ''}" data-i="${x.i}">${x.p == 'uk' ? 'Ekstra person' : esc(P[x.p][0])}</button>`).join('')}</div>`).join('')}<button class="add" data-add="${d}">+ vagt</button>${di.map(i => `<div class="di">${esc(i.t)}</div>`).join('')}</div>`;
@@ -237,7 +246,7 @@ function render() {
   $('#hrs').innerHTML = '<table><tr><th></th>' + WK.map(w => `<th>Uge ${w + 1}</th>`).join('') + '<th>Snit</th></tr>' + ps.map(p => {
     const h = WK.map(w => M.hrs(p, w)), a = h.reduce((x, y) => x + y) / NW, m = M.minSnit(p), u = M.ugeTimer(p), bad = (m && a < m) || (u != null && h.some(x => x != u));
     return `<tr><td>${esc(P[p][0])} <small>${esc(R[P[p][1]])}</small></td>${h.map(x => `<td>${x}</td>`).join('')}<td class="${bad ? 'w' : ''}">${a.toFixed(1)}${m ? ' (min ' + m + ')' : ''}</td></tr>`;
-  }).join('') + Array.from({ length: nx }, (_, k) => {
+  }).join('') + Array.from({ length: Math.max(nx, M.EKSTRA) }, (_, k) => {
     const hh = WK.map(w => M.S.reduce((a, x, i) => a + (EX[i] == k + 1 && x.w == w ? (x.e - x.s) / 60 : 0), 0));
     return `<tr><td>Ekstra person ${k + 1} <small>skal findes</small></td>${hh.map(x => `<td>${x}</td>`).join('')}<td>${(hh.reduce((a, b) => a + b) / NW).toFixed(1)}</td></tr>`;
   }).join('') + '</table>';
@@ -265,8 +274,9 @@ $('#ddel').onclick = () => { M.S.splice(E.i, 1); save(); $('#dlg').close(); rend
 $('#dcx').onclick = () => $('#dlg').close();
 $('#gen').onclick = e => {
   if (!armed) { armed = true; e.target.textContent = 'Sikker? Klik igen (overskriver alt)'; setTimeout(() => { armed = false; $('#gen').textContent = 'Foreslå ny plan'; }, 4000); return; }
-  armed = false; e.target.textContent = 'Foreslå ny plan'; M.gen(); save(); render();
+  armed = false; e.target.textContent = 'Foreslå ny plan'; M.gen(); $('#ekstraHint').hidden = true; save(); render();
 };
+$('#ekstra').onchange = e => { M.EKSTRA = +e.target.value; $('#ekstraHint').hidden = false; save(); render(); };
 const txt = w => M.D.map((n, d) => n + '\n' + (grp(w, d).map(a => M.f(a[0].s) + ' - ' + M.f(a[0].e) + ': ' + a.map(x => M.nmi(x.i) + ' (' + M.R[M.P[x.p][1]] + ')').join(', ')).join('\n') || '–')).join('\n\n');
 const csv = () => 'Uge;Dag;Start;Slut;Medarbejder;Jobtype\n' + M.S.map((x, i) => ({ ...x, i })).sort((a, b) => a.w - b.w || a.d - b.d || a.s - b.s).map(x => [x.w + 1, M.D[x.d], M.f(x.s), M.f(x.e), M.nmi(x.i), M.R[M.P[x.p][1]]].join(';')).join('\n');
 $('#t2').onclick = () => { M.T2 = M.T2 == 900 ? 915 : 900; $('#t2').textContent = '2 pers. fra ' + M.f(M.T2); save(); render(); };
