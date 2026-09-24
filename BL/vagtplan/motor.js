@@ -22,7 +22,11 @@
     // EKSTRA: hvor mange ekstra personer der maa bruges (dropdown'en). null = ingen graense og
     // ingen weekend-aflastning -- saadan opfoerte den oprindelige vagtplan sig.
     const M = {
-      P, R, D, O, f, NW, WK, S: [], EX: [], T2: 900, EKSTRA: null, EKSTRA_ALLE: false,
+      P, R, D, O, f, NW, WK, S: [], EX: [], T2: 900, EKSTRA: null,
+      // Hvor tit en ekstra person maa arbejde weekend: afstand = mindst hver N. weekend
+      // (1 = hver weekend), begge = maa tage baade loerdag og soendag samme weekend.
+      // Standard = samme regel som personalet (hver 3. weekend, én dag).
+      EKSTRA_REGEL: { afstand: 3, begge: false },
     };
     const need = t => t < 600 || (t >= 780 && t < M.T2) ? 1 : 2;
 
@@ -37,29 +41,52 @@
       return ud;
     })();
     M.maxAflastning = DOBBELT.length;
-    // EKSTRA_ALLE: ekstra personer maa arbejde ALLE weekender (baade loerdag og soendag) -- ikke
-    // kun én weekenddag hver 3. uge som personalet. Saa kan én ekstra person overtage en dag
-    // fra HVER af dem, der ellers skal arbejde hele weekenden: den foerste i en rotationsuge
-    // mister soendagen, den naeste loerdagen osv., hoejst EKSTRA pr. dag.
-    // Uden EKSTRA_ALLE overtages kun soendagen for de EKSTRA foerste (se DOBBELT ovenfor).
+    // Hvilke weekenddage de ekstra personer overtager (gen() bygger ud fra det, forbedr()
+    // kan finpudse). Regnes EKSAKT: for hver ekstra person proeves alle de weekend-moenstre
+    // EKSTRA_REGEL tillader (fx hver 3. weekend), og der vaelges den kombination der
+    // aflaster flest "dobbelt-weekender" (samme person loerdag OG soendag). Uge for uge faar
+    // den foerste dobbelt-person soendagen overtaget, den naeste loerdagen osv.
     let aflCache = null, aflNoegle = null;
+    const ugeAfstand = (a, b) => { const q = Math.abs(a - b); return Math.min(q, NW - q); };
     function aflosning() {
-      const k = M.EKSTRA + '|' + M.EKSTRA_ALLE;
+      const rg = M.EKSTRA_REGEL, N = M.EKSTRA > 0 ? M.EKSTRA : 0;
+      const k = N + '|' + rg.afstand + '|' + rg.begge;
       if (k === aflNoegle) return aflCache;
       const ud = new Set();
-      if (M.EKSTRA > 0) {
-        if (!M.EKSTRA_ALLE) DOBBELT.slice(0, M.EKSTRA).forEach(y => ud.add(y.r + '|6|' + y.x.p));
-        else ROT.forEach((hold, r) => {
-          const brugt = { 5: 0, 6: 0 };
-          hold.filter(x => x.d == 6 && hold.some(y => y.d == 5 && y.p == x.p)).forEach((x, j) => {
-            for (const dag of j % 2 ? [5, 6] : [6, 5]) if (brugt[dag] < M.EKSTRA) { brugt[dag]++; ud.add(r + '|' + dag + '|' + x.p); break; }
-          });
+      if (N > 0) {
+        const dob = WK.map(w => { const hold = ROT[w % NR] || []; return [...new Set(hold.filter(x => x.d == 6 && hold.some(y => y.d == 5 && y.p == x.p)).map(x => x.p))]; });
+        // De weekend-moenstre én ekstra person maa have (uger med indbyrdes afstand >= afstand)
+        const moenstre = [];
+        for (let m = 1; m < 1 << NW; m++) {
+          const ws = WK.filter(w => m >> w & 1);
+          if (ws.every(x => ws.every(y => x == y || ugeAfstand(x, y) >= rg.afstand))) moenstre.push(ws);
+        }
+        const pr = rg.begge ? 2 : 1; // dage én ekstra kan overtage i en weekend
+        // DP over de ekstra personer; tilstand = hvor mange dage der er overtaget i hver uge
+        let dp = new Map([[Array(NW).fill(0).join(), { v: 0, dage: 0 }]]);
+        for (let e = 0; e < N; e++) {
+          const ny = new Map(dp);
+          for (const [key, st] of dp) {
+            const s = key.split(',').map(Number);
+            for (const ws of moenstre) {
+              const t = s.slice(); let dage = st.dage;
+              ws.forEach(w => { const add = Math.min(pr, dob[w].length - t[w]); t[w] += add; dage += add; });
+              const v = t.reduce((x, y) => x + y, 0), kk = t.join(), gl = ny.get(kk);
+              if (!gl || v > gl.v || (v == gl.v && dage < gl.dage)) ny.set(kk, { v, dage });
+            }
+          }
+          dp = ny;
+        }
+        let bedst = null;
+        for (const [key, st] of dp) if (!bedst || st.v > bedst.st.v) bedst = { key, st };
+        bedst.key.split(',').map(Number).forEach((r, w) => {
+          dob[w].slice(0, r).forEach((p, j) => ud.add(w + '|' + (j % 2 ? 5 : 6) + '|' + p));
         });
       }
       aflNoegle = k; aflCache = ud;
       return ud;
     }
-    const afloest = (r, x) => aflosning().has(r + '|' + x.d + '|' + x.p);
+    const afloest = (w, x) => aflosning().has(w + '|' + x.d + '|' + x.p);
 
     function ext() {
       const S = M.S, EX = []; const ex = [];
@@ -68,11 +95,45 @@
         for (let n = 0; ; n++) {
           const e = ex[n] || (ex[n] = { D: new Set(), K: [] });
           if (e.D.has(x.w + '-' + x.d)) continue;
-          if (x.d > 4 && !M.EKSTRA_ALLE && e.K.some(k => { const q = Math.abs(k - x.w); return Math.min(q, NW - q) < 3; })) continue;
+          // Weekend-reglen for ekstra personer (EKSTRA_REGEL). Med standard-reglen (afstand 3,
+          // ikke begge dage) er det praecis den oprindelige vagtplans regel.
+          if (x.d > 4 && e.K.some(k => { const q = Math.abs(k - x.w), a = Math.min(q, NW - q); return a == 0 ? !M.EKSTRA_REGEL.begge : a < M.EKSTRA_REGEL.afstand; })) continue;
           e.D.add(x.w + '-' + x.d); if (x.d > 4) e.K.push(x.w); EX[i] = n + 1; break;
         }
       });
+      // Den graadige fordeling ovenfor er den oprindelige vagtplans -- men den kan bruge flere
+      // ekstra personer end noedvendigt. Er der valgt et antal, og bruger den flere, soeges
+      // der eksakt efter en fordeling inden for antallet (faa vagter, saa det er hurtigt).
+      const brugt = Math.max(0, ...EX.filter(Boolean));
+      if (M.EKSTRA != null && brugt > M.EKSTRA) { const alt = fordelEksakt(M.EKSTRA); if (alt) { M.EX = alt; return; } }
       M.EX = EX;
+    }
+    function fordelEksakt(K) {
+      const S = M.S, idx = S.map((x, i) => i).filter(i => S[i].p == 'uk');
+      // Weekendvagter foerst (de har flest begraensninger)
+      idx.sort((a, b) => (S[b].d > 4) - (S[a].d > 4) || S[a].w - S[b].w || S[a].d - S[b].d);
+      const rg = M.EKSTRA_REGEL, hvem = [], tildelt = Array.from({ length: K }, () => []);
+      let skridt = 0;
+      const ok = (n, x) => tildelt[n].every(y => {
+        if (y.w == x.w && y.d == x.d) return false;
+        if (x.d > 4 && y.d > 4) { const a = ugeAfstand(x.w, y.w); return a == 0 ? rg.begge : a >= rg.afstand; }
+        return true;
+      });
+      const soeg = (j, maxN) => {
+        if (++skridt > 200000) return false;
+        if (j == idx.length) return true;
+        const x = S[idx[j]];
+        for (let n = 0; n <= Math.min(maxN + 1, K - 1); n++) {
+          if (!ok(n, x)) continue;
+          tildelt[n].push(x); hvem[j] = n;
+          if (soeg(j + 1, Math.max(maxN, n))) return true;
+          tildelt[n].pop();
+        }
+        return false;
+      };
+      if (!soeg(0, -1)) return null;
+      const EX = []; idx.forEach((i, j) => { EX[i] = hvem[j] + 1; });
+      return EX;
     }
     const nmi = i => M.S[i].p == 'uk' ? 'Ekstra person ' + (M.EX[i] || '') : P[M.S[i].p][0];
 
@@ -135,7 +196,7 @@
       };
       // Faste vagter. `rotation` = kun de uger hvor uge % (antal weekend-hold) er lig vaerdien.
       (C.faste || []).forEach(x => { if (x.rotation == null || w % NR == x.rotation) add(x.d, x.p, x.s, x.e); });
-      (ROT[w % NR] || []).forEach(x => add(x.d, afloest(w % NR, x) ? 'uk' : x.p, x.s, x.e));
+      (ROT[w % NR] || []).forEach(x => add(x.d, afloest(w, x) ? 'uk' : x.p, x.s, x.e));
       for (let d = 0; d < 5; d++) uk(d, 2);
       for (let d = 0; d < 7; d++) { (C.hulFyldere || []).forEach(p => { if (run(w, d, 0) && !has(d, p)) put(p, d, LEN, 1); }); uk(d, 0); }
       (C.ekstraDage || []).forEach(x => {
@@ -236,7 +297,8 @@
     // strafpoint (vurder), og den med faerrest vinder. Regelbrud er udelukket (1.000.000 point
     // stykket); derefter taeller:
     const STRAF = {
-      oenske: 40,     // pr. weekend hvor nogen arbejder baade loerdag og soendag
+      oenske: 200,    // pr. weekend hvor nogen arbejder baade loerdag og soendag -- vejer tungere
+                      // end alt nedenunder: et opfyldt oenske slaar altid jaevnere timer
       ekstraTime: 3,  // pr. time en ekstra person skal daekke
       maerkelig: 25,  // pr. vagt-start/-slut der ikke er en hel/halv time, aabning, 15:15 eller lukketid
       sving: 0.5,     // pr. time en fleksibel medarbejders uge afviger fra hendes/hans eget snit
@@ -267,36 +329,56 @@
         + sving * STRAF.sving + spredning * STRAF.spredning + maal * STRAF.maal + (M.T2 == 915 ? STRAF.fra1515 : 0);
       return { point, hard, soft, ukT, nx, maerk, sving, spredning, maal };
     }
-    // Vagter der ligger fast i opsaetningen (faste vagter + weekend-rotationen, inkl. de
-    // soendage en ekstra person har overtaget) roeres ikke -- kun de oevrige byttes rundt.
+    // Vagter der ligger fast i opsaetningen (faste vagter + weekend-rotationen) byttes ikke
+    // rundt mellem personalet. Rotationens "dobbelt-weekender" (samme person loerdag OG
+    // soendag) kan dog skifte mellem personen og en ekstra person -- det er saadan
+    // planlaeggeren selv finder ud af, hvilke weekenddage de ekstra bedst tager.
     function fasteNoegler() {
       const k = new Set();
       WK.forEach(w => {
         (C.faste || []).forEach(x => { if (x.rotation == null || w % NR == x.rotation) k.add([w, x.d, x.p, x.s, x.e].join()); });
-        (ROT[w % NR] || []).forEach(x => k.add([w, x.d, afloest(w % NR, x) ? 'uk' : x.p, x.s, x.e].join()));
+        (ROT[w % NR] || []).forEach(x => { k.add([w, x.d, x.p, x.s, x.e].join()); k.add([w, x.d, 'uk', x.s, x.e].join()); });
       });
       return k;
+    }
+    function dobbeltVagter() {
+      const ud = [];
+      WK.forEach(w => {
+        const hold = ROT[w % NR] || [];
+        hold.filter(x => (x.d == 5 || x.d == 6) && hold.some(y => y != x && y.p == x.p && (y.d == 5 || y.d == 6) && y.d != x.d)).forEach(x => {
+          const v = M.S.find(y => y.w == w && y.d == x.d && y.s == x.s && y.e == x.e && (y.p == x.p || y.p == 'uk') && !ud.some(u => u.x == y));
+          if (v) ud.push({ x: v, p: x.p });
+        });
+      });
+      return ud;
     }
     const kan = (p, x) => { const v = av(p, x.d); return v && x.s >= v[0] && x.e <= v[1] && !M.S.some(y => y != x && y.w == x.w && y.d == x.d && y.p == p); };
     function forbedr(runder) {
       const faste = fasteNoegler();
       const fri = M.S.filter(x => !faste.has([x.w, x.d, x.p, x.s, x.e].join()));
+      const dob = M.EKSTRA > 0 ? dobbeltVagter() : [];
+      const alle = fri.concat(dob.map(v => v.x));
       // KUN de fleksible: de andres regler (fx en daglig leder med faste ugedage) ligger i
       // deres faste vagter og ikke i regeltjekket, saa de maa aldrig faa ekstra vagter herfra.
       const kandidater = FLEX;
-      if (!fri.length) return;
-      let nu = vurder().point, bedst = nu, bedstP = fri.map(x => x.p);
+      if (!alle.length) return;
+      let nu = vurder().point, bedst = nu, bedstP = alle.map(x => x.p);
       for (let i = 0, T = 30; i < runder; i++, T *= 0.998) {
-        const x = fri[Math.random() * fri.length | 0];
         let fortryd;
-        if (Math.random() < 0.6) {
+        if (dob.length && (!fri.length || Math.random() < 0.25)) {
+          // Lad en ekstra person overtage (eller give tilbage) en dag af en dobbelt-weekend
+          const v = dob[Math.random() * dob.length | 0], gl = v.x.p;
+          v.x.p = gl == 'uk' ? v.p : 'uk'; fortryd = () => { v.x.p = gl; };
+        } else if (!fri.length) continue;
+        else if (Math.random() < 0.6) {
+          const x = fri[Math.random() * fri.length | 0];
           // Giv vagten til en anden, der kan tage den (ogsaa: erstat en ekstra person)
           const q = kandidater.filter(p => p != x.p && kan(p, x));
           if (!q.length) continue;
           const gl = x.p; x.p = q[Math.random() * q.length | 0]; fortryd = () => { x.p = gl; };
         } else {
           // Byt to vagter samme uge, saa ugetimerne bliver ved med at passe
-          const y = fri[Math.random() * fri.length | 0];
+          const x = fri[Math.random() * fri.length | 0], y = fri[Math.random() * fri.length | 0];
           if (y == x || y.w != x.w || y.d == x.d || y.p == x.p || x.p == 'uk' || y.p == 'uk') continue;
           const px = x.p, py = y.p; x.p = py; y.p = px;
           if (!kan(py, x) || !kan(px, y)) { x.p = px; y.p = py; continue; }
@@ -305,10 +387,10 @@
         const ny = vurder().point;
         if (ny <= nu || Math.random() < Math.exp((nu - ny) / T)) {
           nu = ny;
-          if (ny < bedst) { bedst = ny; bedstP = fri.map(z => z.p); }
+          if (ny < bedst) { bedst = ny; bedstP = alle.map(z => z.p); }
         } else fortryd();
       }
-      fri.forEach((x, i) => { x.p = bedstP[i]; });
+      alle.forEach((x, i) => { x.p = bedstP[i]; });
     }
     function foreslaa(runder) {
       let vinder = null;
