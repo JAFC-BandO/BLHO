@@ -22,7 +22,7 @@
     // EKSTRA: hvor mange ekstra personer der maa bruges (dropdown'en). null = ingen graense og
     // ingen weekend-aflastning -- saadan opfoerte den oprindelige vagtplan sig.
     const M = {
-      P, R, D, O, f, NW, WK, S: [], EX: [], T2: 900, EKSTRA: null,
+      P, R, D, O, f, NW, WK, S: [], EX: [], T2: 900, EKSTRA: null, EKSTRA_ALLE: false,
     };
     const need = t => t < 600 || (t >= 780 && t < M.T2) ? 1 : 2;
 
@@ -37,7 +37,29 @@
       return ud;
     })();
     M.maxAflastning = DOBBELT.length;
-    const afloest = (r, x) => M.EKSTRA > 0 && DOBBELT.slice(0, M.EKSTRA).some(y => y.r == r && y.x == x);
+    // EKSTRA_ALLE: ekstra personer maa arbejde ALLE weekender (baade loerdag og soendag) -- ikke
+    // kun én weekenddag hver 3. uge som personalet. Saa kan én ekstra person overtage en dag
+    // fra HVER af dem, der ellers skal arbejde hele weekenden: den foerste i en rotationsuge
+    // mister soendagen, den naeste loerdagen osv., hoejst EKSTRA pr. dag.
+    // Uden EKSTRA_ALLE overtages kun soendagen for de EKSTRA foerste (se DOBBELT ovenfor).
+    let aflCache = null, aflNoegle = null;
+    function aflosning() {
+      const k = M.EKSTRA + '|' + M.EKSTRA_ALLE;
+      if (k === aflNoegle) return aflCache;
+      const ud = new Set();
+      if (M.EKSTRA > 0) {
+        if (!M.EKSTRA_ALLE) DOBBELT.slice(0, M.EKSTRA).forEach(y => ud.add(y.r + '|6|' + y.x.p));
+        else ROT.forEach((hold, r) => {
+          const brugt = { 5: 0, 6: 0 };
+          hold.filter(x => x.d == 6 && hold.some(y => y.d == 5 && y.p == x.p)).forEach((x, j) => {
+            for (const dag of j % 2 ? [5, 6] : [6, 5]) if (brugt[dag] < M.EKSTRA) { brugt[dag]++; ud.add(r + '|' + dag + '|' + x.p); break; }
+          });
+        });
+      }
+      aflNoegle = k; aflCache = ud;
+      return ud;
+    }
+    const afloest = (r, x) => aflosning().has(r + '|' + x.d + '|' + x.p);
 
     function ext() {
       const S = M.S, EX = []; const ex = [];
@@ -46,7 +68,7 @@
         for (let n = 0; ; n++) {
           const e = ex[n] || (ex[n] = { D: new Set(), K: [] });
           if (e.D.has(x.w + '-' + x.d)) continue;
-          if (x.d > 4 && e.K.some(k => { const q = Math.abs(k - x.w); return Math.min(q, NW - q) < 3; })) continue;
+          if (x.d > 4 && !M.EKSTRA_ALLE && e.K.some(k => { const q = Math.abs(k - x.w); return Math.min(q, NW - q) < 3; })) continue;
           e.D.add(x.w + '-' + x.d); if (x.d > 4) e.K.push(x.w); EX[i] = n + 1; break;
         }
       });

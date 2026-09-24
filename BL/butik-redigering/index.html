@@ -134,6 +134,9 @@
   body.fane-vagtplan #app > .main,
   body.fane-vagtplan #faellesSlideBanner,
   body.fane-vagtplan #masterEditBanner { display: none !important; }
+  /* "Gem ændringer" gemmer skaermindholdet, ikke vagtplanen (den gemmer selv). Skjult paa
+     vagtplan-fanen, men med sin plads bevaret, saa ikonerne ikke flytter sig. */
+  body.fane-vagtplan #saveBtn, body.fane-vagtplan #saveMsg { visibility: hidden; }
   body.fane-vagtplan #vagtplanVisning { display: block; flex: 1; min-height: 0; }
   #vagtplanVisning iframe { width: 100%; height: 100%; border: 0; display: block; }
 
@@ -1125,6 +1128,10 @@
     const valg = temaValg();
     const moerk = valg === 'moerk' || (valg === 'system' && !!systemMoerk && systemMoerk.matches);
     document.documentElement.setAttribute('data-tema', moerk ? 'moerk' : 'lys');
+    // Vagtplan-fanens iframe faar temaet direkte herfra (samme domaene), saa den altid foelger
+    // topbaren -- ogsaa hvis dens egen side skulle vaere en aeldre, cachet udgave.
+    const ramme = document.querySelector('#vagtplanVisning iframe');
+    try { if (ramme && ramme.contentDocument) ramme.contentDocument.documentElement.setAttribute('data-tema', moerk ? 'moerk' : 'lys'); } catch (e) {}
     const tekst = 'Tema: ' + TEMA_NAVN[valg] + ' (klik for ' + TEMA_NAVN[TEMA_NAESTE[valg]] + ')';
     ['temaKnap', 'temaKnapLogin'].forEach(id => {
       const knap = document.getElementById(id);
@@ -1499,7 +1506,10 @@
       if (!vis.querySelector('iframe')) {
         const ramme = document.createElement('iframe');
         ramme.title = 'Vagtplan';
-        ramme.src = '../vagtplan/?indlejret=1';
+        // ?v= skal bumpes naar vagtplan/index.html aendres -- ellers kan browseren/GitHub
+        // Pages' cache (op til 10 min) give den gamle side inde i fanen.
+        ramme.src = '../vagtplan/?indlejret=1&v=2026-09-24-4';
+        ramme.addEventListener('load', anvendTema);
         vis.appendChild(ramme);
       }
       updateSlideOverlay(); // fjerner diasshow-panelet, som ellers haenger paa document.body
