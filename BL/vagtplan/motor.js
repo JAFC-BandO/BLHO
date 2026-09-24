@@ -319,7 +319,7 @@
       S.forEach(x => { if (tim[x.p]) tim[x.p][x.w] += (x.e - x.s) / 60; });
       let sving = 0, spredning = 0, maal = 0; const snit = {};
       FLEX.forEach(p => { const a = tim[p].reduce((x, y) => x + y) / NW; snit[p] = a; tim[p].forEach(h => { sving += Math.abs(h - a); }); });
-      ['L', 'S', 'U'].forEach(ty => {
+      [...new Set(FLEX.map(p => P[p][1]))].forEach(ty => { // hver jobtype for sig
         const g = FLEX.filter(p => P[p][1] == ty); if (g.length < 2) return;
         const ga = g.reduce((x, p) => x + snit[p], 0) / g.length;
         g.forEach(p => { spredning += (snit[p] - ga) ** 2; });
