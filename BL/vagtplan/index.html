@@ -23,7 +23,8 @@ window.addEventListener('storage', e => { if (e.key === 'blho-tema') saetTema();
 if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('change', saetTema);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="motor.js?v=2026-09-24-5"></script>
+<script src="motor.js?v=2026-09-24-6"></script>
+<script src="opsaetning.js?v=2026-09-24-6"></script>
 <style>
 /* Farverne ligger som variabler, saa lys/moerk tilstand styres ét sted. Temaet vaelges med
    knappen i butik-redigerings topbar og deles via localStorage 'blho-tema' (se <head>). */
@@ -83,6 +84,31 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 dialog label{display:block;margin:8px 0}dialog select,dialog input,textarea{width:100%;font:inherit;padding:6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--fg)}
 textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .ekstra-valg{font-size:14px;display:inline-flex;align-items:center;gap:6px}.ekstra-valg select{font:inherit;font-size:14px;padding:5px 6px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--fg)}
+/* Medarbejder-dialogen */
+#md{max-width:min(760px,96vw)}
+#md h3{margin:0 0 4px}
+.md-hjaelp{font-size:13px;color:var(--mut);margin:2px 0 8px}
+#mdListe{list-style:none;padding:0;margin:8px 0;max-height:58vh;overflow:auto}
+#mdListe li{display:grid;grid-template-columns:1fr auto;gap:2px 12px;padding:10px 4px;border-bottom:1px solid var(--bd)}
+.md-navn{grid-column:1}.md-job{font-size:12px;color:var(--mut);margin-left:4px}
+.md-resume{grid-column:1;font-size:13px;color:var(--mut)}
+.md-knapper{grid-column:2;grid-row:1/span 2;display:flex;gap:6px;align-items:center}
+.md-knapper .md-fjern{color:var(--bad);min-width:8.5em}
+#mdFormVis{max-height:68vh;overflow:auto;padding-right:4px}
+#mdFormVis fieldset{border:1px solid var(--bd);border-radius:10px;padding:8px 12px 10px;margin:10px 0}
+#mdFormVis legend{font-weight:700;padding:0 4px}
+#mdFormVis label{margin:6px 0}
+.md-linje{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.md-linje input[type=time]{width:auto}.md-linje input[type=number]{width:6em}
+#md .md-linje label{display:inline-flex;align-items:center;gap:6px;margin:4px 12px 4px 0}
+#md input[type=checkbox]{width:auto;margin:0}
+.md-vagt{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0}
+.md-vagt select,.md-vagt input{width:auto}
+.md-vagt .md-slet-vagt{padding:4px 9px;color:var(--bad)}
+.md-ingen{margin:4px 0}
+.slukket{opacity:.5}
+#mdFejl{color:var(--bad);font-size:14px;margin-top:8px}
+.indhold .navn-knap{border:0;background:none;padding:0;color:inherit;font:inherit;text-decoration:underline dotted;text-underline-offset:3px;cursor:pointer}
 .konflikt{display:none;background:var(--fejl-bg);border-radius:8px;padding:10px 12px;margin:8px 0;color:var(--fejl)}
 </style></head><body>
 
@@ -129,7 +155,7 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
 <div class="bar"><span id="tabs"></span><button id="t2" title="Tidspunkt hvor der skal være 2 på arbejde igen">2 pers. fra 15:00</button><label class="ekstra-valg">Ekstra personer <select id="ekstra" title="Hvor mange ekstra personer planen må bruge. Ekstra personer overtager søndagen for dem, der ellers skal arbejde både lørdag og søndag."></select></label><label class="ekstra-valg">Ekstra må arbejde <select id="ekstraRegel" title="Hvor tit de ekstra personer må arbejde weekend. Alle weekend-ønsker kræver ca. 13 timers weekendarbejde om ugen fra ekstra folk — jo sjældnere hver enkelt må arbejde, jo flere ekstra personer skal der til.">
 <option value="3-0">hver 3. weekend, én dag</option><option value="3-1">hver 3. weekend, begge dage</option>
 <option value="2-0">hver 2. weekend, én dag</option><option value="2-1">hver 2. weekend, begge dage</option>
-<option value="1-0">hver weekend, én dag</option><option value="1-1">hver weekend, begge dage</option></select></label><button id="gen">Foreslå ny plan</button><button id="rules">Regler</button><button class="pri" id="exp">Kopiér til SmartPlan</button></div>
+<option value="1-0">hver weekend, én dag</option><option value="1-1">hver weekend, begge dage</option></select></label><button id="gen">Foreslå ny plan</button><button id="medarbejdere" title="Tilføj, ret eller fjern medarbejdere og deres timer">Medarbejdere</button><button id="rules">Regler</button><button class="pri" id="exp">Kopiér til SmartPlan</button></div>
 <div class="statuslinje" id="statuslinje"><span id="stat"></span><span id="ekstraHint" class="s" hidden>Tryk "Foreslå ny plan" for at bruge de nye indstillinger.</span></div>
 <div class="wrap"><div class="grid" id="grid"></div></div>
 <h2>Problemer</h2><ul class="is" id="iss"></ul>
@@ -144,6 +170,47 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
 <label>Slut<input id="de" type="time" step="900"></label>
 <div class="di" id="dm"></div>
 <div class="row"><button class="pri" id="dsave">Gem</button><button id="ddel">Slet</button><button id="dcx">Annullér</button></div></dialog>
+<dialog id="md" aria-labelledby="mdTitel"><h3 id="mdTitel">Medarbejdere</h3>
+<div id="mdListeVis">
+  <p class="md-hjaelp">Her styrer du, hvem planen regner med. Ændringer bruges næste gang du trykker "Foreslå ny plan".</p>
+  <ul id="mdListe"></ul>
+  <div class="row"><button class="pri" id="mdNy" type="button">+ Tilføj medarbejder</button><button id="mdLuk" type="button">Luk</button></div>
+</div>
+<div id="mdFormVis" hidden>
+  <label>Navn<input id="mdNavn" type="text" autocomplete="off" maxlength="40"></label>
+  <label>Jobtype<select id="mdType"><option value="L">Daglig leder</option><option value="S">Salgsassistent</option><option value="U">Ungarbejder</option></select></label>
+  <p class="md-hjaelp">Ungarbejdere kan ikke stå alene og tæller ikke som ansvarlig.</p>
+  <fieldset><legend>Hvornår kan personen arbejde?</legend>
+    <div class="md-linje"><label><input type="checkbox" id="mdHverdagJa"> Hverdage</label>
+      <span class="md-linje" id="mdHverdagTider">fra <input type="time" step="900" id="mdHverdagFra" aria-label="Hverdage fra"> til <input type="time" step="900" id="mdHverdagTil" aria-label="Hverdage til"></span></div>
+    <div class="md-linje" id="mdIkkeDage"><span class="md-hjaelp" style="margin:0">Ikke disse dage:</span>
+      <label><input type="checkbox" value="0"> man</label><label><input type="checkbox" value="1"> tirs</label><label><input type="checkbox" value="2"> ons</label><label><input type="checkbox" value="3"> tors</label><label><input type="checkbox" value="4"> fre</label></div>
+    <div class="md-linje"><label><input type="checkbox" id="mdWeekendJa"> Weekend</label>
+      <span class="md-linje" id="mdWeekendTider">fra <input type="time" step="900" id="mdWeekendFra" aria-label="Weekend fra"> til <input type="time" step="900" id="mdWeekendTil" aria-label="Weekend til"></span></div>
+    <p class="md-hjaelp">Butikken har åbent 08:45–18:15 på hverdage og 08:45–17:15 i weekenden.</p>
+  </fieldset>
+  <fieldset><legend>Timer</legend>
+    <div class="md-linje"><select id="mdTimerArt" aria-label="Timekrav">
+      <option value="ingen">Ingen krav</option>
+      <option value="min">Mindst … timer om ugen (snit over 4 uger)</option>
+      <option value="praecis">Præcis … timer hver uge</option>
+      <option value="oenske">Gerne mindst … timer om ugen (ønske)</option></select>
+      <span class="md-linje" id="mdTimerTal"><input type="number" id="mdTimerT" min="0" max="60" step="0.25" aria-label="Timer"> timer</span></div>
+    <div class="md-linje" id="mdFridagFelt"><label><input type="checkbox" id="mdFridag"> Fridag imellem vagterne (man/ons/fre eller tirs/tors)</label></div>
+  </fieldset>
+  <fieldset><legend>Faste vagter</legend>
+    <p class="md-hjaelp">Vagter personen altid har. Weekend-vagter ligger i et hold, fordi alle højst arbejder hver 3. weekend: hold 1 = uge 1 og 4, hold 2 = uge 2 og 5, hold 3 = uge 3 og 6.</p>
+    <div id="mdVagter"></div>
+    <button type="button" id="mdNyVagt">+ Tilføj fast vagt</button>
+  </fieldset>
+  <fieldset><legend>Planlægning</legend>
+    <div class="md-linje"><label><input type="checkbox" id="mdKunFaste"> Kun de faste vagter</label></div>
+    <div class="md-linje" id="mdFordelesFelt"><label><input type="checkbox" id="mdFordeles"> Planlæggeren må give personen flere vagter efter behov</label></div>
+  </fieldset>
+  <div id="mdFejl" role="alert"></div>
+  <div class="row"><button class="pri" id="mdGem" type="button">Gem medarbejder</button><button id="mdAnnuller" type="button">Tilbage</button></div>
+</div>
+</dialog>
 <dialog id="rd" style="max-width:min(680px,94vw)"><h3>Regler i planen</h3><div id="rt" style="max-height:62vh;overflow:auto;font-size:14px"></div><div class="row"><button id="rx">Luk</button></div></dialog>
 <dialog id="xd"><h3>Kopiér til SmartPlan</h3>
 <div class="row"><button id="xt">Denne uge (tekst)</button><button id="xc">Alle uger (CSV)</button></div>
@@ -206,7 +273,8 @@ async function start() {
 function vaelgPlan(r) {
   raekke = r; konflikt = false; $('#konflikt').style.display = 'none';
   const pl = lesPlan(r.plan);
-  M = lavVagtplanMotor(r.opsaetning); M.T2 = pl.t2; M.EKSTRA = pl.ekstra; M.EKSTRA_REGEL = pl.ekstraRegel; M.S = pl.vagter;
+  M = lavVagtplanMotor(r.opsaetning); M.T2 = pl.t2; M.EKSTRA = pl.ekstra; M.EKSTRA_REGEL = pl.ekstraRegel;
+  M.S = pl.vagter.filter(x => M.P[x.p]); // vagter for folk der er fjernet fra medarbejderlisten
   $('#ekstraRegel').value = M.EKSTRA_REGEL.afstand + '-' + (M.EKSTRA_REGEL.begge ? 1 : 0);
   // 0 op til det antal der fjerner alle dobbelt-weekender (flere giver ingen mening)
   const maxE = Math.max(M.maxAflastning, M.EKSTRA);
@@ -216,7 +284,7 @@ function vaelgPlan(r) {
   $('#butikNavn').textContent = butikNavn(r);
   $('#titel').textContent = r.opsaetning.titel || 'Vagtplan';
   document.title = r.opsaetning.titel || 'Vagtplan';
-  $('#rt').innerHTML = (r.opsaetning.regler || []).map(x => `<p><b>${esc(x.titel)}:</b> ${esc(x.tekst)}</p>`).join('') + FORSLAG_FORKLARING;
+  $('#rt').innerHTML = reglerHtml(r.opsaetning);
   gemStatus('');
   if (!M.S.length) { foreslaa(); return; }
   render();
@@ -239,13 +307,14 @@ $('#planValg').onchange = e => vaelgPlan(planer.find(p => p.id == e.target.value
 // stadig har det opdateret_at vi sidst saa -- har en anden (JC/MP) gemt imens, rammer den 0
 // raekker, og vi viser en advarsel i stedet for stille at overskrive deres aendringer.
 function gemStatus(t, cls) { $('#gemStatus').textContent = t; $('#gemStatus').className = cls || ''; }
-function save() {
+function save(medOpsaetning) {
   if (konflikt) return;
   const r = raekke, plan = { t2: M.T2, ekstra: M.EKSTRA, ekstraRegel: M.EKSTRA_REGEL, vagter: JSON.parse(JSON.stringify(M.S)) };
   gemStatus('Gemmer…');
   gemKaede = gemKaede.then(async () => {
     if (konflikt || r != raekke) return;
-    const { data, error } = await client.from('vagtplan').update({ plan }).eq('id', r.id).eq('opdateret_at', r.opdateret_at).select('opdateret_at');
+    const aendr = medOpsaetning ? { plan, opsaetning: r.opsaetning } : { plan };
+    const { data, error } = await client.from('vagtplan').update(aendr).eq('id', r.id).eq('opdateret_at', r.opdateret_at).select('opdateret_at');
     if (error) { gemStatus('⚠ Kunne ikke gemme – prøv igen', 'bad'); return; }
     if (!data || !data.length) { konflikt = true; $('#konflikt').style.display = 'block'; gemStatus('⚠ Ikke gemt', 'bad'); return; }
     r.opdateret_at = data[0].opdateret_at; r.plan = plan;
@@ -267,6 +336,27 @@ document.addEventListener('visibilitychange', async () => {
   const { data } = await client.from('vagtplan').select('opdateret_at').eq('id', raekke.id).maybeSingle();
   if (data && data.opdateret_at != raekke.opdateret_at) hentIgen();
 });
+
+// ---------- Regler og medarbejdere ----------
+// Regler-dialogen: de generelle regler fra databasen + én linje pr. medarbejder, skrevet ud
+// fra medarbejder-opsaetningen, saa teksten altid passer til det planen faktisk regner med.
+function reglerHtml(C) {
+  const O = window.VagtplanOpsaetning, job = C.jobtyper || {};
+  return (C.regler || []).map(x => `<p><b>${esc(x.titel)}:</b> ${esc(x.tekst)}</p>`).join('')
+    + '<h4 style="margin:14px 0 4px">Medarbejdere</h4>'
+    + O.tilModel(C).map(m => `<p><b>${esc(m.navn)}</b> (${esc(job[m.type] || '')}): ${esc(O.beskriv(m))}.</p>`).join('')
+    + FORSLAG_FORKLARING;
+}
+// Ny medarbejder-opsaetning: motoren bygges om med samme indstillinger, og vagter for folk der
+// ikke findes mere fjernes fra planen.
+function genopbygMotor(C) {
+  const t2 = M.T2, ek = M.EKSTRA, rg = M.EKSTRA_REGEL, S = M.S;
+  raekke.opsaetning = C;
+  M = lavVagtplanMotor(C); M.T2 = t2; M.EKSTRA = ek; M.EKSTRA_REGEL = rg;
+  M.S = S.filter(x => M.P[x.p]);
+  $('#rt').innerHTML = reglerHtml(C);
+}
+$('#medarbejdere').onclick = () => aabnMedarbejdere();
 
 // ---------- Forslag ----------
 // M.foreslaa() (motor.js) proever baade "2 pers. fra 15:00" og "fra 15:15" og tusindvis af
@@ -307,7 +397,7 @@ function render() {
   const ps = Object.keys(P).filter(p => p != 'uk'), nx = Math.max(0, ...EX.filter(Boolean));
   $('#hrs').innerHTML = '<table><tr><th></th>' + WK.map(w => `<th>Uge ${w + 1}</th>`).join('') + '<th>Snit</th></tr>' + ps.map(p => {
     const h = WK.map(w => M.hrs(p, w)), a = h.reduce((x, y) => x + y) / NW, m = M.minSnit(p), u = M.ugeTimer(p), bad = (m && a < m) || (u != null && h.some(x => x != u));
-    return `<tr><td>${esc(P[p][0])} <small>${esc(R[P[p][1]])}</small></td>${h.map(x => `<td>${x}</td>`).join('')}<td class="${bad ? 'w' : ''}">${a.toFixed(1)}${m ? ' (min ' + m + ')' : ''}</td></tr>`;
+    return `<tr><td><button type="button" class="navn-knap" data-person="${esc(p)}" title="Ret ${esc(P[p][0])}">${esc(P[p][0])}</button> <small>${esc(R[P[p][1]])}</small></td>${h.map(x => `<td>${x}</td>`).join('')}<td class="${bad ? 'w' : ''}">${a.toFixed(1)}${m ? ' (min ' + m + ')' : ''}</td></tr>`;
   }).join('') + Array.from({ length: Math.max(nx, M.EKSTRA) }, (_, k) => {
     const hh = WK.map(w => M.S.reduce((a, x, i) => a + (EX[i] == k + 1 && x.w == w ? (x.e - x.s) / 60 : 0), 0));
     return `<tr><td>Ekstra person ${k + 1} <small>skal findes</small></td>${hh.map(x => `<td>${x}</td>`).join('')}<td>${(hh.reduce((a, b) => a + b) / NW).toFixed(1)}</td></tr>`;
@@ -318,6 +408,7 @@ document.addEventListener('click', e => {
   if (t.dataset.w !== undefined) { W = +t.dataset.w; render(); }
   if (t.dataset.i !== undefined) openE(+t.dataset.i, M.S[+t.dataset.i].d);
   if (t.dataset.add !== undefined) openE(null, +t.dataset.add);
+  if (t.dataset.person !== undefined) aabnMedarbejdere(t.dataset.person);
 });
 function openE(i, d) {
   const { P, R, D, O, f } = M;
@@ -356,4 +447,6 @@ if (window.top !== window) {
   $('#statuslinje').appendChild($('#gemStatus'));
   start().catch(() => vis('loginVis'));
 }
-</script></body></html>
+</script>
+<script src="medarbejdere.js?v=2026-09-24-6"></script>
+</body></html>
