@@ -23,8 +23,8 @@ window.addEventListener('storage', e => { if (e.key === 'blho-tema') saetTema();
 if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('change', saetTema);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="motor.js?v=2026-09-24-10"></script>
-<script src="opsaetning.js?v=2026-09-24-10"></script>
+<script src="motor.js?v=2026-09-24-11"></script>
+<script src="opsaetning.js?v=2026-09-24-11"></script>
 <style>
 /* Farverne ligger som variabler, saa lys/moerk tilstand styres ét sted. Temaet vaelges med
    knappen i butik-redigerings topbar og deles via localStorage 'blho-tema' (se <head>). */
@@ -146,6 +146,11 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
 .md-dag.fri .md-tider{visibility:hidden}
 #mdFejl{color:var(--bad);font-size:14px;margin-top:8px}
 .indhold .navn-knap{border:0;background:none;padding:0;color:inherit;font:inherit;text-decoration:underline dotted;text-underline-offset:3px;cursor:pointer}
+.ingen-plan{max-width:520px;margin:40px auto;padding:28px;text-align:center;background:var(--card);border:1px solid var(--bd);border-radius:12px}
+.ingen-plan h2{margin:0 0 6px}.ingen-plan .s{margin:0 0 16px}
+.indhold .ingen-plan .pri{padding:9px 18px}
+.fejltekst{color:var(--bad);font-size:14px;margin:10px 0 0;min-height:1em}
+#andreUgemt{color:var(--brand-tekst)}
 .konflikt{display:none;background:var(--fejl-bg);border-radius:8px;padding:10px 12px;margin:8px 0;color:var(--fejl)}
 </style></head><body>
 
@@ -190,6 +195,13 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
 <h1 id="titel">Vagtplan</h1>
 <p class="s">Rullende 6-ugers plan. Klik på en vagt for at rette den, eller på "+ vagt" for at tilføje. Reglerne tjekkes automatisk, og intet gemmes før du trykker "Gem vagtplan".</p>
 </div><button id="medarbejdere" class="md-aabn" type="button" title="Tilføj, ret eller fjern medarbejdere og deres timer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Medarbejdere</button></div>
+<div class="ingen-plan" id="ingenPlan" hidden>
+  <h2 id="ingenPlanTitel">Ingen vagtplan endnu</h2>
+  <p class="s">Opret en vagtplan, tilføj medarbejderne under "Medarbejdere", og tryk "Foreslå ny plan".</p>
+  <button class="pri" id="opretPlan" type="button">Opret vagtplan</button>
+  <p class="fejltekst" id="opretFejl" role="alert"></p>
+</div>
+<div id="planIndhold">
 <div class="konflikt" id="konflikt">Planen er blevet gemt af en anden, siden du åbnede den, så dine ændringer er ikke gemt. <button id="genindlaes">Hent den nyeste plan</button> (dine ændringer forkastes)</div>
 <div class="bar">
   <nav class="uger" id="tabs" aria-label="Vælg uge"></nav>
@@ -203,11 +215,12 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
 <option value="2-0">hver 2. weekend, én dag</option><option value="2-1">hver 2. weekend, begge dage</option>
 <option value="1-0">hver weekend, én dag</option><option value="1-1">hver weekend, begge dage</option></select></label>
 </div>
-<div class="statuslinje" id="statuslinje"><span id="stat"></span><span id="ekstraHint" class="s" hidden>Tryk "Foreslå ny plan" for at bruge de nye indstillinger.</span><span id="ugemtTekst" hidden>Ikke gemte ændringer</span><span id="lokaleKnapper"><button id="lokalFortryd" type="button" title="Fortryd (Ctrl+Z)">Fortryd</button><button id="lokalGentag" type="button" title="Gentag (Ctrl+Y)">Gentag</button><button id="lokalGem" class="pri" type="button" title="Gem vagtplan (Ctrl+S)">Gem vagtplan</button></span></div>
+<div class="statuslinje" id="statuslinje"><span id="stat"></span><span id="ekstraHint" class="s" hidden>Tryk "Foreslå ny plan" for at bruge de nye indstillinger.</span><span id="ugemtTekst" hidden>Ikke gemte ændringer</span><span id="andreUgemt" class="s" hidden></span><span id="lokaleKnapper"><button id="lokalFortryd" type="button" title="Fortryd (Ctrl+Z)">Fortryd</button><button id="lokalGentag" type="button" title="Gentag (Ctrl+Y)">Gentag</button><button id="lokalGem" class="pri" type="button" title="Gem vagtplan (Ctrl+S)">Gem vagtplan</button></span></div>
 <div class="wrap"><div class="grid" id="grid"></div></div>
 <div class="forklaring" id="forklaring"></div>
 <div class="to-kol"><div><h2>Problemer</h2><ul class="is" id="iss"></ul></div><div><h2>Ønsker der ikke er opfyldt</h2><ul class="is" id="soft"></ul></div></div>
 <div class="hrs-hoved"><h2>Timer pr. uge</h2><span class="s">Klik på et navn for at rette medarbejderen.</span></div><div class="wrap" id="hrs"></div>
+</div>
 </div>
 </div>
 
@@ -296,6 +309,66 @@ const lesPlan = p => {
   return { t2: o.t2 == 915 ? 915 : 900, ekstra: Number.isInteger(o.ekstra) ? o.ekstra : EKSTRA_STANDARD, ekstraRegel: r, vagter: o.vagter };
 };
 
+// ---------- Vagtplan pr. butik ----------
+// Vagtplanen foelger den butik der er valgt i butik-redigerings topbar (vagtplanButik /
+// vagtplanApi.skiftButik). Ikke-gemte aendringer gemmes som kladde pr. butik, saa man kan
+// skifte frem og tilbage uden at miste dem (eller fortryd-historikken).
+const FELTER = 'id, butik_id, opsaetning, plan, opdateret_at, butikker(navn)';
+let kladder = {}, aktuelButik = null;
+const STANDARD_REGLER = [
+  { titel: 'Åbningstider', tekst: 'hverdage 08:45–18:15, weekender 08:45–17:15.' },
+  { titel: 'Bemanding', tekst: '08:45–10:00 præcis 1 på arbejde. 10:00–13:00 2 på arbejde. 13:00–15:00 mindst 1. Fra 15:00 (eller 15:15) 2 på arbejde. Aldrig mere end 2 ad gangen. Der skal altid være en ansvarlig, som ikke er ungarbejder. Ungarbejdere kan ikke stå alene.' },
+  { titel: 'Vagter', tekst: 'en vagt er mindst 3 timer.' },
+  { titel: 'Weekender', tekst: 'alle arbejder højst hver 3. weekend (weekend-hold 1, 2 og 3), og helst kun lørdag eller søndag.' },
+  { titel: 'Ekstra personer', tekst: 'dækker det, som personalet ikke kan dække efter reglerne. Vælg antallet og hvor tit de må arbejde weekend, og tryk "Foreslå ny plan".' },
+];
+const nyOpsaetning = navn => ({
+  titel: 'Vagtplan – ' + navn,
+  jobtyper: { L: 'Daglig leder', S: 'Salgsassistent', F: 'Flexjob', U: 'Ungarbejder' },
+  standardPerson: null, personer: [], faste: [], weekendRotation: [[], [], []],
+  hulFyldere: [], fyldere: [], ekstraDage: [], maalTimer: [], ugeTimer: [], minSnit: [],
+  regler: STANDARD_REGLER,
+});
+function visPlanIndhold(ja) { $('#planIndhold').hidden = !ja; $('#ingenPlan').hidden = ja; $('#medarbejdere').hidden = !ja; }
+async function visButik(id, navn) {
+  if (aktuelButik && aktuelButik.id == id && raekke && raekke.butik_id == id) return;
+  if (raekke) kladder[raekke.butik_id] = { raekke, historik, hpos, gemtSnap, W };
+  aktuelButik = { id, navn };
+  $('#opretFejl').textContent = '';
+  const k = kladder[id];
+  if (k) {
+    delete kladder[id];
+    W = k.W;
+    vaelgPlan(k.raekke, true);
+    historik = k.historik; hpos = k.hpos; gemtSnap = k.gemtSnap;
+    anvendSnap(historik[hpos]);
+    return;
+  }
+  const { data, error } = await client.from('vagtplan').select(FELTER).eq('butik_id', id).maybeSingle();
+  if (!aktuelButik || aktuelButik.id != id) return; // der er skiftet butik igen imens
+  if (error) { vis('ingenAdgangVis'); $('#ingenAdgangTekst').textContent = 'Kunne ikke hente vagtplanen. Prøv igen om lidt.'; return; }
+  vis('app');
+  if (!data) {
+    raekke = null; M = null; historik = []; hpos = 0; gemtSnap = undefined; konflikt = false;
+    $('#ingenPlanTitel').textContent = navn + ' har ingen vagtplan endnu';
+    $('#opretPlan').textContent = 'Opret vagtplan for ' + navn;
+    $('#titel').textContent = 'Vagtplan – ' + navn;
+    visPlanIndhold(false); meld();
+    return;
+  }
+  W = 0;
+  vaelgPlan(data);
+}
+$('#opretPlan').onclick = async () => {
+  if (!aktuelButik) return;
+  const b = aktuelButik, knap = $('#opretPlan');
+  knap.disabled = true;
+  const { data, error } = await client.from('vagtplan').insert({ butik_id: b.id, opsaetning: nyOpsaetning(b.navn) }).select(FELTER).single();
+  knap.disabled = false;
+  if (error || !data) { $('#opretFejl').textContent = 'Vagtplanen blev ikke oprettet. Tjek at du har adgang til ' + b.navn + ', og prøv igen.'; return; }
+  if (aktuelButik && aktuelButik.id == b.id) { vaelgPlan(data); aabnMedarbejdere(); }
+};
+
 // ---------- Login / adgang ----------
 async function start() {
   const { data: { user } } = await client.auth.getUser();
@@ -304,7 +377,10 @@ async function start() {
   // (Selve data er ogsaa beskyttet af RLS, saa dette er kun for at vise en paen besked.)
   const { data: adg } = await client.from('vagtplan_adgang').select('bruger_id').eq('bruger_id', user.id).maybeSingle();
   if (!adg) { vis('ingenAdgangVis'); return; }
-  const { data, error } = await client.from('vagtplan').select('id, butik_id, opsaetning, plan, opdateret_at, butikker(navn)');
+  let fraTopbar = null;
+  try { fraTopbar = window.parent !== window && window.parent.vagtplanButik && window.parent.vagtplanButik(); } catch (e) {}
+  if (fraTopbar && fraTopbar.id) { vis('app'); await visButik(fraTopbar.id, fraTopbar.navn); return; }
+  const { data, error } = await client.from('vagtplan').select(FELTER);
   if (error || !data || !data.length) { vis('ingenAdgangVis'); $('#ingenAdgangTekst').textContent = error ? 'Kunne ikke hente vagtplanen. Prøv igen om lidt.' : 'Der er ikke oprettet nogen vagtplan endnu.'; return; }
   planer = data.sort((a, b) => butikNavn(a).localeCompare(butikNavn(b), 'da'));
   $('#planValg').innerHTML = planer.map(p => `<option value="${esc(p.id)}">${esc(butikNavn(p) || p.id)}</option>`).join('');
@@ -313,8 +389,10 @@ async function start() {
   vis('app');
   vaelgPlan(planer[0]);
 }
-function vaelgPlan(r) {
+function vaelgPlan(r, bevar) {
   raekke = r; konflikt = false; $('#konflikt').style.display = 'none';
+  visPlanIndhold(true);
+  if (!aktuelButik || aktuelButik.id != r.butik_id) aktuelButik = { id: r.butik_id, navn: butikNavn(r) };
   const pl = lesPlan(r.plan);
   M = lavVagtplanMotor(r.opsaetning); M.T2 = pl.t2; M.EKSTRA = pl.ekstra; M.EKSTRA_REGEL = pl.ekstraRegel;
   M.S = pl.vagter.filter(x => M.P[x.p]); // vagter for folk der er fjernet fra medarbejderlisten
@@ -324,8 +402,9 @@ function vaelgPlan(r) {
   document.title = r.opsaetning.titel || 'Vagtplan';
   $('#rt').innerHTML = reglerHtml(r.opsaetning);
   gemStatus('');
+  if (bevar) { render(); return; }
   nulstilHistorik();
-  if (!M.S.length) { foreslaa(); return; }
+  if (!M.S.length && r.opsaetning.personer.length) { foreslaa(); return; }
   render();
 }
 $('#loginForm').addEventListener('submit', async e => {
@@ -365,15 +444,18 @@ function aendret() {
 function gaaTil(i) {
   if (i < 0 || i >= historik.length || i == hpos) return;
   hpos = i;
-  const o = JSON.parse(historik[i]);
+  anvendSnap(historik[i]);
+}
+function anvendSnap(s) {
+  const o = JSON.parse(s);
   if (JSON.stringify(o.opsaetning) !== JSON.stringify(raekke.opsaetning)) genopbygMotor(o.opsaetning);
   M.T2 = o.plan.t2; M.EKSTRA = o.plan.ekstra; M.EKSTRA_REGEL = o.plan.ekstraRegel;
   M.S = o.plan.vagter.filter(x => M.P[x.p]);
   opdaterKontroller(); render(); meld();
 }
-const fortryd = () => gaaTil(hpos - 1), gentag = () => gaaTil(hpos + 1);
+const fortryd = () => { if (raekke) gaaTil(hpos - 1); }, gentag = () => { if (raekke) gaaTil(hpos + 1); };
 async function gem() {
-  if (gemmer || konflikt || !ugemt()) return;
+  if (!raekke || gemmer || konflikt || !ugemt()) return;
   const r = raekke, s = historik[hpos], o = JSON.parse(s);
   gemmer = true; meld();
   const { data, error } = await client.from('vagtplan').update({ plan: o.plan, opsaetning: o.opsaetning })
@@ -386,8 +468,11 @@ async function gem() {
 }
 // Meld tilstanden til topbaren (eller vis egne knapper, hvis topbaren er en aeldre udgave)
 function meld() {
-  const st = { kanFortryde: hpos > 0, kanGentage: hpos < historik.length - 1, ugemt: ugemt(), gemmer, konflikt };
+  const andre = Object.values(kladder).filter(k => k.historik[k.hpos] !== k.gemtSnap).map(k => butikNavn(k.raekke));
+  const st = { kanFortryde: hpos > 0, kanGentage: hpos < historik.length - 1, ugemt: ugemt(), ugemtAndre: andre.length > 0, gemmer, konflikt };
   $('#ugemtTekst').hidden = !st.ugemt || konflikt;
+  $('#andreUgemt').hidden = !andre.length;
+  $('#andreUgemt').textContent = andre.length ? 'Ikke gemte ændringer i ' + andre.join(' og ') : '';
   let topbar = null;
   try { topbar = window.parent !== window && window.parent.vagtplanTilstand; } catch (e) {}
   if (topbar) topbar(st);
@@ -395,7 +480,7 @@ function meld() {
   $('#lokalFortryd').disabled = !st.kanFortryde; $('#lokalGentag').disabled = !st.kanGentage;
   $('#lokalGem').disabled = !st.ugemt || gemmer || konflikt;
 }
-window.vagtplanApi = { fortryd, gentag, gem, ugemt: () => ugemt() };
+window.vagtplanApi = { fortryd, gentag, gem, ugemt: () => ugemt(), skiftButik: (id, navn) => visButik(id, navn) };
 $('#lokalFortryd').onclick = fortryd; $('#lokalGentag').onclick = gentag; $('#lokalGem').onclick = gem;
 // Ctrl+Z / Ctrl+Y (eller Ctrl+Shift+Z) / Ctrl+S -- men ikke inde i tekstfelter og dialoger,
 // hvor browserens egen fortryd skal virke.
@@ -545,5 +630,5 @@ if (window.top !== window) {
   start().catch(() => vis('loginVis'));
 }
 </script>
-<script src="medarbejdere.js?v=2026-09-24-10"></script>
+<script src="medarbejdere.js?v=2026-09-24-11"></script>
 </body></html>

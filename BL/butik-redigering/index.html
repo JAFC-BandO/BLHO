@@ -113,6 +113,10 @@
     padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600;
   }
   .topbar-actions { display: flex; align-items: center; gap: 10px; }
+  /* "Skift butik" skal flugte med de andre pills i topbaren: den generelle label-regel
+     (margin-top 16px) skubbede teksten ned, og dropdown'en var lavere end pills'ene. */
+  #mineButikkerWrap label { margin: 0; }
+  #mineButikkerSelect { height: 28px; padding: 0 8px 0 12px; }
   .logout { font-size: 13px; color: #888; cursor: pointer; text-decoration: underline; }
   #saveBtn { padding: 8px 18px; }
 
@@ -489,6 +493,10 @@
   html[data-tema="moerk"] .tema-knap { background: var(--ui-flade-blaa); color: var(--ui-brand-tekst); }
   html[data-tema="moerk"] .tema-knap:hover { background: #313866; }
   .tema-knap-login { position: fixed; top: 16px; right: 16px; z-index: 10; }
+  /* Tema-skift: det nye tema toerres ned over hele siden (inkl. vagtplan-fanen) oppefra */
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+  ::view-transition-new(root) { animation: tema-swipe .65s cubic-bezier(.65, 0, .35, 1) both; }
+  @keyframes tema-swipe { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
 </style>
 </head>
 <body>
@@ -1166,7 +1174,12 @@
   }
   function skiftTema() {
     try { localStorage.setItem('blho-tema', TEMA_NAESTE[temaValg()]); } catch (e) { /* blokeret -- saa skifter den ikke */ }
-    anvendTema();
+    // Det nye tema "toerres" ned over siden oppefra (View Transitions, se ::view-transition
+    // i CSS'en). Uden browser-understoettelse, eller naar man har bedt om faerre animationer,
+    // skiftes der bare med det samme.
+    const faerreAnimationer = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (document.startViewTransition && !faerreAnimationer) document.startViewTransition(anvendTema);
+    else anvendTema();
   }
   anvendTema();
   document.getElementById('temaKnap').addEventListener('click', skiftTema);
@@ -1397,6 +1410,7 @@
     if (liveViewPollHandle) clearInterval(liveViewPollHandle);
     liveViewPollHandle = setInterval(loadLiveView, 10000);
     redNulstil(); // ny butik: frisk fortryd-historik
+    vagtplanFoelgButik(); // vagtplanen er pr. butik
   }
 
   // Kun superadmin: skift hvilken butik man redigerer som, uden at logge ud/ind igen med den
@@ -1533,7 +1547,7 @@
         ramme.title = 'Vagtplan';
         // ?v= skal bumpes naar vagtplan/index.html aendres -- ellers kan browseren/GitHub
         // Pages' cache (op til 10 min) give den gamle side inde i fanen.
-        ramme.src = '../vagtplan/?indlejret=1&v=2026-09-24-10';
+        ramme.src = '../vagtplan/?indlejret=1&v=2026-09-24-11';
         ramme.addEventListener('load', anvendTema);
         vis.appendChild(ramme);
       }
@@ -1549,8 +1563,15 @@
   // Vagtplanen (iframen) melder sin tilstand hertil via vagtplanTilstand, og knapperne kalder
   // dens vagtplanApi. Samme domaene, saa det er direkte funktionskald.
   let vagtplanUgemt = false, vagtplanKan = { fortryd: false, gentag: false };
+  // Vagtplanen er pr. butik og foelger butikken i topbaren
+  window.vagtplanButik = () => ({ id: currentButikId, navn: document.getElementById('butikNavn').textContent });
+  function vagtplanFoelgButik() {
+    const a = vagtplanApi();
+    if (a && a.skiftButik && currentButikId) a.skiftButik(currentButikId, document.getElementById('butikNavn').textContent);
+  }
   window.vagtplanTilstand = (st) => {
-    vagtplanUgemt = !!st.ugemt;
+    // ugemtAndre: kladder i andre butikker -- advarslen ved luk/log ud skal ogsaa gaelde dem
+    vagtplanUgemt = !!(st.ugemt || st.ugemtAndre);
     vagtplanKan = { fortryd: !!st.kanFortryde, gentag: !!st.kanGentage };
     opdaterFortrydKnapper();
     const gem = document.getElementById('vpGem');
