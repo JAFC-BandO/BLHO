@@ -35,7 +35,7 @@
     const m = id ? model.find(x => x.id == id) : null;
     aaben = m ? JSON.parse(JSON.stringify(m)) : {
       id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), navn: '', type: 'S',
-      hverdag: [O.AABEN, O.LUK_HVERDAG], weekend: null, ikkeDage: [], timer: { art: 'ingen' },
+      dage: [0, 1, 2, 3, 4].map(() => [O.AABEN, O.LUK_HVERDAG]).concat([null, null]), timer: { art: 'ingen' },
       kunFaste: false, fordeles: true, vagter: [], ny: true,
     };
     $('#mdTitel').textContent = m ? 'Ret ' + m.navn : 'Ny medarbejder';
@@ -46,11 +46,7 @@
     const orden = k => { const i = ['L', 'S', 'F', 'U'].indexOf(k); return i < 0 ? 99 : i; };
     $('#mdType').innerHTML = Object.keys(raekke.opsaetning.jobtyper || {}).sort((x, y) => orden(x) - orden(y)).map(k => `<option value="${esc(k)}">${esc(job(k))}</option>`).join('');
     $('#mdType').value = a.type;
-    $('#mdHverdagJa').checked = !!a.hverdag;
-    $('#mdHverdagFra').value = kl((a.hverdag || [O.AABEN])[0]); $('#mdHverdagTil').value = kl((a.hverdag || [0, O.LUK_HVERDAG])[1]);
-    document.querySelectorAll('#mdIkkeDage input').forEach(c => { c.checked = a.ikkeDage.includes(+c.value); });
-    $('#mdWeekendJa').checked = !!a.weekend;
-    $('#mdWeekendFra').value = kl((a.weekend || [O.AABEN])[0]); $('#mdWeekendTil').value = kl((a.weekend || [0, O.LUK_WEEKEND])[1]);
+    tegnDage(a.dage);
     $('#mdTimerArt').value = a.timer.art;
     $('#mdTimerT').value = a.timer.t != null ? a.timer.t : '';
     $('#mdFridag').checked = !!a.timer.fridag;
@@ -60,10 +56,40 @@
     tegnVagter(); opdaterFelter();
     $('#mdNavn').focus();
   }
+  // Én linje pr. dag: kryds + fra/til. En dag uden kryds har tiderne skjult (men husket, saa
+  // et nyt kryds giver de samme tider tilbage).
+  function tegnDage(dage) {
+    $('#mdDage').innerHTML = DAGE.map((n, d) => {
+      const v = dage[d] || [O.AABEN, luk(d)];
+      return `<div class="md-dag ${dage[d] ? '' : 'fri'}" data-dag="${d}">
+        <label><input type="checkbox" data-dag-ja="${d}" ${dage[d] ? 'checked' : ''}> ${n}</label>
+        <span class="md-tider">fra <input type="time" step="900" data-dag-fra="${d}" value="${kl(v[0])}" aria-label="${n} fra"> til <input type="time" step="900" data-dag-til="${d}" value="${kl(v[1])}" aria-label="${n} til"></span>
+      </div>`;
+    }).join('');
+  }
+  const dagJa = d => document.querySelector(`[data-dag-ja="${d}"]`);
+  const saetDag = (d, ja) => { dagJa(d).checked = ja; document.querySelector(`.md-dag[data-dag="${d}"]`).classList.toggle('fri', !ja); };
+  $('#mdDage').addEventListener('change', e => {
+    const d = e.target.dataset.dagJa; if (d !== undefined) saetDag(+d, e.target.checked);
+  });
+  document.querySelector('.md-hurtig').addEventListener('click', e => {
+    const b = e.target.closest('[data-vaelg]'); if (!b) return;
+    const v = b.dataset.vaelg;
+    if (v == 'samme') {
+      const foerste = [0, 1, 2, 3, 4, 5, 6].find(d => dagJa(d).checked);
+      if (foerste == null) return;
+      const fra = document.querySelector(`[data-dag-fra="${foerste}"]`).value, til = tid(document.querySelector(`[data-dag-til="${foerste}"]`).value);
+      [0, 1, 2, 3, 4, 5, 6].filter(d => dagJa(d).checked).forEach(d => {
+        document.querySelector(`[data-dag-fra="${d}"]`).value = fra;
+        document.querySelector(`[data-dag-til="${d}"]`).value = kl(Math.min(til, luk(d))); // weekend lukker 17:15
+      });
+      return;
+    }
+    const valgt = { hverdage: [0, 1, 2, 3, 4], weekend: [5, 6], alle: [0, 1, 2, 3, 4, 5, 6], ingen: [] }[v];
+    [0, 1, 2, 3, 4, 5, 6].forEach(d => saetDag(d, v == 'hverdage' || v == 'weekend' ? (valgt.includes(d) || dagJa(d).checked) : valgt.includes(d)));
+  });
   // Viser/skjuler de felter der kun giver mening i en bestemt situation
   function opdaterFelter() {
-    $('#mdHverdagTider').hidden = !$('#mdHverdagJa').checked;
-    $('#mdWeekendTider').hidden = !$('#mdWeekendJa').checked;
     const art = $('#mdTimerArt').value;
     $('#mdTimerTal').hidden = art == 'ingen';
     $('#mdFridagFelt').hidden = art != 'praecis';
@@ -94,7 +120,7 @@
     aaben.vagter.splice(+b.dataset.sletVagt, 1); tegnVagter();
   });
   $('#mdNyVagt').onclick = () => { aaben.vagter.push({ d: 0, s: 600, e: 780, hold: null }); tegnVagter(); };
-  ['#mdHverdagJa', '#mdWeekendJa', '#mdTimerArt', '#mdKunFaste'].forEach(s => $(s).addEventListener('change', opdaterFelter));
+  ['#mdTimerArt', '#mdKunFaste'].forEach(s => $(s).addEventListener('change', opdaterFelter));
 
   // ---------- Gem ----------
   function laesForm() {
@@ -103,17 +129,14 @@
     a.type = $('#mdType').value;
     if (!a.navn) fejl.push('Skriv et navn.');
     else if (model.some(m => m.id != a.id && m.navn.toLowerCase() == a.navn.toLowerCase())) fejl.push('Der findes allerede en medarbejder med det navn.');
-    const vindue = (ja, fra, til, lukT, hvad) => {
-      if (!ja) return null;
-      const s = tid(fra), e = tid(til);
-      if (isNaN(s) || isNaN(e) || s >= e) { fejl.push(`${hvad}: "fra" skal være før "til".`); return null; }
-      if (s < O.AABEN || e > lukT) fejl.push(`${hvad}: butikken har åbent ${kl(O.AABEN)}–${kl(lukT)}.`);
-      if (e - s < 180) fejl.push(`${hvad}: der skal være mindst 3 timer (en vagt er mindst 3 timer).`);
+    a.dage = DAGE.map((n, d) => {
+      if (!dagJa(d).checked) return null;
+      const s = tid(document.querySelector(`[data-dag-fra="${d}"]`).value), e = tid(document.querySelector(`[data-dag-til="${d}"]`).value);
+      if (isNaN(s) || isNaN(e) || s >= e) { fejl.push(`${n}: "fra" skal være før "til".`); return null; }
+      if (s < O.AABEN || e > luk(d)) fejl.push(`${n}: butikken har åbent ${kl(O.AABEN)}–${kl(luk(d))}.`);
+      if (e - s < 180) fejl.push(`${n}: der skal være mindst 3 timer (en vagt er mindst 3 timer).`);
       return [s, e];
-    };
-    a.hverdag = vindue($('#mdHverdagJa').checked, $('#mdHverdagFra').value, $('#mdHverdagTil').value, O.LUK_HVERDAG, 'Hverdage');
-    a.weekend = vindue($('#mdWeekendJa').checked, $('#mdWeekendFra').value, $('#mdWeekendTil').value, O.LUK_WEEKEND, 'Weekend');
-    a.ikkeDage = [...document.querySelectorAll('#mdIkkeDage input:checked')].map(c => +c.value);
+    });
     const art = $('#mdTimerArt').value, t = parseFloat(String($('#mdTimerT').value).replace(',', '.'));
     if (art != 'ingen' && !(t > 0 && t <= 60)) fejl.push('Skriv antal timer (mellem 0 og 60).');
     a.timer = art == 'ingen' ? { art } : art == 'praecis' ? { art, t, fridag: $('#mdFridag').checked } : { art, t };

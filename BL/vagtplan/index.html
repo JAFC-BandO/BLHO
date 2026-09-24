@@ -23,8 +23,8 @@ window.addEventListener('storage', e => { if (e.key === 'blho-tema') saetTema();
 if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('change', saetTema);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="motor.js?v=2026-09-24-9"></script>
-<script src="opsaetning.js?v=2026-09-24-9"></script>
+<script src="motor.js?v=2026-09-24-10"></script>
+<script src="opsaetning.js?v=2026-09-24-10"></script>
 <style>
 /* Farverne ligger som variabler, saa lys/moerk tilstand styres ét sted. Temaet vaelges med
    knappen i butik-redigerings topbar og deles via localStorage 'blho-tema' (se <head>). */
@@ -137,6 +137,13 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
 .md-vagt .md-slet-vagt{padding:4px 9px;color:var(--bad)}
 .md-ingen{margin:4px 0}
 .slukket{opacity:.5}
+.md-hurtig{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}
+.md-hurtig button{font-size:13px;padding:4px 10px}
+.md-dag{display:grid;grid-template-columns:8.5em auto;align-items:center;gap:8px;padding:3px 0}
+#md .md-dag label{margin:0}
+.md-dag .md-tider{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.md-dag .md-tider input{width:auto}
+.md-dag.fri .md-tider{visibility:hidden}
 #mdFejl{color:var(--bad);font-size:14px;margin-top:8px}
 .indhold .navn-knap{border:0;background:none;padding:0;color:inherit;font:inherit;text-decoration:underline dotted;text-underline-offset:3px;cursor:pointer}
 .konflikt{display:none;background:var(--fejl-bg);border-radius:8px;padding:10px 12px;margin:8px 0;color:var(--fejl)}
@@ -221,13 +228,9 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
   <label>Jobtype<select id="mdType"></select></label>
   <p class="md-hjaelp">Ungarbejdere kan ikke stå alene og tæller ikke som ansvarlig. Alle andre jobtyper tæller som ansvarlig.</p>
   <fieldset><legend>Hvornår kan personen arbejde?</legend>
-    <div class="md-linje"><label><input type="checkbox" id="mdHverdagJa"> Hverdage</label>
-      <span class="md-linje" id="mdHverdagTider">fra <input type="time" step="900" id="mdHverdagFra" aria-label="Hverdage fra"> til <input type="time" step="900" id="mdHverdagTil" aria-label="Hverdage til"></span></div>
-    <div class="md-linje" id="mdIkkeDage"><span class="md-hjaelp" style="margin:0">Ikke disse dage:</span>
-      <label><input type="checkbox" value="0"> man</label><label><input type="checkbox" value="1"> tirs</label><label><input type="checkbox" value="2"> ons</label><label><input type="checkbox" value="3"> tors</label><label><input type="checkbox" value="4"> fre</label></div>
-    <div class="md-linje"><label><input type="checkbox" id="mdWeekendJa"> Weekend</label>
-      <span class="md-linje" id="mdWeekendTider">fra <input type="time" step="900" id="mdWeekendFra" aria-label="Weekend fra"> til <input type="time" step="900" id="mdWeekendTil" aria-label="Weekend til"></span></div>
-    <p class="md-hjaelp">Butikken har åbent 08:45–18:15 på hverdage og 08:45–17:15 i weekenden.</p>
+    <div class="md-hurtig"><button type="button" data-vaelg="hverdage">Hverdage</button><button type="button" data-vaelg="weekend">Weekend</button><button type="button" data-vaelg="alle">Alle dage</button><button type="button" data-vaelg="ingen">Ingen</button><button type="button" data-vaelg="samme" title="Brug tiderne fra den første valgte dag på alle valgte dage">Samme tider på alle valgte dage</button></div>
+    <div id="mdDage"></div>
+    <p class="md-hjaelp">Sæt kryds ved de dage, personen kan arbejde, og hvornår. Butikken har åbent 08:45–18:15 på hverdage og 08:45–17:15 i weekenden.</p>
   </fieldset>
   <fieldset><legend>Timer</legend>
     <div class="md-linje"><select id="mdTimerArt" aria-label="Timekrav">
@@ -542,5 +545,5 @@ if (window.top !== window) {
   start().catch(() => vis('loginVis'));
 }
 </script>
-<script src="medarbejdere.js?v=2026-09-24-9"></script>
+<script src="medarbejdere.js?v=2026-09-24-10"></script>
 </body></html>

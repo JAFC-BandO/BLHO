@@ -134,9 +134,9 @@
   body.fane-vagtplan #app > .main,
   body.fane-vagtplan #faellesSlideBanner,
   body.fane-vagtplan #masterEditBanner { display: none !important; }
-  /* Gem-pladsen: paa butiks-fanen "Gem ændringer" (skaermindholdet), paa vagtplan-fanen
-     Fortryd/Gentag/"Gem vagtplan". Pladsen har fast bredde, saa ?- og tema-knappen staar
-     samme sted paa begge faner. */
+  /* Gem-pladsen: Fortryd/Gentag (virker paa den fane man staar paa) + "Gem ændringer"
+     (skaermindholdet) paa butiks-fanen eller "Gem vagtplan" paa vagtplan-fanen. Fast bredde,
+     saa ?- og tema-knappen staar samme sted paa begge faner. */
   .gem-plads { display: flex; justify-content: flex-end; align-items: center; gap: 6px; width: 226px; }
   #saveBtn, #vpGem { min-width: 140px; }
   .vp-handlinger { display: none; align-items: center; gap: 6px; }
@@ -582,10 +582,10 @@
       <span id="guideOpenBtn" title="Se guiden til systemet" style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:var(--ui-flade-blaa); color:var(--ui-brand-tekst); font-weight:700; font-size:14px; cursor:pointer; user-select:none;">?</span>
       <button type="button" class="tema-knap" id="temaKnap"></button>
       <div class="gem-plads">
+        <button type="button" class="vp-ikon" id="fortrydKnap" title="Fortryd (Ctrl+Z)" aria-label="Fortryd" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+        <button type="button" class="vp-ikon" id="gentagKnap" title="Gentag (Ctrl+Y)" aria-label="Gentag" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
         <button id="saveBtn">Gem ændringer</button>
         <span class="vp-handlinger">
-          <button type="button" class="vp-ikon" id="vpFortryd" title="Fortryd (Ctrl+Z)" aria-label="Fortryd" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
-          <button type="button" class="vp-ikon" id="vpGentag" title="Gentag (Ctrl+Y)" aria-label="Gentag" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
           <button type="button" id="vpGem" title="Gem vagtplan (Ctrl+S)" disabled>Gemt ✓</button>
         </span>
       </div>
@@ -1396,6 +1396,7 @@
     await loadLiveView();
     if (liveViewPollHandle) clearInterval(liveViewPollHandle);
     liveViewPollHandle = setInterval(loadLiveView, 10000);
+    redNulstil(); // ny butik: frisk fortryd-historik
   }
 
   // Kun superadmin: skift hvilken butik man redigerer som, uden at logge ud/ind igen med den
@@ -1523,6 +1524,7 @@
     aktivFane = fane;
     document.body.classList.toggle('fane-vagtplan', fane === 'vagtplan');
     document.querySelectorAll('.hovedfane').forEach(b => b.classList.toggle('aktiv', b.dataset.fane === fane));
+    opdaterFortrydKnapper();
     history.replaceState(null, '', location.pathname + location.search + (fane === 'vagtplan' ? '#vagtplan' : ''));
     if (fane === 'vagtplan') {
       const vis = document.getElementById('vagtplanVisning');
@@ -1531,7 +1533,7 @@
         ramme.title = 'Vagtplan';
         // ?v= skal bumpes naar vagtplan/index.html aendres -- ellers kan browseren/GitHub
         // Pages' cache (op til 10 min) give den gamle side inde i fanen.
-        ramme.src = '../vagtplan/?indlejret=1&v=2026-09-24-9';
+        ramme.src = '../vagtplan/?indlejret=1&v=2026-09-24-10';
         ramme.addEventListener('load', anvendTema);
         vis.appendChild(ramme);
       }
@@ -1546,11 +1548,11 @@
   // ---------- Vagtplanens gem/fortryd i topbaren ----------
   // Vagtplanen (iframen) melder sin tilstand hertil via vagtplanTilstand, og knapperne kalder
   // dens vagtplanApi. Samme domaene, saa det er direkte funktionskald.
-  let vagtplanUgemt = false;
+  let vagtplanUgemt = false, vagtplanKan = { fortryd: false, gentag: false };
   window.vagtplanTilstand = (st) => {
     vagtplanUgemt = !!st.ugemt;
-    document.getElementById('vpFortryd').disabled = !st.kanFortryde;
-    document.getElementById('vpGentag').disabled = !st.kanGentage;
+    vagtplanKan = { fortryd: !!st.kanFortryde, gentag: !!st.kanGentage };
+    opdaterFortrydKnapper();
     const gem = document.getElementById('vpGem');
     gem.disabled = !st.ugemt || st.gemmer || st.konflikt;
     gem.textContent = st.gemmer ? 'Gemmer…' : st.ugemt ? 'Gem vagtplan' : 'Gemt ✓';
@@ -1559,20 +1561,102 @@
     const ramme = document.querySelector('#vagtplanVisning iframe');
     try { return ramme && ramme.contentWindow && ramme.contentWindow.vagtplanApi; } catch (e) { return null; }
   };
-  document.getElementById('vpFortryd').addEventListener('click', () => { const a = vagtplanApi(); if (a) a.fortryd(); });
-  document.getElementById('vpGentag').addEventListener('click', () => { const a = vagtplanApi(); if (a) a.gentag(); });
+  // Fortryd/Gentag-knapperne i topbaren virker paa den fane man staar paa
+  function opdaterFortrydKnapper() {
+    const kan = aktivFane === 'vagtplan' ? vagtplanKan : { fortryd: redPos > 0, gentag: redPos < redHist.length - 1 };
+    document.getElementById('fortrydKnap').disabled = !kan.fortryd;
+    document.getElementById('gentagKnap').disabled = !kan.gentag;
+  }
+  document.getElementById('fortrydKnap').addEventListener('click', () => {
+    if (aktivFane === 'vagtplan') { const a = vagtplanApi(); if (a) a.fortryd(); } else redFortryd();
+  });
+  document.getElementById('gentagKnap').addEventListener('click', () => {
+    if (aktivFane === 'vagtplan') { const a = vagtplanApi(); if (a) a.gentag(); } else redGentag();
+  });
   document.getElementById('vpGem').addEventListener('click', () => { const a = vagtplanApi(); if (a) a.gem(); });
-  // Genveje, naar fokus er i topbaren (inde i vagtplanen haandterer den dem selv)
+  // Genveje. Paa vagtplan-fanen, naar fokus er i topbaren (inde i vagtplanen haandterer den
+  // dem selv). Paa butiks-fanen Ctrl+Z/Ctrl+Y til skaerm-redigeringens historik -- men ikke
+  // mens man skriver i et tekstfelt, hvor browserens egen fortryd skal virke.
   document.addEventListener('keydown', (e) => {
-    if (aktivFane !== 'vagtplan' || !(e.ctrlKey || e.metaKey)) return;
+    if (!(e.ctrlKey || e.metaKey)) return;
     const t = e.target;
     if (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return;
-    const a = vagtplanApi(), k = e.key.toLowerCase();
+    const k = e.key.toLowerCase();
+    if (aktivFane === 'butik') {
+      if (app.style.display === 'none') return;
+      if (k === 'z' && !e.shiftKey) { e.preventDefault(); redFortryd(); }
+      else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redGentag(); }
+      return;
+    }
+    const a = vagtplanApi();
     if (!a) return;
     if (k === 's') { e.preventDefault(); a.gem(); }
     else if (k === 'z' && !e.shiftKey) { e.preventDefault(); a.fortryd(); }
     else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); a.gentag(); }
   });
+  // ---------- Fortryd / Gentag i skaerm-redigeringen ----------
+  // Historikken foelger TILSTANDEN (sider, aktiv side, "vis her", eller skabelonens/slidets
+  // elementer i de to saerlige tilstande) i stedet for at hver eneste aendrings-sted skal
+  // melde sig: efter hver handling (slip af musen, tast, aendring i et felt, upload ...)
+  // sammenlignes tilstanden med historikkens seneste, og er den anderledes, laegges den paa.
+  // Historikken nulstilles naar man skifter butik eller gaar ind/ud af faelles skabelon eller
+  // faelles slide -- saa en fortryd aldrig kan blande indhold fra to steder sammen.
+  // "Gem ændringer" er uaendret: man kan fortryde baade foer og efter man har gemt.
+  let redHist = [], redPos = 0, redKontekst = null, redTimer = null, markoerNede = false;
+  const redNoegle = () => masterEditMode ? 'master' : faellesSlideEditMode ? 'slide:' + faellesSlideRedigerIndex : 'butik:' + currentButikId;
+  function redSnap() {
+    if (masterEditMode || faellesSlideEditMode) return JSON.stringify({ elements, baggrundsfarve });
+    const egne = stripLockedMasterElements(elements);
+    return JSON.stringify({
+      sider: sider.map(s => s.id === aktivSideId ? Object.assign({}, s, { elements: egne, background: baggrundsfarve }) : s),
+      aktivSideId, synligSideId,
+    });
+  }
+  function redTjek() {
+    if (!currentButikId || app.style.display === 'none') return;
+    const k = redNoegle(), s = redSnap();
+    if (k !== redKontekst) { redKontekst = k; redHist = [s]; redPos = 0; }
+    else if (s !== redHist[redPos]) {
+      redHist = redHist.slice(0, redPos + 1); redHist.push(s);
+      if (redHist.length > 100) redHist.shift();
+      redPos = redHist.length - 1;
+    }
+    opdaterFortrydKnapper();
+  }
+  function redNulstil() { redKontekst = null; redTjek(); }
+  function redGaaTil(i) {
+    if (i < 0 || i >= redHist.length || i === redPos) return;
+    redPos = i;
+    const o = JSON.parse(redHist[i]);
+    if (masterEditMode || faellesSlideEditMode) {
+      elements = o.elements; baggrundsfarve = o.baggrundsfarve;
+    } else {
+      sider = o.sider; synligSideId = o.synligSideId;
+      const side = sider.find(s => s.id === o.aktivSideId) || sider[0];
+      aktivSideId = side.id; elements = side.elements; baggrundsfarve = side.background;
+    }
+    if (selectedElementId && !elements.some(e => e.id === selectedElementId)) selectedElementId = null;
+    armedElementId = null;
+    canvas.style.background = baggrundsfarve;
+    if (!masterEditMode && !faellesSlideEditMode) renderSiderTabs();
+    renderCanvas(); renderPropsPanel(); updateSlideOverlay();
+    opdaterFortrydKnapper();
+  }
+  // Foerst registreres en evt. endnu ikke optalt aendring (fx lige efter man har skrevet)
+  function redFortryd() { redTjek(); redGaaTil(redPos - 1); }
+  function redGentag() { redTjek(); redGaaTil(redPos + 1); }
+  const redPlanlaeg = (ms) => {
+    clearTimeout(redTimer);
+    redTimer = setTimeout(() => { if (!markoerNede && aktivFane === 'butik') redTjek(); }, ms || 250);
+  };
+  document.addEventListener('pointerdown', () => { markoerNede = true; }, true);
+  document.addEventListener('pointerup', () => { markoerNede = false; redPlanlaeg(); }, true);
+  ['change', 'keyup', 'drop', 'click'].forEach(t => document.addEventListener(t, () => redPlanlaeg(), true));
+  document.addEventListener('input', () => redPlanlaeg(700), true);
+  // Sikkerhedsnet for aendringer der sker uden en handling lige foer (fx en upload der bliver
+  // faerdig): kig efter hvert andet sekund, men aldrig midt i et traek.
+  setInterval(() => { if (!markoerNede && aktivFane === 'butik') redTjek(); }, 2000);
+
   // Advar, foer en ikke-gemt vagtplan forsvinder (luk fane / genindlaes / naviger vaek)
   window.addEventListener('beforeunload', (e) => {
     if (!vagtplanUgemt) return;
@@ -1763,6 +1847,7 @@
     renderPropsPanel();
     renderMediaGrid();
     loadLiveView();
+    redNulstil();
   }
 
   function exitMasterEditMode() {
@@ -1780,6 +1865,7 @@
     renderMediaGrid();
     renderSiderTabs();
     loadLiveView();
+    redNulstil();
   }
 
   document.getElementById('masterEditBtn').addEventListener('click', () => {
@@ -3092,6 +3178,7 @@
     renderPropsPanel();
     renderMediaGrid();
     loadLiveView();
+    redNulstil();
   }
 
   function exitFaellesSlideEditMode() {
@@ -3110,6 +3197,7 @@
     renderMediaGrid();
     renderSiderTabs();
     loadLiveView();
+    redNulstil();
   }
 
   // Spoerger om et navn foerste gang et slide gemmes. Falder tilbage til et nummer hvis
