@@ -23,7 +23,7 @@ window.addEventListener('storage', e => { if (e.key === 'blho-tema') saetTema();
 if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('change', saetTema);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="motor.js?v=2026-09-24-4"></script>
+<script src="motor.js?v=2026-09-24-5"></script>
 <style>
 /* Farverne ligger som variabler, saa lys/moerk tilstand styres ét sted. Temaet vaelges med
    knappen i butik-redigerings topbar og deles via localStorage 'blho-tema' (se <head>). */
@@ -58,7 +58,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
 /* Selve vagtplanen -- som den oprindelige, bare i sidens farver. */
 .indhold h1{font-size:20px;margin:0 0 2px;color:var(--brand-tekst)}p.s,.s{margin:0 0 12px;color:var(--mut)}
-.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 4px;font-variant-numeric:tabular-nums}
+/* Knapper hvis tekst skifter (fx "Beregner…") har fast bredde, og ⚠ paa uge-fanerne har altid
+   sin plads -- saa intet i vaerktoejslinjen hopper, naar man trykker paa noget. Alt der
+   skifter (status, gem, hint) ligger paa statuslinjen nedenunder. */
+.indhold #gen{width:10.5em;text-align:center}
+.indhold .tab .adv{display:inline-block;width:1.1em;text-align:right}.indhold .tab .adv.ingen{visibility:hidden}
+.statuslinje{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;min-height:22px;margin:0 0 10px;font-size:14px}
+.statuslinje .s{margin:0}
 .indhold button,dialog button{font:inherit;font-size:14px;cursor:pointer;border:1px solid var(--bd);background:var(--card);color:var(--fg);border-radius:8px;padding:6px 12px}
 button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--brand-tekst);outline-offset:1px}
 .indhold .tab.on{background:var(--brand);color:#fff;border-color:var(--brand)}.indhold .pri,dialog .pri{background:var(--brand);color:#fff;border-color:var(--brand)}
@@ -119,7 +126,11 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
 <h1 id="titel">Vagtplan</h1>
 <p class="s">Rullende 4-ugers plan. Klik på en vagt for at rette den, eller på "+ vagt" for at tilføje. Reglerne tjekkes automatisk.</p>
 <div class="konflikt" id="konflikt">Planen er blevet ændret af en anden, siden du åbnede den. Din seneste ændring er <b>ikke</b> gemt. <button id="genindlaes">Hent den nyeste plan</button></div>
-<div class="bar"><span id="tabs"></span><button id="t2" title="Tidspunkt hvor der skal være 2 på arbejde igen">2 pers. fra 15:00</button><label class="ekstra-valg">Ekstra personer <select id="ekstra" title="Hvor mange ekstra personer planen må bruge. Ekstra personer overtager søndagen for dem, der ellers skal arbejde både lørdag og søndag."></select></label><label class="ekstra-valg">Ekstra må arbejde <select id="ekstraAlle" title="Må de ekstra personer arbejde alle weekender (lørdag og søndag)? Så kan én ekstra person overtage den ene weekenddag for alle, der ellers skal arbejde hele weekenden."><option value="1">alle weekender</option><option value="0">hver 3. weekend</option></select></label><button id="gen">Foreslå ny plan</button><span id="ekstraHint" class="s" hidden>← tryk "Foreslå ny plan" for at bruge den nye indstilling</span><button id="rules">Regler</button><button class="pri" id="exp">Kopiér til SmartPlan</button><span id="stat"></span></div>
+<div class="bar"><span id="tabs"></span><button id="t2" title="Tidspunkt hvor der skal være 2 på arbejde igen">2 pers. fra 15:00</button><label class="ekstra-valg">Ekstra personer <select id="ekstra" title="Hvor mange ekstra personer planen må bruge. Ekstra personer overtager søndagen for dem, der ellers skal arbejde både lørdag og søndag."></select></label><label class="ekstra-valg">Ekstra må arbejde <select id="ekstraRegel" title="Hvor tit de ekstra personer må arbejde weekend. Alle weekend-ønsker kræver ca. 13 timers weekendarbejde om ugen fra ekstra folk — jo sjældnere hver enkelt må arbejde, jo flere ekstra personer skal der til.">
+<option value="3-0">hver 3. weekend, én dag</option><option value="3-1">hver 3. weekend, begge dage</option>
+<option value="2-0">hver 2. weekend, én dag</option><option value="2-1">hver 2. weekend, begge dage</option>
+<option value="1-0">hver weekend, én dag</option><option value="1-1">hver weekend, begge dage</option></select></label><button id="gen">Foreslå ny plan</button><button id="rules">Regler</button><button class="pri" id="exp">Kopiér til SmartPlan</button></div>
+<div class="statuslinje" id="statuslinje"><span id="stat"></span><span id="ekstraHint" class="s" hidden>Tryk "Foreslå ny plan" for at bruge de nye indstillinger.</span></div>
 <div class="wrap"><div class="grid" id="grid"></div></div>
 <h2>Problemer</h2><ul class="is" id="iss"></ul>
 <h2>Ønsker der ikke er opfyldt</h2><ul class="is" id="soft"></ul>
@@ -161,15 +172,18 @@ let gemKaede = Promise.resolve(), konflikt = false;
 
 function vis(id) { ['laeserVis', 'loginVis', 'ingenAdgangVis', 'app'].forEach(x => { $('#' + x).hidden = x != id; }); }
 
-// `plan` i databasen: { t2, ekstra, ekstraAlle, vagter: [{w,d,p,s,e}, ...] }. t2 er
-// "2 pers. fra"-knappen, ekstra er "Ekstra personer" og ekstraAlle er "Ekstra maa arbejde" --
+// `plan` i databasen: { t2, ekstra, ekstraRegel: {afstand, begge}, vagter: [{w,d,p,s,e}, ...] }.
+// t2 er "2 pers. fra"-knappen, ekstra er "Ekstra personer" og ekstraRegel er "Ekstra maa arbejde" --
 // alle gemmes sammen med planen, ellers passer planen ikke til indstillingerne, naar siden
 // aabnes igen. (Aeldre format: bare vagt-listen.)
 const EKSTRA_STANDARD = 1; // I ansaetter 1 ekstra person nu
 const lesPlan = p => {
   const o = Array.isArray(p) ? { vagter: p } : p && Array.isArray(p.vagter) ? p : { vagter: [] };
-  // ekstraAlle: standard JA -- kun saadan kan alle weekend-oenskerne opfyldes med én ekstra person.
-  return { t2: o.t2 == 915 ? 915 : 900, ekstra: Number.isInteger(o.ekstra) ? o.ekstra : EKSTRA_STANDARD, ekstraAlle: o.ekstraAlle !== false, vagter: o.vagter };
+  // ekstraRegel: hvor tit de ekstra maa arbejde weekend. Aeldre planer havde kun ekstraAlle
+  // (true = hver weekend, begge dage; false = hver 3. weekend, én dag).
+  const r = o.ekstraRegel && [1, 2, 3].includes(o.ekstraRegel.afstand) ? { afstand: o.ekstraRegel.afstand, begge: !!o.ekstraRegel.begge }
+    : o.ekstraAlle === false ? { afstand: 3, begge: false } : { afstand: 1, begge: true };
+  return { t2: o.t2 == 915 ? 915 : 900, ekstra: Number.isInteger(o.ekstra) ? o.ekstra : EKSTRA_STANDARD, ekstraRegel: r, vagter: o.vagter };
 };
 
 // ---------- Login / adgang ----------
@@ -192,8 +206,8 @@ async function start() {
 function vaelgPlan(r) {
   raekke = r; konflikt = false; $('#konflikt').style.display = 'none';
   const pl = lesPlan(r.plan);
-  M = lavVagtplanMotor(r.opsaetning); M.T2 = pl.t2; M.EKSTRA = pl.ekstra; M.EKSTRA_ALLE = pl.ekstraAlle; M.S = pl.vagter;
-  $('#ekstraAlle').value = M.EKSTRA_ALLE ? '1' : '0';
+  M = lavVagtplanMotor(r.opsaetning); M.T2 = pl.t2; M.EKSTRA = pl.ekstra; M.EKSTRA_REGEL = pl.ekstraRegel; M.S = pl.vagter;
+  $('#ekstraRegel').value = M.EKSTRA_REGEL.afstand + '-' + (M.EKSTRA_REGEL.begge ? 1 : 0);
   // 0 op til det antal der fjerner alle dobbelt-weekender (flere giver ingen mening)
   const maxE = Math.max(M.maxAflastning, M.EKSTRA);
   $('#ekstra').innerHTML = Array.from({ length: maxE + 1 }, (_, n) => `<option value="${n}">${n}</option>`).join('');
@@ -227,7 +241,7 @@ $('#planValg').onchange = e => vaelgPlan(planer.find(p => p.id == e.target.value
 function gemStatus(t, cls) { $('#gemStatus').textContent = t; $('#gemStatus').className = cls || ''; }
 function save() {
   if (konflikt) return;
-  const r = raekke, plan = { t2: M.T2, ekstra: M.EKSTRA, ekstraAlle: M.EKSTRA_ALLE, vagter: JSON.parse(JSON.stringify(M.S)) };
+  const r = raekke, plan = { t2: M.T2, ekstra: M.EKSTRA, ekstraRegel: M.EKSTRA_REGEL, vagter: JSON.parse(JSON.stringify(M.S)) };
   gemStatus('Gemmer…');
   gemKaede = gemKaede.then(async () => {
     if (konflikt || r != raekke) return;
@@ -281,7 +295,7 @@ function render() {
   const { P, R, D, f, WK, NW } = M;
   M.ext(); const EX = M.EX;
   const A = M.check(), I = A.filter(i => !i.soft), Q = A.filter(i => i.soft);
-  $('#tabs').innerHTML = WK.map(w => `<button class="tab ${w == W ? 'on' : ''}" data-w="${w}">Uge ${w + 1}${I.some(i => i.w == w) ? ' ⚠' : ''}</button>`).join(' ');
+  $('#tabs').innerHTML = WK.map(w => `<button class="tab ${w == W ? 'on' : ''}" data-w="${w}">Uge ${w + 1}<span class="adv ${I.some(i => i.w == w) ? '' : 'ingen'}">⚠</span></button>`).join(' ');
   const uh = M.S.filter(x => x.p == 'uk').reduce((a, x) => a + (x.e - x.s) / 60, 0);
   $('#stat').innerHTML = (I.length ? `<b class="bad">⚠ ${I.length} problemer</b>` : `<b class="ok">✓ Planen går op</b>`) + (uh ? ` <span class="s">· bruger ${Math.max(0, ...EX.filter(Boolean))} af ${M.EKSTRA} ekstra (${uh} t på 6 uger)</span>` : '');
   $('#grid').innerHTML = D.map((n, d) => {
@@ -321,11 +335,11 @@ $('#dsave').onclick = () => {
 $('#ddel').onclick = () => { M.S.splice(E.i, 1); save(); $('#dlg').close(); render(); };
 $('#dcx').onclick = () => $('#dlg').close();
 $('#gen').onclick = e => {
-  if (!armed) { armed = true; e.target.textContent = 'Sikker? Klik igen (overskriver alt)'; setTimeout(() => { armed = false; $('#gen').textContent = 'Foreslå ny plan'; }, 4000); return; }
+  if (!armed) { armed = true; e.target.textContent = 'Sikker? Klik igen'; e.target.title = 'Overskriver hele den nuværende plan'; setTimeout(() => { armed = false; $('#gen').textContent = 'Foreslå ny plan'; $('#gen').title = ''; }, 4000); return; }
   armed = false; e.target.textContent = 'Foreslå ny plan'; foreslaa();
 };
 $('#ekstra').onchange = e => { M.EKSTRA = +e.target.value; $('#ekstraHint').hidden = false; save(); render(); };
-$('#ekstraAlle').onchange = e => { M.EKSTRA_ALLE = e.target.value == '1'; $('#ekstraHint').hidden = false; save(); render(); };
+$('#ekstraRegel').onchange = e => { const [a, b] = e.target.value.split('-').map(Number); M.EKSTRA_REGEL = { afstand: a, begge: b == 1 }; $('#ekstraHint').hidden = false; save(); render(); };
 const txt = w => M.D.map((n, d) => n + '\n' + (grp(w, d).map(a => M.f(a[0].s) + ' - ' + M.f(a[0].e) + ': ' + a.map(x => M.nmi(x.i) + ' (' + M.R[M.P[x.p][1]] + ')').join(', ')).join('\n') || '–')).join('\n\n');
 const csv = () => 'Uge;Dag;Start;Slut;Medarbejder;Jobtype\n' + M.S.map((x, i) => ({ ...x, i })).sort((a, b) => a.w - b.w || a.d - b.d || a.s - b.s).map(x => [x.w + 1, M.D[x.d], M.f(x.s), M.f(x.e), M.nmi(x.i), M.R[M.P[x.p][1]]].join(';')).join('\n');
 $('#t2').onclick = () => { M.T2 = M.T2 == 900 ? 915 : 900; $('#t2').textContent = '2 pers. fra ' + M.f(M.T2); save(); render(); };
@@ -335,11 +349,11 @@ $('#xt').onclick = () => $('#xa').value = txt(W); $('#xc').onclick = () => $('#x
 $('#xx').onclick = () => $('#xd').close();
 $('#xcopy').onclick = () => { const a = $('#xa'); a.select(); try { navigator.clipboard.writeText(a.value); } catch (e) { document.execCommand('copy'); } $('#xcopy').textContent = 'Kopieret ✓'; setTimeout(() => $('#xcopy').textContent = 'Kopiér', 1500); };
 
-// Indlejret i butik-redigering: dens topbar erstatter vores, saa gem-status flyttes ned i
-// vaerktoejslinjen, hvor den stadig kan ses.
+// Indlejret i butik-redigering: dens topbar erstatter vores, saa gem-status flyttes ned paa
+// statuslinjen, hvor den stadig kan ses.
 if (window.top !== window) {
   document.body.classList.add('indlejret');
-  $('.bar').insertBefore($('#gemStatus'), $('#stat'));
+  $('#statuslinje').appendChild($('#gemStatus'));
   start().catch(() => vis('loginVis'));
 }
 </script></body></html>
