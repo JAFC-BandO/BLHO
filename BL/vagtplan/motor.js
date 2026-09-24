@@ -1,12 +1,29 @@
 // Vagtplan-motoren: selve planlaegningen og regeltjekket, uden DOM og uden persondata.
 // Alt om de konkrete medarbejdere (navne, jobtype, hvornaar de kan, faste vagter, weekend-
 // rotation, timekrav) kommer fra opsaetningen i Supabase-tabellen `vagtplan` -- intet af det
-// maa staa her, fordi repoet er offentligt. Det der staar her er kun butikkens generelle
-// regler (aabningstider, bemanding, vagtlaengder), som i forvejen er offentlige.
+// maa staa her, fordi repoet er offentligt. Butikkens regler (aabningstider, bemanding, max
+// paa arbejde, mindste vagt, ansvarlig, weekender) kommer fra C.butiksregler; mangler de,
+// bruges STANDARD_REGLER nedenfor (den oprindelige vagtplans regler).
 //
 // Tider er minutter efter midnat (525 = 08:45). Dage er 0-6 (mandag-soendag). Uger er 0 til
 // planens antal uger - 1 (C.uger: 3, 6, 9 eller 12; standard 6).
 (function (root) {
+  // Butikkens regler. aabning: [fra, til] pr. ugedag (null = lukket). bemanding: tidslinjer
+  // for hverdage og weekend (weekend: null = samme som hverdage) -- hver linje gaelder fra
+  // "fra" og til naeste linje eller lukketid; "ellerFra" er et alternativt starttidspunkt
+  // planlaeggeren maa vaelge (det der var "2 pers. fra 15:00 eller 15:15"). maksAltid: aldrig
+  // flere paa arbejde ad gangen. minVagt: mindste vagt i minutter. ansvarlig: der skal altid
+  // vaere én der ikke er ungarbejder (og ungarbejdere kan ikke staa alene). weekendHver: alle
+  // arbejder hoejst hver N. weekend.
+  const STANDARD_REGLER = {
+    aabning: [[525, 1095], [525, 1095], [525, 1095], [525, 1095], [525, 1095], [525, 1035], [525, 1035]],
+    bemanding: {
+      hverdag: [{ fra: 525, min: 1, max: 1 }, { fra: 600, min: 2, max: 2 }, { fra: 780, min: 1, max: 2 }, { fra: 900, ellerFra: 915, min: 2, max: 2 }],
+      weekend: null,
+    },
+    maksAltid: 2, minVagt: 180, ansvarlig: true, weekendHver: 3,
+  };
+
   // valg.rullende (standard true): planen gentager sig, saa sidste uge efterfoelges af foerste
   //   (saadan var den oprindelige vagtplan). false = en periode med datoer, der ikke gentager
   //   sig -- saa kan den have et vilkaarligt antal uger.
@@ -16,15 +33,29 @@
     valg = valg || {};
     const RULLENDE = valg.rullende !== false, HOLD_START = [0, 1, 2].includes(valg.holdStart) ? valg.holdStart : 0;
     const R = C.jobtyper;
+    const RG = Object.assign({}, STANDARD_REGLER, C.butiksregler || {});
+    RG.bemanding = Object.assign({}, STANDARD_REGLER.bemanding, RG.bemanding || {});
     // Raekkefoelgen i C.personer bestemmer raekkefoelgen i dropdown, timetabel og advarsler.
     // 'uk' (ekstra person) er motorens eget begreb og tilfoejes altid sidst.
     const P = {}, TID = {};
     C.personer.forEach(p => { P[p.id] = [p.navn, p.type]; TID[p.id] = p.tid || {}; });
     P.uk = ['Ekstra person', 'S']; TID.uk = {};
     const D = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
-    const O = d => [525, d > 4 ? 1035 : 1095];
+    // Aabningstid pr. dag; en lukket dag er et tomt tidsrum (ingen krav, ingen vagter).
+    const O = d => RG.aabning[d] || [0, 0];
+    const lukket = d => O(d)[1] <= O(d)[0];
     const f = m => String(m / 60 | 0).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
-    const LEN = [180, 195, 210, 225, 240, 255, 270, 300, 330, 360, 390, 420, 435, 480, 510];
+    const MIN_VAGT = RG.minVagt;
+    const LEN0 = [180, 195, 210, 225, 240, 255, 270, 300, 330, 360, 390, 420, 435, 480, 510];
+    // Vagtlaengder planlaeggeren proever: den oprindelige liste fra mindste vagt og op
+    const LEN = MIN_VAGT < 180 ? Array.from({ length: (180 - MIN_VAGT) / 15 }, (_, i) => MIN_VAGT + i * 15).concat(LEN0)
+      : LEN0.filter(l => l >= MIN_VAGT).length ? LEN0.filter(l => l >= MIN_VAGT) : [MIN_VAGT];
+    // Bemandingens tidslinjer. FLEKS = linjen med et alternativt starttidspunkt (hoejst én).
+    const tidslinje = d => (d > 4 && RG.bemanding.weekend) || RG.bemanding.hverdag;
+    const FLEKS = RG.bemanding.hverdag.concat(RG.bemanding.weekend || []).find(b => b.ellerFra != null) || null;
+    // Hvornaar eftermiddagsholdet tidligst kan komme -- planlaeggeren daekker hullerne foer det
+    // med ekstra personer i sit foerste gennemloeb (som den oprindelige vagtplan: 15:15).
+    const SKIFT = FLEKS ? FLEKS.ellerFra : Math.max(0, ...RG.bemanding.hverdag.map(b => b.fra));
     // Planens laengde i uger. En rullende plan skal gaa op i 3 (weekend-holdene skiftes hver 3.
     // weekend, og efter sidste uge kommer foerste igen); en periode kan have 1-12 uger.
     const NW = RULLENDE ? ([3, 6, 9, 12].includes(C.uger) ? C.uger : 6) : (Number.isInteger(C.uger) && C.uger >= 1 && C.uger <= 12 ? C.uger : 6);
@@ -34,13 +65,32 @@
     // EKSTRA: hvor mange ekstra personer der maa bruges (dropdown'en). null = ingen graense og
     // ingen weekend-aflastning -- saadan opfoerte den oprindelige vagtplan sig.
     const M = {
-      P, R, D, O, f, NW, WK, S: [], EX: [], T2: 900, EKSTRA: null, RULLENDE, HOLD_START, holdAf,
+      P, R, D, O, f, NW, WK, NR, S: [], EX: [], T2: FLEKS ? FLEKS.fra : 900, EKSTRA: null, RULLENDE, HOLD_START, holdAf,
+      REGLER: RG, MIN_VAGT, lukket,
+      // De starttidspunkter "Foreslå ny plan" proever for den fleksible bemandings-linje
+      T2VALG: FLEKS ? [FLEKS.fra, FLEKS.ellerFra] : [FLEKS ? FLEKS.fra : 900],
       // Hvor tit en ekstra person maa arbejde weekend: afstand = mindst hver N. weekend
       // (1 = hver weekend), begge = maa tage baade loerdag og soendag samme weekend.
       // Standard = samme regel som personalet (hver 3. weekend, én dag).
       EKSTRA_REGEL: { afstand: 3, begge: false },
     };
-    const need = t => t < 600 || (t >= 780 && t < M.T2) ? 1 : 2;
+    // Krav pr. 15 minutter for en dag: mn = mindst, mx = hoejst paa arbejde. Afhaenger af T2
+    // (hvornaar den fleksible linje starter), saa cachen nulstilles naar T2 aendres.
+    let kravCache = {}, kravT2 = null;
+    function krav(d) {
+      if (kravT2 !== M.T2) { kravCache = {}; kravT2 = M.T2; }
+      if (kravCache[d]) return kravCache[d];
+      const [a, b] = O(d), n = Math.max(0, (b - a) / 15), mn = Array(n).fill(0), mx = Array(n).fill(RG.maksAltid);
+      const bp = tidslinje(d).map(x => ({ fra: x.ellerFra != null && M.T2 == x.ellerFra ? x.ellerFra : x.fra, min: x.min, max: x.max })).sort((x, y) => x.fra - y.fra);
+      for (let i = 0; i < n; i++) {
+        const t = a + i * 15; let cur = null;
+        bp.forEach(x => { if (x.fra <= t) cur = x; });
+        if (cur) { mn[i] = Math.min(cur.min, RG.maksAltid); mx[i] = Math.min(cur.max, RG.maksAltid); }
+      }
+      return (kravCache[d] = { a, mn, mx });
+    }
+    const need = (t, d) => { const k = krav(d), i = (t - k.a) / 15; return k.mn[i] || 0; };
+    const maks = (t, d) => { const k = krav(d), i = (t - k.a) / 15; return k.mx[i] != null ? k.mx[i] : RG.maksAltid; };
 
     // Weekend-aflastning: i weekend-rotationen er der folk der tager baade loerdag og soendag,
     // fordi der ikke er folk nok. Hver ekstra person kan tage én weekenddag pr. 3 uger (samme
@@ -180,6 +230,8 @@
       const EX = []; idx.forEach((i, j) => { EX[i] = hvem[j] + 1; });
       return EX;
     }
+    const timer = m => String(m / 60).replace('.', ','); // 180 -> "3", 150 -> "2,5"
+    const pm = s => { const [x, y] = s.split(':').map(Number); return x * 60 + y; };
     const nmi = i => M.S[i].p == 'uk' ? 'Ekstra person ' + (M.EX[i] || '') : P[M.S[i].p][0];
 
     // Hvornaar en medarbejder kan arbejde en given dag. tid.hverdag/tid.weekend: udeladt =
@@ -187,6 +239,7 @@
     // tid.dage: { dag: [start, slut] } for enkelte dage med andre tider end resten.
     function av(p, d) {
       const [a, b] = O(d), t = TID[p] || {};
+      if (lukket(d)) return null;
       if (t.ikkeDage && t.ikkeDage.includes(d)) return null;
       const v = t.dage && t.dage[d] !== undefined ? t.dage[d] : d > 4 ? t.weekend : t.hverdag;
       if (v === null) return null;
@@ -198,14 +251,14 @@
       M.S.filter(x => x.w == w && x.d == d).forEach(x => {
         for (let t = Math.max(x.s, a); t < Math.min(x.e, b); t += 15) { const i = (t - a) / 15; c[i]++; if (P[x.p][1] != 'U') m[i]++; }
       });
-      return { a, c, m };
+      return { a, c, m, d };
     }
     function sc(p, cv, s, e) {
       let v = 0; const y = P[p][1] == 'U';
       for (let t = s; t < e; t += 15) {
-        const i = (t - cv.a) / 15, nd = need(t) - cv.c[i] > 0;
-        if (cv.c[i] >= 2 || (t < 600 && cv.c[i] >= 1)) return -1;
-        if (y) { if (cv.m[i] == 0) return -1; v += nd ? 1 : 0; } else v += (nd ? 1 : 0) + (cv.m[i] == 0 ? 2 : 0);
+        const i = (t - cv.a) / 15, nd = need(t, cv.d) - cv.c[i] > 0;
+        if (cv.c[i] >= maks(t, cv.d)) return -1;
+        if (y) { if (RG.ansvarlig && cv.m[i] == 0) return -1; v += nd ? 1 : 0; } else v += (nd ? 1 : 0) + (RG.ansvarlig && cv.m[i] == 0 ? 2 : 0);
       }
       return v;
     }
@@ -219,7 +272,7 @@
     }
     function run(w, d, k) {
       const cv = cov(w, d), a = cv.a, n = cv.c.length,
-        fn = i => k ? need(a + i * 15) - cv.c[i] > 0 && (k != 2 || a + i * 15 < 915) : cv.m[i] == 0;
+        fn = i => k ? need(a + i * 15, d) - cv.c[i] > 0 && (k != 2 || a + i * 15 < SKIFT) : RG.ansvarlig && cv.m[i] == 0;
       for (let i = 0; i < n; i++) if (fn(i)) { let j = i; while (j < n && fn(j)) j++; return [a + i * 15, a + j * 15]; }
     }
     function genWeek(w, n) {
@@ -232,9 +285,9 @@
         let g;
         while (g = run(w, d, k)) {
           const [a, b] = O(d), cv = cov(w, d); let bw = null;
-          for (let s = a; s <= g[0]; s += 15) for (const e of [Math.max(g[1], s + 180), b]) {
-            if (e > b || e < g[1] || e - s < 180) continue; let pen = 0;
-            for (let t = s; t < e; t += 15) { const c = cv.c[(t - a) / 15]; pen += (c >= 2 || (t < 600 && c >= 1)) ? 1000 : (need(t) - c <= 0 ? 1 : 0); }
+          for (let s = a; s <= g[0]; s += 15) for (const e of [Math.max(g[1], s + MIN_VAGT), b]) {
+            if (e > b || e < g[1] || e - s < MIN_VAGT) continue; let pen = 0;
+            for (let t = s; t < e; t += 15) { const c = cv.c[(t - a) / 15]; pen += c >= maks(t, d) ? 1000 : (need(t, d) - c <= 0 ? 1 : 0); }
             if (!bw || pen <= bw.pen) bw = { s, e, pen };
           }
           if (!bw) bw = { s: g[0], e: g[1], pen: 0 }; add(d, 'uk', bw.s, bw.e);
@@ -259,7 +312,7 @@
         for (let t = 0; t < 70 && (bv >= 1e6 || t < 25) && bv > 0; t++) {
           M.S = all.slice(); genWeek(w, t ? 12 : 0);
           const u = M.S.filter(x => x.w == w && x.p == 'uk'); let ov = 0;
-          for (let d = 0; d < 7; d++) cov(w, d).c.forEach((c, i) => { if (c > 2 || (i < 5 && c > 1)) ov++; });
+          for (let d = 0; d < 7; d++) { const k = krav(d); cov(w, d).c.forEach((c, i) => { if (c > k.mx[i]) ov++; }); }
           const v = ov * 1e7 + u.reduce((a, x) => a + x.e - x.s, 0) * 10 + u.length + (C.maalTimer || []).reduce((a, x) => a + Math.max(0, x.timer * 60 - hrs(x.p, w) * 60) / 10, 0);
           if (v < bv) { bv = v; bs = M.S.filter(x => x.w == w); }
         }
@@ -294,7 +347,7 @@
       for (let w = 0; w < NW; w++) {
         for (let d = 0; d < 7; d++) {
           const sh = dag[w * 7 + d];
-          sh.forEach(x => { if (x.e - x.s < 180) emit(w, d, 0, () => `${nmi(x.i)} ${f(x.s)}–${f(x.e)}: vagten er under 3 timer`); });
+          sh.forEach(x => { if (x.e - x.s < MIN_VAGT) emit(w, d, 0, () => `${nmi(x.i)} ${f(x.s)}–${f(x.e)}: vagten er under ${timer(MIN_VAGT)} timer`); });
           sh.forEach(x => {
             if (x.p == 'uk') return; const v = av(x.p, d);
             if (!v || x.s < v[0] || x.e > v[1]) emit(w, d, 0, () => `${P[x.p][0]} kan ikke arbejde ${f(x.s)}–${f(x.e)}`);
@@ -303,11 +356,13 @@
           });
           const [a, b] = O(d), n = (b - a) / 15, c = Array(n).fill(0), m = Array(n).fill(0);
           sh.forEach(x => { for (let t = Math.max(x.s, a); t < Math.min(x.e, b); t += 15) { const i = (t - a) / 15; c[i]++; if (P[x.p][1] != 'U') m[i]++; } });
-          const rn = (fn, ms) => { for (let i = 0; i < n;) { if (fn(i)) { let j = i, mx = 0; while (j < n && fn(j)) { mx = Math.max(mx, need(a + j * 15) - c[j]); j++; } const i0 = i, j0 = j, mx0 = mx; emit(w, d, 0, () => ms(f(a + i0 * 15), f(a + j0 * 15), mx0)); i = j; } else i++; } };
-          rn(i => need(a + i * 15) - c[i] > 0, (x, y, k) => `Mangler ${k} pers. ${x}–${y}`);
-          rn(i => a + i * 15 < 600 && c[i] > 1, (x, y) => `For mange: kun 1 person ${x}–${y}`);
-          rn(i => c[i] > 2, (x, y) => `For mange: max 2 ad gangen ${x}–${y}`);
-          rn(i => m[i] == 0, (x, y) => `Ingen ansvarlig (ikke ungarbejder) ${x}–${y}`);
+          const rn = (fn, ms) => { for (let i = 0; i < n;) { if (fn(i)) { let j = i, mx = 0; while (j < n && fn(j)) { mx = Math.max(mx, need(a + j * 15, d) - c[j]); j++; } const i0 = i, j0 = j, mx0 = mx; emit(w, d, 0, () => ms(f(a + i0 * 15), f(a + j0 * 15), mx0)); i = j; } else i++; } };
+          const kv = krav(d);
+          rn(i => need(a + i * 15, d) - c[i] > 0, (x, y, k) => `Mangler ${k} pers. ${x}–${y}`);
+          rn(i => kv.mx[i] == 1 && c[i] > 1, (x, y) => `For mange: kun 1 person ${x}–${y}`);
+          rn(i => c[i] > RG.maksAltid, (x, y) => `For mange: max ${RG.maksAltid} ad gangen ${x}–${y}`);
+          rn(i => kv.mx[i] > 1 && kv.mx[i] < RG.maksAltid && c[i] > kv.mx[i], (x, y) => `For mange: højst ${kv.mx[(pm(x) - a) / 15]} pers. ${x}–${y}`);
+          rn(i => RG.ansvarlig && m[i] == 0, (x, y) => `Ingen ansvarlig (ikke ungarbejder) ${x}–${y}`);
         }
         (C.ugeTimer || []).forEach(x => {
           const p = x.p, hh = h(p, w), ds = [...new Set(S.filter(y => y.w == w && y.p == p).map(y => y.d))].sort().join();
@@ -329,7 +384,9 @@
         const a = WK.map(w => wd(w, 5, p) || wd(w, 6, p));
         WK.forEach(w => {
           if (!a[w]) return;
-          if (RULLENDE ? (a[(w + 1) % NW] || a[(w + 2) % NW]) : (a[w + 1] || a[w + 2])) emit(w, -1, 0, () => `${P[p][0]} arbejder weekender for tæt (max hver 3. weekend)`);
+          let taet = false;
+          for (let k = 1; k < RG.weekendHver; k++) if (RULLENDE ? a[(w + k) % NW] : a[w + k]) taet = true;
+          if (taet) emit(w, -1, 0, () => `${P[p][0]} arbejder weekender for tæt (max hver ${RG.weekendHver}. weekend)`);
           if (wd(w, 5, p) && wd(w, 6, p)) emit(w, -1, 1, () => `${P[p][0]} arbejder både lørdag og søndag (helst kun én dag)`);
         });
       });
@@ -354,11 +411,13 @@
       sving: 0.5,     // pr. time en fleksibel medarbejders uge afviger fra hendes/hans eget snit
       spredning: 1,   // pr. (time)^2 en fleksibel medarbejders snit afviger fra jobtypens snit
       maal: 1,        // pr. time under maalTimer i en uge
-      fra1515: 8,     // "2 pers. fra 15:15" bruges kun hvis 15:00 koster mere end det her
+      fra1515: 8,     // det alternative starttidspunkt ("eller fra", fx 15:15) bruges kun, hvis det normale koster mere
     };
     // Fleksible = dem planlaeggeren selv fordeler (ikke faste vagter/weekend-rotation).
     const FLEX = [...new Set([...(C.hulFyldere || []), ...(C.fyldere || []), ...(C.ekstraDage || []).map(x => x.p)])].filter(p => P[p]);
-    const paen = t => t % 30 == 0 || t == 525 || t == 915 || t == 1035 || t == 1095;
+    // Paene tider: hele/halve timer, aabnings-/lukketider og bemandingens skiftetider
+    const PAENE = new Set([].concat(...RG.aabning.filter(Boolean)).concat(...RG.bemanding.hverdag.concat(RG.bemanding.weekend || []).map(b => [b.fra, b.ellerFra])));
+    const paen = t => t % 30 == 0 || PAENE.has(t);
     function vurder() {
       let hard = 0, soft = 0;
       gennemgaa((w, d, s) => { if (s) soft++; else hard++; });
@@ -380,7 +439,7 @@
       // foerst er overskredet.
       const forMange = M.EKSTRA != null ? Math.max(0, nx - M.EKSTRA - 1) : 0;
       const point = (hard + forMange) * 1e6 + soft * STRAF.oenske + ukT * STRAF.ekstraTime + maerk * STRAF.maerkelig
-        + sving * STRAF.sving + spredning * STRAF.spredning + maal * STRAF.maal + (M.T2 == 915 ? STRAF.fra1515 : 0);
+        + sving * STRAF.sving + spredning * STRAF.spredning + maal * STRAF.maal + (FLEKS && M.T2 == FLEKS.ellerFra ? STRAF.fra1515 : 0);
       return { point, hard, soft, ukT, nx, maerk, sving, spredning, maal };
     }
     // Vagter der ligger fast i opsaetningen (faste vagter + weekend-rotationen) byttes ikke
@@ -468,7 +527,7 @@
     }
     function foreslaa(runder) {
       let vinder = null;
-      for (const t2 of [900, 915]) {
+      for (const t2 of M.T2VALG) {
         const r = runder == null ? 2500 : runder;
         M.T2 = t2; gen(); saml(); forbedr(r); saml(); forbedr(Math.round(r / 4));
         const v = vurder();
@@ -485,6 +544,6 @@
     Object.assign(M, { need, ext, nmi, av, cov, best, gen, genWeek, hrs, check, minSnit, ugeTimer, vurder, foreslaa });
     return M;
   }
-  if (typeof module !== 'undefined' && module.exports) module.exports = { lavMotor };
-  else root.lavVagtplanMotor = lavMotor;
+  if (typeof module !== 'undefined' && module.exports) module.exports = { lavMotor, STANDARD_REGLER };
+  else { root.lavVagtplanMotor = lavMotor; root.VagtplanStandardRegler = STANDARD_REGLER; }
 })(this);
