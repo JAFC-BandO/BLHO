@@ -470,7 +470,8 @@
   }
   .tema-knap svg { width: 16px; height: 16px; display: block; }
   .tema-knap:hover { background: #dde1fb; }
-  html[data-tema="moerk"] .tema-knap { background: var(--ui-flade-blaa); color: #ffd24d; }
+  /* Samme blaa som "?"-knappen ved siden af, i begge tilstande */
+  html[data-tema="moerk"] .tema-knap { background: var(--ui-flade-blaa); color: var(--ui-brand-tekst); }
   html[data-tema="moerk"] .tema-knap:hover { background: #313866; }
   .tema-knap-login { position: fixed; top: 16px; right: 16px; z-index: 10; }
 </style>
