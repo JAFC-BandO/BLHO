@@ -138,54 +138,172 @@
       }
       M.S = all;
     }
-    function check() {
-      const I = [], S = M.S;
+    // Regeltjekket. gennemgaa() finder alle brud og kalder emit(w, d, soft, tekst) for hvert,
+    // hvor tekst er en FUNKTION -- saa den hurtige optaelling i vurder() (som planlaeggeren
+    // kalder tusindvis af gange) slipper for at bygge beskederne. check() og vurder() bruger
+    // altsaa praecis de samme regler og kan ikke komme ud af trit med hinanden.
+    // Personer med kunFaste i opsaetningen (fx en daglig leder med faste ugedage) maa kun have
+    // deres faste vagter fra faste/weekend-rotationen -- alt andet er et regelbrud.
+    const KUN_FASTE = new Set(C.personer.filter(p => p.kunFaste).map(p => p.id));
+    const FASTE_VAGTER = new Set();
+    WK.forEach(w => {
+      (C.faste || []).forEach(x => { if (KUN_FASTE.has(x.p) && (x.rotation == null || w % NR == x.rotation)) FASTE_VAGTER.add([w, x.d, x.p, x.s, x.e].join()); });
+      (ROT[w % NR] || []).forEach(x => { if (KUN_FASTE.has(x.p)) FASTE_VAGTER.add([w, x.d, x.p, x.s, x.e].join()); });
+    });
+    function gennemgaa(emit) {
+      const S = M.S;
       ext();
       const nx = Math.max(0, ...M.EX.filter(Boolean));
-      if (M.EKSTRA != null && nx > M.EKSTRA) I.push({ w: -1, d: -1, t: `Planen bruger ${nx} ekstra ${nx == 1 ? 'person' : 'personer'}, men der er kun valgt ${M.EKSTRA}` });
+      if (M.EKSTRA != null && nx > M.EKSTRA) emit(-1, -1, 0, () => `Planen bruger ${nx} ekstra ${nx == 1 ? 'person' : 'personer'}, men der er kun valgt ${M.EKSTRA}`);
+      // Vagterne fordelt pr. dag og timer pr. person/uge, beregnet én gang i stedet for pr. regel.
+      const dag = Array.from({ length: NW * 7 }, () => []), tim = {};
+      S.forEach((x, i) => {
+        dag[x.w * 7 + x.d].push({ ...x, i });
+        const t = tim[x.p] || (tim[x.p] = Array(NW).fill(0)); t[x.w] += (x.e - x.s) / 60;
+      });
+      const h = (p, w) => tim[p] ? tim[p][w] : 0;
       for (let w = 0; w < NW; w++) {
         for (let d = 0; d < 7; d++) {
-          const sh = S.map((x, i) => ({ ...x, i })).filter(x => x.w == w && x.d == d);
-          sh.forEach(x => { if (x.e - x.s < 180) I.push({ w, d, t: `${nmi(x.i)} ${f(x.s)}–${f(x.e)}: vagten er under 3 timer` }); });
+          const sh = dag[w * 7 + d];
+          sh.forEach(x => { if (x.e - x.s < 180) emit(w, d, 0, () => `${nmi(x.i)} ${f(x.s)}–${f(x.e)}: vagten er under 3 timer`); });
           sh.forEach(x => {
             if (x.p == 'uk') return; const v = av(x.p, d);
-            if (!v || x.s < v[0] || x.e > v[1]) I.push({ w, d, t: `${P[x.p][0]} kan ikke arbejde ${f(x.s)}–${f(x.e)}` });
-            if (sh.some(y => y.i != x.i && y.p == x.p && y.s < x.e && x.s < y.e)) I.push({ w, d, t: `${P[x.p][0]} har overlappende vagter` });
+            if (!v || x.s < v[0] || x.e > v[1]) emit(w, d, 0, () => `${P[x.p][0]} kan ikke arbejde ${f(x.s)}–${f(x.e)}`);
+            if (KUN_FASTE.has(x.p) && !FASTE_VAGTER.has([w, d, x.p, x.s, x.e].join())) emit(w, d, 0, () => `${P[x.p][0]} har kun sine faste vagter (se Regler)`);
+            if (sh.some(y => y.i != x.i && y.p == x.p && y.s < x.e && x.s < y.e)) emit(w, d, 0, () => `${P[x.p][0]} har overlappende vagter`);
           });
-          const cv = cov(w, d), n = cv.c.length;
-          const rn = (fn, ms) => { for (let i = 0; i < n;) { if (fn(i)) { let j = i, mx = 0; while (j < n && fn(j)) { mx = Math.max(mx, need(cv.a + j * 15) - cv.c[j]); j++; } I.push({ w, d, t: ms(f(cv.a + i * 15), f(cv.a + j * 15), mx) }); i = j; } else i++; } };
-          rn(i => need(cv.a + i * 15) - cv.c[i] > 0, (a, b, m) => `Mangler ${m} pers. ${a}–${b}`);
-          rn(i => cv.a + i * 15 < 600 && cv.c[i] > 1, (a, b) => `For mange: kun 1 person ${a}–${b}`);
-          rn(i => cv.c[i] > 2, (a, b) => `For mange: max 2 ad gangen ${a}–${b}`);
-          rn(i => cv.m[i] == 0, (a, b) => `Ingen ansvarlig (ikke ungarbejder) ${a}–${b}`);
+          const [a, b] = O(d), n = (b - a) / 15, c = Array(n).fill(0), m = Array(n).fill(0);
+          sh.forEach(x => { for (let t = Math.max(x.s, a); t < Math.min(x.e, b); t += 15) { const i = (t - a) / 15; c[i]++; if (P[x.p][1] != 'U') m[i]++; } });
+          const rn = (fn, ms) => { for (let i = 0; i < n;) { if (fn(i)) { let j = i, mx = 0; while (j < n && fn(j)) { mx = Math.max(mx, need(a + j * 15) - c[j]); j++; } const i0 = i, j0 = j, mx0 = mx; emit(w, d, 0, () => ms(f(a + i0 * 15), f(a + j0 * 15), mx0)); i = j; } else i++; } };
+          rn(i => need(a + i * 15) - c[i] > 0, (x, y, k) => `Mangler ${k} pers. ${x}–${y}`);
+          rn(i => a + i * 15 < 600 && c[i] > 1, (x, y) => `For mange: kun 1 person ${x}–${y}`);
+          rn(i => c[i] > 2, (x, y) => `For mange: max 2 ad gangen ${x}–${y}`);
+          rn(i => m[i] == 0, (x, y) => `Ingen ansvarlig (ikke ungarbejder) ${x}–${y}`);
         }
         (C.ugeTimer || []).forEach(x => {
-          const p = x.p, h = hrs(p, w), ds = [...new Set(S.filter(y => y.w == w && y.p == p).map(y => y.d))].sort().join();
-          if (h != x.timer) I.push({ w, d: -1, t: `${P[p][0]}: ${h} t (skal være ${x.timer})` });
-          if (x.dagMoenstre && !x.dagMoenstre.includes(ds)) I.push({ w, d: -1, t: `${P[p][0]}: ${x.dagMoenstreTekst || 'arbejder på de forkerte dage'}` });
+          const p = x.p, hh = h(p, w), ds = [...new Set(S.filter(y => y.w == w && y.p == p).map(y => y.d))].sort().join();
+          if (hh != x.timer) emit(w, -1, 0, () => `${P[p][0]}: ${hh} t (skal være ${x.timer})`);
+          if (x.dagMoenstre && !x.dagMoenstre.includes(ds)) emit(w, -1, 0, () => `${P[p][0]}: ${x.dagMoenstreTekst || 'arbejder på de forkerte dage'}`);
         });
       }
       (C.minSnit || []).forEach(({ p, timer: m }) => {
         let mn = 1e9;
-        for (let s = 0; s < NW; s++) { let a = 0; for (let k = 0; k < 4; k++) a += hrs(p, (s + k) % NW); mn = Math.min(mn, a / 4); }
-        if (mn < m) I.push({ w: -1, d: -1, t: `${P[p][0]}: snit ${mn.toFixed(1)} t/uge over 4 uger (min ${m})` });
+        for (let s = 0; s < NW; s++) { let a = 0; for (let k = 0; k < 4; k++) a += h(p, (s + k) % NW); mn = Math.min(mn, a / 4); }
+        if (mn < m) emit(-1, -1, 0, () => `${P[p][0]}: snit ${mn.toFixed(1)} t/uge over 4 uger (min ${m})`);
       });
-      const wk = p => WK.map(w => [5, 6].some(d => S.some(x => x.w == w && x.d == d && x.p == p)));
+      const wd = (w, d, p) => dag[w * 7 + d].some(x => x.p == p);
       Object.keys(P).filter(p => p != 'uk').forEach(p => {
-        const a = wk(p);
+        const a = WK.map(w => wd(w, 5, p) || wd(w, 6, p));
         WK.forEach(w => {
           if (!a[w]) return;
-          if (a[(w + 1) % NW] || a[(w + 2) % NW]) I.push({ w, d: -1, t: `${P[p][0]} arbejder weekender for tæt (max hver 3. weekend)` });
-          if (S.some(x => x.w == w && x.d == 5 && x.p == p) && S.some(x => x.w == w && x.d == 6 && x.p == p)) I.push({ w, d: -1, soft: 1, t: `${P[p][0]} arbejder både lørdag og søndag (helst kun én dag)` });
+          if (a[(w + 1) % NW] || a[(w + 2) % NW]) emit(w, -1, 0, () => `${P[p][0]} arbejder weekender for tæt (max hver 3. weekend)`);
+          if (wd(w, 5, p) && wd(w, 6, p)) emit(w, -1, 1, () => `${P[p][0]} arbejder både lørdag og søndag (helst kun én dag)`);
         });
       });
+    }
+    function check() {
+      const I = [];
+      gennemgaa((w, d, soft, t) => I.push(soft ? { w, d, soft: 1, t: t() } : { w, d, t: t() }));
       return I;
     }
+    // ---------- Den kloge planlaegger (foreslaa) ----------
+    // gen() ovenfor er den oprindelige vagtplans generator og giver et godt udgangspunkt, men
+    // den laegger vagterne ud i én fast raekkefoelge. foreslaa() koerer den for baade
+    // "2 pers. fra 15:00" og "fra 15:15", og forbedrer saa hver plan ved at proeve tusindvis af
+    // bytninger af HVEM der tager de vagter, der ikke ligger fast i opsaetningen. Hver plan faar
+    // strafpoint (vurder), og den med faerrest vinder. Regelbrud er udelukket (1.000.000 point
+    // stykket); derefter taeller:
+    const STRAF = {
+      oenske: 40,     // pr. weekend hvor nogen arbejder baade loerdag og soendag
+      ekstraTime: 3,  // pr. time en ekstra person skal daekke
+      maerkelig: 25,  // pr. vagt-start/-slut der ikke er en hel/halv time, aabning, 15:15 eller lukketid
+      sving: 0.5,     // pr. time en fleksibel medarbejders uge afviger fra hendes/hans eget snit
+      spredning: 1,   // pr. (time)^2 en fleksibel medarbejders snit afviger fra jobtypens snit
+      maal: 1,        // pr. time under maalTimer i en uge
+      fra1515: 8,     // "2 pers. fra 15:15" bruges kun hvis 15:00 koster mere end det her
+    };
+    // Fleksible = dem planlaeggeren selv fordeler (ikke faste vagter/weekend-rotation).
+    const FLEX = [...new Set([...(C.hulFyldere || []), ...(C.fyldere || []), ...(C.ekstraDage || []).map(x => x.p)])].filter(p => P[p]);
+    const paen = t => t % 30 == 0 || t == 525 || t == 915 || t == 1035 || t == 1095;
+    function vurder() {
+      let hard = 0, soft = 0;
+      gennemgaa((w, d, s) => { if (s) soft++; else hard++; });
+      const S = M.S, nx = Math.max(0, ...M.EX.filter(Boolean));
+      const ukT = S.reduce((a, x) => a + (x.p == 'uk' ? (x.e - x.s) / 60 : 0), 0);
+      let maerk = 0; S.forEach(x => { if (!paen(x.s)) maerk++; if (!paen(x.e)) maerk++; });
+      const tim = {}; FLEX.forEach(p => { tim[p] = Array(NW).fill(0); });
+      S.forEach(x => { if (tim[x.p]) tim[x.p][x.w] += (x.e - x.s) / 60; });
+      let sving = 0, spredning = 0, maal = 0; const snit = {};
+      FLEX.forEach(p => { const a = tim[p].reduce((x, y) => x + y) / NW; snit[p] = a; tim[p].forEach(h => { sving += Math.abs(h - a); }); });
+      ['L', 'S', 'U'].forEach(ty => {
+        const g = FLEX.filter(p => P[p][1] == ty); if (g.length < 2) return;
+        const ga = g.reduce((x, p) => x + snit[p], 0) / g.length;
+        g.forEach(p => { spredning += (snit[p] - ga) ** 2; });
+      });
+      (C.maalTimer || []).forEach(x => { if (tim[x.p]) tim[x.p].forEach(h => { maal += Math.max(0, x.timer - h); }); });
+      const point = hard * 1e6 + soft * STRAF.oenske + ukT * STRAF.ekstraTime + maerk * STRAF.maerkelig
+        + sving * STRAF.sving + spredning * STRAF.spredning + maal * STRAF.maal + (M.T2 == 915 ? STRAF.fra1515 : 0);
+      return { point, hard, soft, ukT, nx, maerk, sving, spredning, maal };
+    }
+    // Vagter der ligger fast i opsaetningen (faste vagter + weekend-rotationen, inkl. de
+    // soendage en ekstra person har overtaget) roeres ikke -- kun de oevrige byttes rundt.
+    function fasteNoegler() {
+      const k = new Set();
+      WK.forEach(w => {
+        (C.faste || []).forEach(x => { if (x.rotation == null || w % NR == x.rotation) k.add([w, x.d, x.p, x.s, x.e].join()); });
+        (ROT[w % NR] || []).forEach(x => k.add([w, x.d, afloest(w % NR, x) ? 'uk' : x.p, x.s, x.e].join()));
+      });
+      return k;
+    }
+    const kan = (p, x) => { const v = av(p, x.d); return v && x.s >= v[0] && x.e <= v[1] && !M.S.some(y => y != x && y.w == x.w && y.d == x.d && y.p == p); };
+    function forbedr(runder) {
+      const faste = fasteNoegler();
+      const fri = M.S.filter(x => !faste.has([x.w, x.d, x.p, x.s, x.e].join()));
+      // KUN de fleksible: de andres regler (fx en daglig leder med faste ugedage) ligger i
+      // deres faste vagter og ikke i regeltjekket, saa de maa aldrig faa ekstra vagter herfra.
+      const kandidater = FLEX;
+      if (!fri.length) return;
+      let nu = vurder().point, bedst = nu, bedstP = fri.map(x => x.p);
+      for (let i = 0, T = 30; i < runder; i++, T *= 0.998) {
+        const x = fri[Math.random() * fri.length | 0];
+        let fortryd;
+        if (Math.random() < 0.6) {
+          // Giv vagten til en anden, der kan tage den (ogsaa: erstat en ekstra person)
+          const q = kandidater.filter(p => p != x.p && kan(p, x));
+          if (!q.length) continue;
+          const gl = x.p; x.p = q[Math.random() * q.length | 0]; fortryd = () => { x.p = gl; };
+        } else {
+          // Byt to vagter samme uge, saa ugetimerne bliver ved med at passe
+          const y = fri[Math.random() * fri.length | 0];
+          if (y == x || y.w != x.w || y.d == x.d || y.p == x.p || x.p == 'uk' || y.p == 'uk') continue;
+          const px = x.p, py = y.p; x.p = py; y.p = px;
+          if (!kan(py, x) || !kan(px, y)) { x.p = px; y.p = py; continue; }
+          fortryd = () => { x.p = px; y.p = py; };
+        }
+        const ny = vurder().point;
+        if (ny <= nu || Math.random() < Math.exp((nu - ny) / T)) {
+          nu = ny;
+          if (ny < bedst) { bedst = ny; bedstP = fri.map(z => z.p); }
+        } else fortryd();
+      }
+      fri.forEach((x, i) => { x.p = bedstP[i]; });
+    }
+    function foreslaa(runder) {
+      let vinder = null;
+      for (const t2 of [900, 915]) {
+        M.T2 = t2; gen(); forbedr(runder == null ? 2500 : runder);
+        const v = vurder();
+        if (!vinder || v.point < vinder.v.point) vinder = { t2, S: M.S.map(x => ({ ...x })), v };
+      }
+      M.T2 = vinder.t2; M.S = vinder.S;
+      return vinder.v;
+    }
+
     // Timekrav pr. person til timetabellen: minimum-snit og/eller fast ugentligt antal.
     const minSnit = p => { const x = (C.minSnit || []).find(y => y.p == p); return x ? x.timer : null; };
     const ugeTimer = p => { const x = (C.ugeTimer || []).find(y => y.p == p); return x ? x.timer : null; };
 
-    Object.assign(M, { need, ext, nmi, av, cov, best, gen, genWeek, hrs, check, minSnit, ugeTimer });
+    Object.assign(M, { need, ext, nmi, av, cov, best, gen, genWeek, hrs, check, minSnit, ugeTimer, vurder, foreslaa });
     return M;
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = { lavMotor };

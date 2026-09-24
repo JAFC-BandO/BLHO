@@ -4,6 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Butik Indhold - Redigering</title>
+<!-- Lys/moerk tilstand (kun redigerings-UI'et, aldrig skaermindholdet). Saettes her i <head>,
+     FOER stylesheets og <body>, saa siden ikke naar at blinke lys frem ved indlaesning i moerk
+     tilstand. Samme noegle ('blho-tema') laeses af vagtplanen i iframen. -->
+<script>
+  try {
+    document.documentElement.setAttribute('data-tema', localStorage.getItem('blho-tema') === 'moerk' ? 'moerk' : 'lys');
+  } catch (e) {
+    document.documentElement.setAttribute('data-tema', 'lys');
+  }
+</script>
 <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=4">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
@@ -13,6 +23,36 @@
 <script src="../render-shared.js?v=2026-08-24-38"></script>
 <style>
   * { box-sizing: border-box; }
+
+  /* --- Tema-farver ---
+     Lys tilstand bruger PRAECIS de farver siden altid har haft (hver variabel er navngivet
+     efter sin rolle, men har den gamle vaerdi) -- saa lys tilstand ser ud som foer. Moerk
+     tilstand overskriver kun variablerne. Bruges af inline styles i HTML og i JS-strenge
+     (style="color:var(--ui-tekst-888)" osv.), fordi de ellers ikke kan temaes udefra.
+     Skaermindholdet (canvas, Live View, diasshow-panelet) bruger IKKE disse variabler. */
+  :root {
+    --ui-side: #f4f4f2; --ui-flade: white; --ui-flade-graa: #f7f7fb; --ui-flade-side: #f4f4f2;
+    --ui-flade-felt: #f4f4f7; --ui-flade-blaa: #eef0fd; --ui-flade-blaa2: #eef2ff; --ui-flade-blaa3: #f4f6ff;
+    --ui-flade-neutral: #eee; --ui-flade-fejl: #fdecea; --ui-flade-advarsel: #fff7e6;
+    --ui-tekst: #1a1a1a; --ui-tekst-333: #333; --ui-tekst-555: #555; --ui-tekst-666: #666;
+    --ui-tekst-888: #888; --ui-tekst-999: #999; --ui-tekst-aaa: #aaa;
+    --ui-brand-tekst: #040DB1; --ui-advarsel-tekst: #7a5c1e; --ui-fejl-moerk-tekst: #7d1c0c;
+    --ui-fejl-tekst: #c0392b; --ui-fejl-tekst2: #b92a15; --ui-orange-tekst: #b96a15; --ui-groen-tekst: #1a9b4b;
+    --ui-kant: #ddd; --ui-kant-mellem: #bbb; --ui-kant-stiplet: #ccc; --ui-kant-blaa: #dde3f7;
+    --ui-kant-advarsel: #ffe0a3; --ui-kant-fejl: #f5c6c0;
+  }
+  html[data-tema="moerk"] {
+    color-scheme: dark; /* moerke scrollbars og formularfelter (select, input, textarea) */
+    --ui-side: #15161b; --ui-flade: #1e2029; --ui-flade-graa: #262833; --ui-flade-side: #2a2c37;
+    --ui-flade-felt: #2a2c37; --ui-flade-blaa: #262b4d; --ui-flade-blaa2: #232846; --ui-flade-blaa3: #232846;
+    --ui-flade-neutral: #30323d; --ui-flade-fejl: #3a2023; --ui-flade-advarsel: #3a3020;
+    --ui-tekst: #e8e8ee; --ui-tekst-333: #d6d7de; --ui-tekst-555: #c0c2cc; --ui-tekst-666: #b0b2bd;
+    --ui-tekst-888: #9a9cab; --ui-tekst-999: #90929f; --ui-tekst-aaa: #80828f;
+    --ui-brand-tekst: #9aa6ff; --ui-advarsel-tekst: #e0bf7a; --ui-fejl-moerk-tekst: #ffb4a8;
+    --ui-fejl-tekst: #ff7b6b; --ui-fejl-tekst2: #ff7b6b; --ui-orange-tekst: #f0a64f; --ui-groen-tekst: #4cc27a;
+    --ui-kant: #3a3d4a; --ui-kant-mellem: #4a4d5a; --ui-kant-stiplet: #4a4d5a; --ui-kant-blaa: #363c63;
+    --ui-kant-advarsel: #5a4a28; --ui-kant-fejl: #5a2e2a;
+  }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: #f4f4f2;
@@ -73,6 +113,23 @@
   .topbar-actions { display: flex; align-items: center; gap: 10px; }
   .logout { font-size: 13px; color: #888; cursor: pointer; text-decoration: underline; }
   #saveBtn { padding: 8px 18px; }
+
+  /* --- Hovedfaner (Butik-redigering / Vagtplan) ---
+     Vagtplanen vises i en iframe UNDER den samme topbar, saa et fanebyt ikke genindlaeser
+     hele siden (det var det der fik alt til at "blinke"). Begge faner lever videre i
+     baggrunden, saa man kommer tilbage til praecis hvor man var. Kun brugere i
+     vagtplan_adgang ser fanerne -- se visVagtplanKnap. */
+  .hovedfaner { display: none; margin-left: 12px; background: #eef0fd; border-radius: 20px; padding: 3px; gap: 2px; }
+  .hovedfaner.synlig { display: inline-flex; }
+  .hovedfane { background: none; color: #040DB1; font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 20px; }
+  .hovedfane:hover { background: rgba(4,13,177,.08); }
+  .hovedfane.aktiv { background: #040DB1; color: white; }
+  #vagtplanVisning { display: none; }
+  body.fane-vagtplan #app { display: flex !important; flex-direction: column; height: 100vh; }
+  body.fane-vagtplan #app > :not(.topbar):not(#vagtplanVisning):not(#feedbackOverlay):not(#feedbackFloatBtn) { display: none !important; }
+  body.fane-vagtplan .kun-butik, body.fane-vagtplan #saveMsg { display: none !important; }
+  body.fane-vagtplan #vagtplanVisning { display: block; flex: 1; min-height: 0; }
+  #vagtplanVisning iframe { width: 100%; height: 100%; border: 0; display: block; }
 
   .main {
     display: grid;
@@ -348,11 +405,71 @@
     .canvas { min-width: 0; max-width: 100%; }
     .add-btn { padding: 9px 12px; font-size: 13px; }
   }
+
+  /* --- Moerk tilstand: klasse-reglerne ovenfor ---
+     Kun redigerings-UI'et. .canvas, #liveViewBox og alt indeni er skaermindhold og skal se
+     ud praecis som paa den rigtige skaerm -- de faar derfor lys-tilstandens arvede tekstfarve
+     og color-scheme tilbage, saa intet i dem kan arve de moerke vaerdier. */
+  html[data-tema="moerk"] body { background: var(--ui-side); color: var(--ui-tekst); }
+  html[data-tema="moerk"] .canvas,
+  html[data-tema="moerk"] #liveViewBox { color: #1a1a1a; color-scheme: light; }
+  html[data-tema="moerk"] .card,
+  html[data-tema="moerk"] .topbar,
+  html[data-tema="moerk"] .sidebar,
+  html[data-tema="moerk"] .canvas-outer,
+  html[data-tema="moerk"] .emoji-picker { background: var(--ui-flade); }
+  html[data-tema="moerk"] .card { box-shadow: 0 2px 12px rgba(0,0,0,.35); }
+  html[data-tema="moerk"] .topbar { border-bottom-color: #2c2e38; }
+  html[data-tema="moerk"] h1 { color: var(--ui-brand-tekst); }
+  html[data-tema="moerk"] .subtitle { color: var(--ui-tekst-666); }
+  html[data-tema="moerk"] label:not(.canvas label) { color: var(--ui-tekst-333); }
+  html[data-tema="moerk"] input[type=email],
+  html[data-tema="moerk"] input[type=password],
+  html[data-tema="moerk"] input[type=text] { border-color: var(--ui-kant); background: #15161b; color: var(--ui-tekst); }
+  html[data-tema="moerk"] textarea:not(.canvas textarea),
+  html[data-tema="moerk"] select:not(.canvas select) { background: #15161b; color: var(--ui-tekst); }
+  html[data-tema="moerk"] button:disabled:not(.canvas button) { background: #4a4d5a; color: #9a9cab; }
+  html[data-tema="moerk"] .msg.ok { background: #1d3326; color: #7fd49a; }
+  html[data-tema="moerk"] .msg.err { background: var(--ui-flade-fejl); color: #ff8a7a; }
+  html[data-tema="moerk"] .butik-badge,
+  html[data-tema="moerk"] .add-btn,
+  html[data-tema="moerk"] .side-tab,
+  html[data-tema="moerk"] .hovedfaner { background: var(--ui-flade-blaa); color: var(--ui-brand-tekst); }
+  html[data-tema="moerk"] .add-btn:hover { background: #313866; }
+  html[data-tema="moerk"] .help-hint { background: rgba(154,166,255,.2); color: var(--ui-brand-tekst); }
+  html[data-tema="moerk"] .help-hint:hover { background: rgba(154,166,255,.35); }
+  html[data-tema="moerk"] .side-tab.active,
+  html[data-tema="moerk"] .hovedfane.aktiv { background: #040DB1; color: white; }
+  html[data-tema="moerk"] .hovedfane { color: var(--ui-brand-tekst); }
+  html[data-tema="moerk"] .hovedfane:hover { background: rgba(154,166,255,.12); }
+  html[data-tema="moerk"] .side-tab-new { background: var(--ui-flade-side); color: var(--ui-tekst-666); }
+  html[data-tema="moerk"] .live-dot-vaelg { border-color: #5a5d6a; }
+  html[data-tema="moerk"] .sidebar h2 { color: var(--ui-tekst-888); }
+  html[data-tema="moerk"] .logout { color: var(--ui-tekst-888); }
+  html[data-tema="moerk"] .media-banner { background: var(--ui-flade-advarsel); color: var(--ui-advarsel-tekst); }
+  html[data-tema="moerk"] .media-item { background: #2a2c37; }
+  html[data-tema="moerk"] .upload-label { border-color: var(--ui-kant-mellem); color: var(--ui-tekst-555); }
+  html[data-tema="moerk"] .upload-label:hover { border-color: var(--ui-brand-tekst); color: var(--ui-brand-tekst); }
+  html[data-tema="moerk"] .emoji-picker button:hover { background: #30323d; }
+  html[data-tema="moerk"] .feedback-type-btn:not(.active) { background: var(--ui-flade-side); color: var(--ui-tekst-666); }
+  html[data-tema="moerk"] .feedback-type-btn.active { background: var(--ui-flade-blaa); color: var(--ui-brand-tekst); }
+
+  /* --- Tema-knap (topbar + login) --- */
+  .tema-knap {
+    display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+    border-radius: 50%; padding: 0; background: #eef0fd; color: #040DB1; font-size: 15px; line-height: 1;
+  }
+  .tema-knap:hover { background: #dde1fb; }
+  html[data-tema="moerk"] .tema-knap { background: var(--ui-flade-blaa); color: #ffd24d; }
+  html[data-tema="moerk"] .tema-knap:hover { background: #313866; }
+  .tema-knap-login { position: fixed; top: 16px; right: 16px; z-index: 10; }
 </style>
 </head>
 <body>
 
 <div class="login-wrap" id="loginWrap">
+  <!-- Inde i loginWrap, saa den forsvinder sammen med login-skaermen. -->
+  <button type="button" class="tema-knap tema-knap-login" id="temaKnapLogin"></button>
   <div class="login-logo-panel">
     <img src="../logo-boerneloppen.svg" alt="Børneloppen">
   </div>
@@ -374,7 +491,7 @@
     <!-- Bruger email-feltet ovenfor i stedet for sit eget: ét felt mindre at udfylde, og
          man har som regel allerede skrevet sin adresse foer man opdager at man har glemt
          koden. -->
-    <a href="#" id="glemtPasswordLink" style="display:inline-block; margin-top:12px; font-size:12px; color:#040DB1; text-decoration:none;">Glemt adgangskode?</a>
+    <a href="#" id="glemtPasswordLink" style="display:inline-block; margin-top:12px; font-size:12px; color:var(--ui-brand-tekst); text-decoration:none;">Glemt adgangskode?</a>
     <div class="msg" id="loginMsg"></div>
   </div>
   <div class="card" id="setPasswordCard" style="display:none; margin-top:16px;">
@@ -388,7 +505,7 @@
            nyttigt naar man er landet her fra et link i en mail. -->
       <label for="setPasswordEmail">Konto</label>
       <input type="text" id="setPasswordEmail" autocomplete="username" readonly tabindex="-1"
-             style="background:#f4f4f7; color:#666; cursor:default;">
+             style="background:var(--ui-flade-felt); color:var(--ui-tekst-666); cursor:default;">
       <label for="newPassword1">Nyt password</label>
       <input type="password" id="newPassword1" autocomplete="new-password">
       <label for="newPassword2">Gentag password</label>
@@ -402,42 +519,49 @@
 <div id="app">
   <div class="topbar">
     <div style="display:flex; align-items:center;">
-      <div class="butik-badge" id="butikNavn"></div>
+      <div class="butik-badge kun-butik" id="butikNavn"></div>
       <!-- Kun for almindelige admins med adgang til flere butikker (bruger_butikker) --
            erstatter badget ovenfor, som saa skjules. Se loadMineButikker/skiftMinButik. -->
-      <span id="mineButikkerWrap" style="display:none; align-items:center; gap:6px;">
-        <label for="mineButikkerSelect" style="font-size:12px; color:#888;">Skift butik:</label>
+      <span id="mineButikkerWrap" class="kun-butik" style="display:none; align-items:center; gap:6px;">
+        <label for="mineButikkerSelect" style="font-size:12px; color:var(--ui-tekst-888);">Skift butik:</label>
         <select id="mineButikkerSelect" class="butik-badge" style="border:none; cursor:pointer;"></select>
       </span>
-      <div style="position:relative; display:inline-block; margin-left:8px;">
+      <div class="kun-butik" style="position:relative; display:inline-block; margin-left:8px;">
         <span id="superadminBadge" style="display:none; background:#ffd700; color:#5a4600; font-weight:700; font-size:12px; padding:4px 10px; border-radius:20px; cursor:pointer; user-select:none;">Admin ▾</span>
-        <div id="superadminMenu" style="display:none; position:absolute; top:100%; left:0; margin-top:6px; background:white; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.2); padding:14px; width:280px; z-index:1000;">
-          <h2 style="margin:0 0 10px 0; font-size:13px; text-transform:uppercase; letter-spacing:.03em; color:#888;">Admin</h2>
-          <label style="font-size:11px; color:#888; display:block; margin-bottom:3px;">Skift butik (redigér som)</label>
+        <div id="superadminMenu" style="display:none; position:absolute; top:100%; left:0; margin-top:6px; background:var(--ui-flade); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.2); padding:14px; width:280px; z-index:1000;">
+          <h2 style="margin:0 0 10px 0; font-size:13px; text-transform:uppercase; letter-spacing:.03em; color:var(--ui-tekst-888);">Admin</h2>
+          <label style="font-size:11px; color:var(--ui-tekst-888); display:block; margin-bottom:3px;">Skift butik (redigér som)</label>
           <select id="skiftButikSelect" style="width:100%; padding:6px; font-size:13px; margin-bottom:10px;"></select>
           <button id="masterEditBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Rediger fælles skabelon</button>
           <button id="faellesSlideBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Fælles slide i alle diasshow</button>
           <button id="enhederBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Enheder / Fjernsupport</button>
           <button id="aktivitetslogBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Aktivitetslog</button>
           <button id="feedbackAdminBtn" style="width:100%; padding:8px; font-size:13px; margin-bottom:10px;">Feedback fra butikker</button>
-          <div style="font-size:11px; color:#666; line-height:1.5;">
+          <div style="font-size:11px; color:var(--ui-tekst-666); line-height:1.5;">
             <b>Fælles skabelon:</b> ét layout du redigerer ét sted. Elementer du låser der (lås-knappen i Egenskaber) vises identisk og skrivebeskyttet på ALLE butikkers skærme med det samme.
             <br><br>
             <b>Fælles slide:</b> ét ekstra slide der lægges ind i alle butikkers diasshow. Det skrives aldrig ind i butikkernes indhold — det vises kun, og forsvinder overalt når du fjerner det igen.
           </div>
         </div>
       </div>
-      <!-- Vagtplan: separat side, kun for brugere i vagtplan_adgang (se visVagtplanKnap) --
-           ikke koblet til superadmin eller butik. -->
-      <a id="vagtplanLink" href="../vagtplan/" style="display:none; margin-left:8px; background:#eef0fd; color:#040DB1; font-weight:700; font-size:12px; padding:4px 10px; border-radius:20px; text-decoration:none;">Vagtplan</a>
+      <!-- Hovedfaner: kun synlige for brugere i vagtplan_adgang (se visVagtplanKnap) -- ikke
+           koblet til superadmin eller butik. -->
+      <nav class="hovedfaner" id="hovedfaner" aria-label="Skift side">
+        <button type="button" class="hovedfane aktiv" data-fane="butik">Butik-redigering</button>
+        <button type="button" class="hovedfane" data-fane="vagtplan">Vagtplan</button>
+      </nav>
     </div>
     <div class="topbar-actions">
-      <div class="msg" id="saveMsg" style="display:none;"></div>
-      <span id="guideOpenBtn" title="Se guiden til systemet" style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:#eef0fd; color:#040DB1; font-weight:700; font-size:14px; cursor:pointer; user-select:none;">?</span>
-      <button id="saveBtn">Gem ændringer</button>
+      <div class="msg kun-butik" id="saveMsg" style="display:none;"></div>
+      <span id="guideOpenBtn" class="kun-butik" title="Se guiden til systemet" style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:var(--ui-flade-blaa); color:var(--ui-brand-tekst); font-weight:700; font-size:14px; cursor:pointer; user-select:none;">?</span>
+      <button type="button" class="tema-knap" id="temaKnap"></button>
+      <button id="saveBtn" class="kun-butik">Gem ændringer</button>
       <div class="logout" id="logoutBtn">Log ud</div>
     </div>
   </div>
+
+  <!-- Vagtplanens iframe oprettes foerst naar fanen aabnes (skiftFane). -->
+  <div id="vagtplanVisning"></div>
 
   <div id="faellesSlideBanner" style="display:none; align-items:center; justify-content:space-between; background:#4d5bff; color:#fff; font-weight:700; font-size:13px; padding:8px 20px;">
     <span id="faellesSlideBannerTekst">Du bygger et FÆLLES SLIDE — byg det som en helt almindelig side.</span>
@@ -450,13 +574,13 @@
   </div>
 
   <div id="faellesSlideOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:2000; align-items:center; justify-content:center;">
-    <div style="background:white; border-radius:10px; padding:24px; width:min(680px, 92vw); max-height:85vh; overflow-y:auto;">
+    <div style="background:var(--ui-flade); border-radius:10px; padding:24px; width:min(680px, 92vw); max-height:85vh; overflow-y:auto;">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
         <h2 style="margin:0;">Fælles slides i alle diasshow</h2>
-        <span id="faellesSlideCloseBtn" style="cursor:pointer; font-size:20px; color:#888; line-height:1;">✕</span>
+        <span id="faellesSlideCloseBtn" style="cursor:pointer; font-size:20px; color:var(--ui-tekst-888); line-height:1;">✕</span>
       </div>
 
-      <div style="font-size:12px; color:#666; line-height:1.6; background:#f4f6ff; border-radius:8px; padding:12px; margin-bottom:18px;">
+      <div style="font-size:12px; color:var(--ui-tekst-666); line-height:1.6; background:var(--ui-flade-blaa3); border-radius:8px; padding:12px; margin-bottom:18px;">
         Lægger ekstra slides ind i <b>alle butikkers diasshow</b> på én gang — fx en kampagne eller en driftsbesked.
         <br><br>
         De gemmes <b>aldrig</b> i butikkernes eget indhold. De flettes ind når skærmen tegner, så ingen butiks
@@ -474,43 +598,43 @@
         <button id="tilfoejMedieSlideBtn" style="padding:9px 16px; font-size:13px;">+ Tilføj billede/video</button>
       </div>
 
-      <div id="faellesSlideMediaValg" style="display:none; margin-bottom:18px; background:#f7f7fb; border-radius:8px; padding:12px;">
+      <div id="faellesSlideMediaValg" style="display:none; margin-bottom:18px; background:var(--ui-flade-graa); border-radius:8px; padding:12px;">
         <select id="faellesSlideMedie" style="width:100%; padding:8px; font-size:13px; margin-bottom:8px;"></select>
         <div style="display:flex; gap:8px; align-items:center;">
           <button id="faellesSlideMedieOkBtn" style="padding:7px 14px; font-size:12px;">Tilføj til listen</button>
-          <button id="faellesSlideMedieAnnullerBtn" style="padding:7px 14px; font-size:12px; background:#fff; border:1px solid #bbb; color:#666;">Fortryd</button>
-          <span style="font-size:11px; color:#888;">Fra mediebiblioteket. Bucket'en er offentlig, så et medie virker i alle butikker.</span>
+          <button id="faellesSlideMedieAnnullerBtn" style="padding:7px 14px; font-size:12px; background:var(--ui-flade); border:1px solid var(--ui-kant-mellem); color:var(--ui-tekst-666);">Fortryd</button>
+          <span style="font-size:11px; color:var(--ui-tekst-888);">Fra mediebiblioteket. Bucket'en er offentlig, så et medie virker i alle butikker.</span>
         </div>
       </div>
 
       <div style="display:flex; align-items:center; gap:8px; margin-bottom:18px;">
-        <label for="faellesSlidePosition" style="font-size:12px; color:#666;">Hvor i rækkefølgen:</label>
+        <label for="faellesSlidePosition" style="font-size:12px; color:var(--ui-tekst-666);">Hvor i rækkefølgen:</label>
         <select id="faellesSlidePosition" style="padding:6px 8px; font-size:12px;">
           <option value="sidst">Sidst — efter butikkens egne slides</option>
           <option value="foerst">Først — vises før butikkens egne</option>
           <option value="efter-foerste">Efter det første slide</option>
         </select>
-        <span style="font-size:11px; color:#888;">Gælder alle fælles slides.</span>
+        <span style="font-size:11px; color:var(--ui-tekst-888);">Gælder alle fælles slides.</span>
       </div>
 
       <span id="faellesSlideMsg" style="font-size:12px;"></span>
 
-      <div id="faellesSlideRaekkevidde" style="font-size:11px; color:#888; margin-top:16px; line-height:1.6;"></div>
+      <div id="faellesSlideRaekkevidde" style="font-size:11px; color:var(--ui-tekst-888); margin-top:16px; line-height:1.6;"></div>
     </div>
   </div>
   <div id="enhederOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:2000; align-items:center; justify-content:center;">
-    <div style="background:white; border-radius:10px; padding:24px; width:min(720px, 92vw); max-height:85vh; overflow-y:auto;">
+    <div style="background:var(--ui-flade); border-radius:10px; padding:24px; width:min(720px, 92vw); max-height:85vh; overflow-y:auto;">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
         <h2 style="margin:0;">Enheder / Fjernsupport</h2>
-        <span id="enhederCloseBtn" style="cursor:pointer; font-size:20px; color:#888; line-height:1;">✕</span>
+        <span id="enhederCloseBtn" style="cursor:pointer; font-size:20px; color:var(--ui-tekst-888); line-height:1;">✕</span>
       </div>
 
-      <div style="font-size:12px; color:#888; margin-bottom:16px;">
+      <div style="font-size:12px; color:var(--ui-tekst-888); margin-bottom:16px;">
         Enheden "melder sig" selv med jævne mellemrum — status opdateres derfor ikke i realtid, men typisk indenfor et minut. En kommando udføres af enheden ved næste check-in.
       </div>
 
       <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; font-size:12px;">
-        <label for="enhederSortering" style="color:#888;">Sortér:</label>
+        <label for="enhederSortering" style="color:var(--ui-tekst-888);">Sortér:</label>
         <select id="enhederSortering" style="padding:5px 8px; font-size:12px;">
           <option value="status">Online først</option>
           <option value="butik">Butik (A-Å)</option>
@@ -518,7 +642,7 @@
           <option value="hukommelse">Ledig hukommelse (mindst først)</option>
           <option value="type">Type</option>
         </select>
-        <span id="enhederAntal" style="color:#aaa; margin-left:auto;"></span>
+        <span id="enhederAntal" style="color:var(--ui-tekst-aaa); margin-left:auto;"></span>
       </div>
 
       <div id="enhederListe" style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;"></div>
@@ -533,13 +657,13 @@
   </div>
 
   <div id="aktivitetslogOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:2000; align-items:center; justify-content:center;">
-    <div style="background:white; border-radius:10px; padding:24px; width:min(720px, 92vw); max-height:85vh; overflow-y:auto;">
+    <div style="background:var(--ui-flade); border-radius:10px; padding:24px; width:min(720px, 92vw); max-height:85vh; overflow-y:auto;">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
         <h2 style="margin:0;">Aktivitetslog</h2>
-        <span id="aktivitetslogCloseBtn" style="cursor:pointer; font-size:20px; color:#888; line-height:1;">✕</span>
+        <span id="aktivitetslogCloseBtn" style="cursor:pointer; font-size:20px; color:var(--ui-tekst-888); line-height:1;">✕</span>
       </div>
 
-      <div style="font-size:12px; color:#888; margin-bottom:16px;">
+      <div style="font-size:12px; color:var(--ui-tekst-888); margin-bottom:16px;">
         Hvem logger ind, og hvornår indhold/skabeloner bliver gemt — kun synligt for superadmin. De seneste 200 hændelser.
       </div>
 
@@ -564,13 +688,13 @@
   </div>
 
   <div id="feedbackAdminOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:2000; align-items:center; justify-content:center;">
-    <div style="background:white; border-radius:10px; padding:24px; width:min(720px, 92vw); max-height:85vh; overflow-y:auto;">
+    <div style="background:var(--ui-flade); border-radius:10px; padding:24px; width:min(720px, 92vw); max-height:85vh; overflow-y:auto;">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
         <h2 style="margin:0;">Feedback fra butikker</h2>
-        <span id="feedbackAdminCloseBtn" style="cursor:pointer; font-size:20px; color:#888; line-height:1;">✕</span>
+        <span id="feedbackAdminCloseBtn" style="cursor:pointer; font-size:20px; color:var(--ui-tekst-888); line-height:1;">✕</span>
       </div>
 
-      <div style="font-size:12px; color:#888; margin-bottom:16px;">
+      <div style="font-size:12px; color:var(--ui-tekst-888); margin-bottom:16px;">
         Fejlrapporter og ønsker om ændringer, sendt fra "Feedback"-knappen — kun synligt for superadmin. De seneste 300.
       </div>
 
@@ -594,12 +718,12 @@
        gamle "tilfoej loesrevet element, gaa saa ind i Egenskaber og adoptér en fast plads"-
        forloeb, og garanterer at det snapper 100% til pladsens placering med det samme. -->
   <div id="slotVaelgerOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:2000; align-items:center; justify-content:center;">
-    <div style="background:white; border-radius:10px; padding:24px; width:min(420px, 92vw);">
+    <div style="background:var(--ui-flade); border-radius:10px; padding:24px; width:min(420px, 92vw);">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
         <h2 style="margin:0;">Hvilken plads skal dette ind i?</h2>
-        <span id="slotVaelgerCloseBtn" style="cursor:pointer; font-size:20px; color:#888; line-height:1;">✕</span>
+        <span id="slotVaelgerCloseBtn" style="cursor:pointer; font-size:20px; color:var(--ui-tekst-888); line-height:1;">✕</span>
       </div>
-      <div style="font-size:12px; color:#888; margin-bottom:16px;">
+      <div style="font-size:12px; color:var(--ui-tekst-888); margin-bottom:16px;">
         Dette element passer bedst ind i ét af skabelonens faste vinduer, så det altid rammer placeringen 100% rigtigt uden at du selv skal finjustere det bagefter.
       </div>
       <div id="slotVaelgerListe" style="display:flex; flex-direction:column; gap:8px;"></div>
@@ -607,7 +731,7 @@
            almindelige admins maa KUN fylde et af de 2 faste vinduer, saa for dem er de eneste
            to knapper i "Tilføj element" i forvejen FYLDER_HELE-typer, og skal ALTID ende i et
            af vinduerne (se opdaterTilfoejHint + klik-haandteringen for [data-add]). -->
-      <button id="slotVaelgerFritBtn" class="superadmin-only" style="display:none; margin-top:12px; padding:10px; font-size:13px; text-align:left; border-radius:6px; border:1px dashed #ccc; background:none; cursor:pointer; color:#666; width:100%;">Nej tak, tilføj som et almindeligt, frit element i stedet</button>
+      <button id="slotVaelgerFritBtn" class="superadmin-only" style="display:none; margin-top:12px; padding:10px; font-size:13px; text-align:left; border-radius:6px; border:1px dashed var(--ui-kant-stiplet); background:none; cursor:pointer; color:var(--ui-tekst-666); width:100%;">Nej tak, tilføj som et almindeligt, frit element i stedet</button>
     </div>
   </div>
 
@@ -618,14 +742,14 @@
        skygge malede henover kortet i stedet for omvendt. -->
   <div id="guideOverlay" style="display:none; position:fixed; inset:0; z-index:3010;">
     <div id="guideArrow" style="display:none; position:fixed; width:0; height:0; z-index:3002;"></div>
-    <div id="guideCard" style="position:fixed; background:white; border-radius:12px; padding:22px 24px; width:min(360px, 90vw); text-align:left; z-index:3002; box-shadow:0 12px 32px rgba(0,0,0,.28); transition:top .2s, left .2s;">
-      <div id="guideEyebrow" style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#040DB1; margin-bottom:6px;"></div>
+    <div id="guideCard" style="position:fixed; background:var(--ui-flade); border-radius:12px; padding:22px 24px; width:min(360px, 90vw); text-align:left; z-index:3002; box-shadow:0 12px 32px rgba(0,0,0,.28); transition:top .2s, left .2s;">
+      <div id="guideEyebrow" style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--ui-brand-tekst); margin-bottom:6px;"></div>
       <h1 id="guideTitel" style="margin:0 0 8px 0; font-size:17px;"></h1>
-      <div id="guideBody" style="color:#555; font-size:13px; line-height:1.55; margin-bottom:18px;"></div>
+      <div id="guideBody" style="color:var(--ui-tekst-555); font-size:13px; line-height:1.55; margin-bottom:18px;"></div>
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
         <span id="guideDots" style="display:flex; gap:5px;"></span>
         <div style="display:flex; gap:8px;">
-          <button id="guideSkipBtn" style="padding:7px 12px; font-size:12px; background:#f4f4f2; color:#666;">Spring over</button>
+          <button id="guideSkipBtn" style="padding:7px 12px; font-size:12px; background:var(--ui-flade-side); color:var(--ui-tekst-666);">Spring over</button>
           <button id="guideNextBtn" style="padding:7px 14px; font-size:12px;">Næste</button>
         </div>
       </div>
@@ -636,7 +760,7 @@
     <div class="sidebar">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
         <h2 style="margin:0;">Live nu på skærmen</h2>
-        <span id="liveViewBadge" style="font-size:11px; color:#666;"></span>
+        <span id="liveViewBadge" style="font-size:11px; color:var(--ui-tekst-666);"></span>
       </div>
       <div id="liveViewBox" style="position:relative; width:100%; aspect-ratio:16/9; background:#0a0a0a; border-radius:8px; overflow:hidden; container-type:inline-size; margin-bottom:8px;"></div>
       <!-- Aabner den RIGTIGE skaerm-visning (skaerm.html) i en ny fane -- ikke et link med
@@ -646,14 +770,14 @@
            selve butiksnavnet for den butik man rent faktisk kigger paa lige nu -- ellers ville
            en superadmin der har "skiftet butik" altid lande paa sin EGEN hjemme-butik i
            stedet for den de faktisk redigerer, naar de har en eksisterende session. -->
-      <a id="skaermVisLink" href="../skaerm.html" target="_blank" rel="noopener" style="display:block; text-align:center; font-size:12px; color:#040DB1; margin-bottom:20px; text-decoration:none;">Se jeres skærm ↗</a>
+      <a id="skaermVisLink" href="../skaerm.html" target="_blank" rel="noopener" style="display:block; text-align:center; font-size:12px; color:var(--ui-brand-tekst); margin-bottom:20px; text-decoration:none;">Se jeres skærm ↗</a>
 
       <h2>Tilføj element</h2>
       <!-- id="tilfoejElementHint" -- teksten herunder saettes af JS alt efter om man er
            superadmin (frit layout, alle typer) eller almindelig admin (KUN de 2 faste vinduer:
            banner + hoved, og KUN Billede/Video/Diasshow som indholdstyper -- resten er
            superadmin-only, se klasserne herunder). -->
-      <div id="tilfoejElementHint" style="font-size:11px; color:#888; margin-bottom:8px;"></div>
+      <div id="tilfoejElementHint" style="font-size:11px; color:var(--ui-tekst-888); margin-bottom:8px;"></div>
       <div class="add-row">
         <button class="add-btn superadmin-only" data-add="titel" style="display:none;"><svg width="18" height="18" viewBox="0 0 20 20"><path d="M4 5h12M10 5v10" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>Titel<span class="help-hint" data-help="Stor, fed overskriftstekst -- til et kort budskab, fx en kampagnetitel.">?</span></button>
         <button class="add-btn superadmin-only" data-add="tekst" style="display:none;"><svg width="18" height="18" viewBox="0 0 20 20"><path d="M4 6h12M4 10h12M4 14h8" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>Tekst<span class="help-hint" data-help="Almindelig brødtekst -- til længere beskeder eller information.">?</span></button>
@@ -669,30 +793,30 @@
         <button class="add-btn superadmin-only" data-add="vejr" style="display:none;"><svg width="18" height="18" viewBox="0 0 20 20"><circle cx="7" cy="7.5" r="2.6" fill="currentColor" opacity="0.55"/><path d="M8.5 15.5a3.4 3.4 0 0 1 .3-6.8 3.9 3.9 0 0 1 7.4 1.6 2.8 2.8 0 0 1-.6 5.2H8.5z" fill="currentColor"/></svg>Vejr<span class="help-hint" data-help="Viser aktuelt vejr og en kort udsigt for butikkens by.">?</span></button>
       </div>
 
-      <div id="propsPanel" style="display:none; margin-bottom:20px; padding:12px; background:#f7f7fb; border-radius:8px;">
+      <div id="propsPanel" style="display:none; margin-bottom:20px; padding:12px; background:var(--ui-flade-graa); border-radius:8px;">
         <h2 style="margin-top:0;">Egenskaber</h2>
         <div id="propsSizeRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Størrelse (%)</label>
           <div style="display:flex; align-items:flex-end; gap:8px;">
             <div>
-              <div style="font-size:10px; color:#888; margin-bottom:2px;">Bredde</div>
+              <div style="font-size:10px; color:var(--ui-tekst-888); margin-bottom:2px;">Bredde</div>
               <input type="number" id="propWidth" min="1" max="100" step="0.5" style="width:70px;">
             </div>
             <div>
-              <div style="font-size:10px; color:#888; margin-bottom:2px;">Højde</div>
+              <div style="font-size:10px; color:var(--ui-tekst-888); margin-bottom:2px;">Højde</div>
               <input type="number" id="propHeight" min="1" max="100" step="0.5" style="width:70px;">
             </div>
           </div>
-          <div id="propsSizeHint" style="font-size:11px; color:#888; margin-top:4px;">Skriv et tal for at gøre elementet større/mindre, uden at skulle trække i det.</div>
+          <div id="propsSizeHint" style="font-size:11px; color:var(--ui-tekst-888); margin-top:4px;">Skriv et tal for at gøre elementet større/mindre, uden at skulle trække i det.</div>
         </div>
         <!-- Anbefalet billedstoerrelse: elementets procent-stoerrelse omregnet til den fysiske
              skaerms pixels, saa man kan lave filen i praecis det format i fx Canva i stedet for
              at gaette. Oenske fra Vallensbaek (august 2026) -- de havde uploadet et coverbillede
              i helt forkert format for at se hvad der skete, og der stod intet nogen steder. -->
-        <div id="propsBilledStoerrelseRow" style="display:none; margin-bottom:12px; background:#eef2ff; border-radius:8px; padding:10px;">
+        <div id="propsBilledStoerrelseRow" style="display:none; margin-bottom:12px; background:var(--ui-flade-blaa2); border-radius:8px; padding:10px;">
           <label style="margin-top:0;">Anbefalet billedstørrelse</label>
-          <div id="propsBilledStoerrelse" style="font-size:16px; font-weight:700; color:#040DB1; margin-top:2px;"></div>
-          <div style="font-size:11px; color:#888; margin-top:4px;">Billeder og video <strong>strækkes</strong> ud til at fylde boksen -- der bliver ikke skåret noget fra. Laver du filen i et andet format, bliver den altså synligt trykket sammen eller trukket i langdrag. Hele skærmen er 1920x1080.</div>
+          <div id="propsBilledStoerrelse" style="font-size:16px; font-weight:700; color:var(--ui-brand-tekst); margin-top:2px;"></div>
+          <div style="font-size:11px; color:var(--ui-tekst-888); margin-top:4px;">Billeder og video <strong>strækkes</strong> ud til at fylde boksen -- der bliver ikke skåret noget fra. Laver du filen i et andet format, bliver den altså synligt trykket sammen eller trukket i langdrag. Hele skærmen er 1920x1080.</div>
         </div>
         <!-- Instagram-video afspiller aldrig af sig selv i en offentlig indlejring. Opslaget
              ligger i en iframe paa instagram.com -- en anden origin -- saa browseren blokerer
@@ -701,36 +825,36 @@
              et syntetisk klik ville blive afvist. Det gaelder enhver metode, ikke kun vores.
              Noten staar her, saa man opdager det MENS man saetter elementet op -- ikke foerst
              naar skaermen staar i butikken med et afspil-ikon paa. -->
-        <div id="propsInstagramInfoRow" style="display:none; margin-bottom:12px; background:#fff7e6; border:1px solid #ffe0a3; border-radius:8px; padding:10px;">
+        <div id="propsInstagramInfoRow" style="display:none; margin-bottom:12px; background:var(--ui-flade-advarsel); border:1px solid var(--ui-kant-advarsel); border-radius:8px; padding:10px;">
           <label style="margin-top:0;">Video afspiller ikke automatisk</label>
-          <div style="font-size:11px; color:#7a5c1e; margin-top:4px; line-height:1.5;">
+          <div style="font-size:11px; color:var(--ui-advarsel-tekst); margin-top:4px; line-height:1.5;">
             Er opslaget en <strong>video eller reel</strong>, viser skærmen kun et stillbillede med et afspil-ikon. Instagram kræver et rigtigt klik, og det kan ingen løsning omgå.<br><br>
             <strong>Skal videoen køre af sig selv:</strong> hent den fra Instagram og upload den som et almindeligt <strong>video-element</strong> i stedet. Så afspiller den automatisk, looper og er uden Instagram-ramme.<br><br>
             Er opslaget et <strong>billede</strong>, virker det fint som det er.
           </div>
         </div>
-        <div id="propAutoFyldRow" style="display:none; margin-bottom:12px; background:#eef2ff; border-radius:8px; padding:10px;">
+        <div id="propAutoFyldRow" style="display:none; margin-bottom:12px; background:var(--ui-flade-blaa2); border-radius:8px; padding:10px;">
           <label style="display:flex; align-items:center; gap:6px; margin-top:0;">
             <input type="checkbox" id="propAutoFyldRest" style="margin:0;">
             Fyld automatisk resten af pladsen
           </label>
-          <div id="propAutoFyldHint" style="font-size:11px; color:#888; margin-top:4px;">Størrelse/placering udregnes automatisk ud fra hvad der allerede er på siden -- fylder ud til det naermeste andet element (eller skaermens kant, hvis intet er i vejen) i alle fire retninger. Opdateres live, saa denne plads aldrig kommer ud af trit igen, selv hvis du senere flytter noget den er tilpasset efter.</div>
+          <div id="propAutoFyldHint" style="font-size:11px; color:var(--ui-tekst-888); margin-top:4px;">Størrelse/placering udregnes automatisk ud fra hvad der allerede er på siden -- fylder ud til det naermeste andet element (eller skaermens kant, hvis intet er i vejen) i alle fire retninger. Opdateres live, saa denne plads aldrig kommer ud af trit igen, selv hvis du senere flytter noget den er tilpasset efter.</div>
         </div>
         <div id="propsContentScaleRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Indhold-størrelse (%)</label>
           <input type="number" id="propContentScale" min="20" max="200" step="5" style="width:80px;">
-          <div style="font-size:11px; color:#888; margin-top:4px;">Gør ikoner/tekst/billede større eller mindre UDEN at ændre selve boksen -- går det ud over boksens kant, bliver det klippet der, ligesom alt andet indhold.</div>
+          <div style="font-size:11px; color:var(--ui-tekst-888); margin-top:4px;">Gør ikoner/tekst/billede større eller mindre UDEN at ændre selve boksen -- går det ud over boksens kant, bliver det klippet der, ligesom alt andet indhold.</div>
         </div>
         <div id="propsMiljoeKortRow" style="margin-bottom:12px; display:none;">
           <label style="margin-top:0;">Kortets højde (% af boksen)</label>
           <input type="number" id="propMiljoeHoejde" min="10" max="100" step="5" style="width:80px;">
           <label>Kortets bredde (% af boksen)</label>
           <input type="number" id="propMiljoeBredde" min="10" max="100" step="5" style="width:80px;" placeholder="auto">
-          <div style="font-size:11px; color:#888; margin-top:4px;">Kortet centreres altid i boksen med baggrunden rundt om. Lad bredden stå tom, så holder kortet automatisk et slankt 3:4-format ud fra højden -- sæt kun et tal hvis du selv vil styre bredden.</div>
+          <div style="font-size:11px; color:var(--ui-tekst-888); margin-top:4px;">Kortet centreres altid i boksen med baggrunden rundt om. Lad bredden stå tom, så holder kortet automatisk et slankt 3:4-format ud fra højden -- sæt kun et tal hvis du selv vil styre bredden.</div>
         </div>
         <div id="propsVejrHeadingRow" style="margin-bottom:12px; display:none;">
           <label style="margin-top:0;">Overskriftens placering ("Vejret i dag (Horsens)")</label>
-          <div style="font-size:11px; color:#888; margin:2px 0 6px 0;">Træk direkte i teksten på canvas for at flytte den, eller marker den (klik på den) og brug piletasterne til finjustering.</div>
+          <div style="font-size:11px; color:var(--ui-tekst-888); margin:2px 0 6px 0;">Træk direkte i teksten på canvas for at flytte den, eller marker den (klik på den) og brug piletasterne til finjustering.</div>
           <button id="propVejrHeadingResetBtn" style="padding:6px 10px; font-size:12px;">Nulstil placering</button>
         </div>
         <div id="propsFontSizeRow" style="margin-bottom:12px;">
@@ -741,14 +865,14 @@
           <label style="margin-top:0;">Tekstfarve</label>
           <div style="display:flex; align-items:center; gap:8px;">
             <input type="color" id="propTextColor" style="width:40px; height:32px; border:none; border-radius:6px; cursor:pointer; padding:0;">
-            <input type="text" id="propTextColorHex" placeholder="#rrggbb" style="width:90px; padding:6px 8px; font-size:12px; border:1px solid #ddd; border-radius:6px;">
+            <input type="text" id="propTextColorHex" placeholder="#rrggbb" style="width:90px; padding:6px 8px; font-size:12px; border:1px solid var(--ui-kant); border-radius:6px;">
           </div>
         </div>
         <div id="propsBoxColorRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Boksens baggrundsfarve</label>
           <div style="display:flex; align-items:center; gap:8px;">
             <input type="color" id="propBoxColor" style="width:40px; height:32px; border:none; border-radius:6px; cursor:pointer; padding:0;">
-            <input type="text" id="propBoxColorHex" placeholder="#rrggbb" style="width:90px; padding:6px 8px; font-size:12px; border:1px solid #ddd; border-radius:6px;">
+            <input type="text" id="propBoxColorHex" placeholder="#rrggbb" style="width:90px; padding:6px 8px; font-size:12px; border:1px solid var(--ui-kant); border-radius:6px;">
             <button id="propBoxColorClear" style="padding:6px 10px; font-size:12px;">Ryd</button>
           </div>
         </div>
@@ -759,7 +883,7 @@
         <div id="propsScrollRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Rulle-hastighed (sekunder per gennemløb)</label>
           <input type="number" id="propScrollSekunder" min="10" max="300" step="5" style="width:80px;">
-          <div style="font-size:11px; color:#888; margin-top:4px;">Højere tal = langsommere.</div>
+          <div style="font-size:11px; color:var(--ui-tekst-888); margin-top:4px;">Højere tal = langsommere.</div>
         </div>
         <div id="propsCenterRow" style="margin-bottom:12px;">
           <label style="margin-top:0;">Centrer på skærmen</label>
@@ -775,28 +899,28 @@
             <button id="propMoveFront" style="padding:6px 10px; font-size:12px; flex:1;">Send forrest ▶</button>
           </div>
         </div>
-        <div id="propAdopterSlotRow" style="display:none; margin-bottom:12px; background:#eef2ff; border-radius:8px; padding:10px;">
+        <div id="propAdopterSlotRow" style="display:none; margin-bottom:12px; background:var(--ui-flade-blaa2); border-radius:8px; padding:10px;">
           <label style="margin-top:0;">Brug som fast plads</label>
           <div style="display:flex; gap:8px;">
             <select id="propAdopterSlotSelect" style="flex:1; padding:6px;"></select>
             <button id="propAdopterSlotBtn" style="padding:6px 10px; font-size:12px;">Anvend</button>
           </div>
-          <div style="font-size:11px; color:#888; margin-top:4px;">Gør dette element til indholdet i en af skabelonens faste pladser — det snapper til pladsens position/størrelse med det samme, så det passer 100% på tværs af alle butikker.</div>
+          <div style="font-size:11px; color:var(--ui-tekst-888); margin-top:4px;">Gør dette element til indholdet i en af skabelonens faste pladser — det snapper til pladsens position/størrelse med det samme, så det passer 100% på tværs af alle butikker.</div>
         </div>
         <div id="propsLockRow" style="display:none;">
           <label style="margin-top:0;">Lås i fælles skabelon</label>
           <button id="propLockBtn" style="padding:6px 10px; font-size:12px; width:100%;">Lås element</button>
-          <div style="font-size:11px; color:#888; margin-top:4px;">Låste elementer vises identisk (uden kasser/kontroller) på ALLE butikkers skærme — almindelige admins kan se dem, men ikke flytte/redigere/slette dem.</div>
+          <div style="font-size:11px; color:var(--ui-tekst-888); margin-top:4px;">Låste elementer vises identisk (uden kasser/kontroller) på ALLE butikkers skærme — almindelige admins kan se dem, men ikke flytte/redigere/slette dem.</div>
           <div id="propKunPaaSideRow" style="display:none; margin-top:8px;">
             <label style="margin-top:0;">Vis kun på side (valgfrit)</label>
             <input type="text" id="propKunPaaSide" list="sideNavneListe" placeholder="Blank = alle sider, fx &quot;Side 1&quot;" style="width:100%;">
             <datalist id="sideNavneListe"></datalist>
-            <div style="font-size:11px; color:#888; margin-top:4px;">Skal matche navnet på siden præcis (som det står på sidefanen) — vælg fra listen for at undgå tastefejl. Blank = elementet vises på alle butikkers sider.</div>
+            <div style="font-size:11px; color:var(--ui-tekst-888); margin-top:4px;">Skal matche navnet på siden præcis (som det står på sidefanen) — vælg fra listen for at undgå tastefejl. Blank = elementet vises på alle butikkers sider.</div>
           </div>
           <div id="propSlotRow" style="display:none; margin-top:8px;">
             <label style="margin-top:0;">Fast plads (valgfrit)</label>
             <input type="text" id="propSlotId" placeholder="Blank = helt låst. Udfyld fx &quot;banner&quot; for en fast plads.">
-            <div style="font-size:11px; color:#888; margin-top:4px;">En "fast plads" beholder DENNE placering/størrelse hos alle butikker, men hver butik vælger selv sit eget indhold der (billede/video/diasshow osv.) — modsat et almindeligt låst element, som viser det samme indhold overalt. Almindelige admins kan skifte indholdet, men ikke flytte/resize/slette pladsen.</div>
+            <div style="font-size:11px; color:var(--ui-tekst-888); margin-top:4px;">En "fast plads" beholder DENNE placering/størrelse hos alle butikker, men hver butik vælger selv sit eget indhold der (billede/video/diasshow osv.) — modsat et almindeligt låst element, som viser det samme indhold overalt. Almindelige admins kan skifte indholdet, men ikke flytte/resize/slette pladsen.</div>
           </div>
         </div>
       </div>
@@ -825,7 +949,7 @@
         <!-- Se ogsaa "Anbefalet billedstoerrelse" i Egenskaber, som viser det praecise
              pixeltal for det element man har valgt. Denne generelle note staar her, fordi
              man som regel er ved at uploade FOER man taenker paa formatet. -->
-        <div style="font-size:11px; color:#888; margin-top:6px; line-height:1.5;">
+        <div style="font-size:11px; color:var(--ui-tekst-888); margin-top:6px; line-height:1.5;">
           Skærmen er <strong>1920x1080</strong> (16:9). Et billede der skal fylde hele skærmen laves i den størrelse.<br>
           Billedet <strong>strækkes</strong> ud til at fylde sit element -- der skæres ikke noget fra. Passer formatet ikke, bliver billedet derfor trykket sammen eller trukket i langdrag.<br>
           Vælg et element på siden, så viser <strong>Egenskaber → Anbefalet billedstørrelse</strong> præcis hvilket pixeltal du skal lave filen i.
@@ -848,10 +972,10 @@
   </button>
 
   <div id="feedbackOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:2000; align-items:center; justify-content:center;">
-    <div style="background:white; border-radius:14px; padding:28px; width:min(480px, 92vw); max-height:90vh; overflow-y:auto;">
+    <div style="background:var(--ui-flade); border-radius:14px; padding:28px; width:min(480px, 92vw); max-height:90vh; overflow-y:auto;">
       <div style="display:flex; align-items:center; justify-content:space-between;">
         <h1 style="margin:0;">Send feedback</h1>
-        <span id="feedbackCloseBtn" style="cursor:pointer; font-size:20px; color:#888; line-height:1;">✕</span>
+        <span id="feedbackCloseBtn" style="cursor:pointer; font-size:20px; color:var(--ui-tekst-888); line-height:1;">✕</span>
       </div>
       <div class="subtitle" style="margin-bottom:20px;">Fandt du en fejl, eller mangler der noget?</div>
 
@@ -864,7 +988,7 @@
       <input type="text" id="feedbackTitel" placeholder="Kort beskrivelse i én sætning" maxlength="200">
 
       <label id="feedbackBeskrivelseLabel" for="feedbackBeskrivelse">Hvad skete der, og hvordan genskaber vi det?</label>
-      <textarea id="feedbackBeskrivelse" rows="5" placeholder="Fx: 1. Jeg trykkede på X. 2. Så skete Y i stedet for Z." style="width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:8px; font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+      <textarea id="feedbackBeskrivelse" rows="5" placeholder="Fx: 1. Jeg trykkede på X. 2. Så skete Y i stedet for Z." style="width:100%; padding:10px 12px; border:1px solid var(--ui-kant); border-radius:8px; font-size:14px; font-family:inherit; resize:vertical;"></textarea>
 
       <div id="feedbackHvorRow">
         <label for="feedbackHvor">Hvor sker det?</label>
@@ -972,6 +1096,33 @@
   let masterEditMode = false;
   let storeElementsBackup = null;
   let storeBackgroundBackup = null;
+
+  // ---------- Lys/moerk tilstand ----------
+  // Kun redigerings-UI'et -- skaermindholdet (canvas/Live View) har sine egne, faste farver.
+  // Valget huskes pr. browser i localStorage ('blho-tema'), som ogsaa vagtplanen i iframen
+  // laeser; 'storage'-eventet holder andre aabne faner (og iframen) i sync.
+  function anvendTema(tema) {
+    document.documentElement.setAttribute('data-tema', tema);
+    const moerk = tema === 'moerk';
+    ['temaKnap', 'temaKnapLogin'].forEach(id => {
+      const knap = document.getElementById(id);
+      if (!knap) return;
+      knap.textContent = moerk ? '☀' : '☾';
+      knap.title = moerk ? 'Skift til lys tilstand' : 'Skift til mørk tilstand';
+      knap.setAttribute('aria-label', knap.title);
+    });
+  }
+  function skiftTema() {
+    const nyt = document.documentElement.getAttribute('data-tema') === 'moerk' ? 'lys' : 'moerk';
+    try { localStorage.setItem('blho-tema', nyt); } catch (e) { /* blokeret -- gaelder saa kun denne visning */ }
+    anvendTema(nyt);
+  }
+  anvendTema(document.documentElement.getAttribute('data-tema') === 'moerk' ? 'moerk' : 'lys');
+  document.getElementById('temaKnap').addEventListener('click', skiftTema);
+  document.getElementById('temaKnapLogin').addEventListener('click', skiftTema);
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'blho-tema') anvendTema(e.newValue === 'moerk' ? 'moerk' : 'lys');
+  });
 
   const loginWrap = document.getElementById('loginWrap');
   // Er der en gemt session (fx naar man kommer tilbage fra vagtplanen), skjules login-kortet
@@ -1297,15 +1448,46 @@
     if (!localStorage.getItem('blho_guide_set')) aabnGuide();
   }
 
-  // Vagtplan-knappen vises kun for brugere med en raekke i vagtplan_adgang (RLS lader hver
-  // bruger se sin egen raekke og intet andet). Selve vagtplanens data er beskyttet af RLS
-  // uanset knappen -- den skjules kun, saa andre ikke ser en menu de ikke kan bruge.
+  // ---------- Hovedfaner: Butik-redigering / Vagtplan ----------
+  // Fanerne vises kun for brugere med en raekke i vagtplan_adgang (RLS lader hver bruger se
+  // sin egen raekke og intet andet). Selve vagtplanens data er beskyttet af RLS uanset
+  // fanen -- den skjules kun, saa andre ikke ser en menu de ikke kan bruge.
+  let aktivFane = 'butik';
   async function visVagtplanKnap(brugerId) {
-    const link = document.getElementById('vagtplanLink');
-    link.style.display = 'none';
+    const faner = document.getElementById('hovedfaner');
+    faner.classList.remove('synlig');
     const { data } = await client.from('vagtplan_adgang').select('bruger_id').eq('bruger_id', brugerId).maybeSingle();
-    if (data) link.style.display = 'inline-block';
+    if (!data) return;
+    faner.classList.add('synlig');
+    // #vagtplan i adressen (fx et bogmaerke, eller et reload mens man stod paa vagtplanen)
+    if (location.hash === '#vagtplan') skiftFane('vagtplan');
   }
+  // Vagtplanen ligger i en iframe under den SAMME topbar, saa et fanebyt ikke genindlaeser
+  // siden. Iframen oprettes foerste gang fanen aabnes og bliver derefter liggende, saa man
+  // kommer tilbage til den samme uge/dialog. Butiks-fanens canvas er skjult (display:none)
+  // imens -- derfor gentegnes den ved hjemkomst, ellers faar teksten skriftstoerrelse 0
+  // (se kommentaren i loadEverything om canvas.getBoundingClientRect()).
+  function skiftFane(fane) {
+    if (fane === aktivFane) return;
+    aktivFane = fane;
+    document.body.classList.toggle('fane-vagtplan', fane === 'vagtplan');
+    document.querySelectorAll('.hovedfane').forEach(b => b.classList.toggle('aktiv', b.dataset.fane === fane));
+    history.replaceState(null, '', location.pathname + location.search + (fane === 'vagtplan' ? '#vagtplan' : ''));
+    if (fane === 'vagtplan') {
+      const vis = document.getElementById('vagtplanVisning');
+      if (!vis.querySelector('iframe')) {
+        const ramme = document.createElement('iframe');
+        ramme.title = 'Vagtplan';
+        ramme.src = '../vagtplan/?indlejret=1';
+        vis.appendChild(ramme);
+      }
+      updateSlideOverlay(); // fjerner diasshow-panelet, som ellers haenger paa document.body
+    } else {
+      renderCanvas();
+      updateSlideOverlay();
+    }
+  }
+  document.querySelectorAll('.hovedfane').forEach(b => b.addEventListener('click', () => skiftFane(b.dataset.fane)));
 
   document.getElementById('loginBtn').addEventListener('click', async () => {
     const email = document.getElementById('email').value.trim();
@@ -1338,7 +1520,9 @@
 
   document.getElementById('logoutBtn').addEventListener('click', async () => {
     await client.auth.signOut();
-    document.getElementById('vagtplanLink').style.display = 'none';
+    skiftFane('butik');
+    document.getElementById('hovedfaner').classList.remove('synlig');
+    document.getElementById('vagtplanVisning').innerHTML = ''; // vagtplanen maa ikke overleve et log ud
     app.style.display = 'none';
     loginWrap.style.display = 'flex';
     loginMsg.className = 'msg';
@@ -1591,8 +1775,10 @@
     const farve = dBm >= -60 ? '#1a9b4b' : dBm >= -70 ? '#c98a1b' : '#c0392b';
     const bjaelkeHoejder = [4, 7, 10, 13];
     const bjaelker = bjaelkeHoejder.map((h, i) =>
-      '<rect x="' + (i * 4.2) + '" y="' + (13 - h) + '" width="3" height="' + h + '" rx="0.7" fill="' +
-      (i < niveau ? farve : '#ddd') + '"/>'
+      '<rect x="' + (i * 4.2) + '" y="' + (13 - h) + '" width="3" height="' + h + '" rx="0.7" ' +
+      // Tomme bjaelker via CSS-variabel (style, ikke fill-attribut -- var() virker ikke i
+      // SVG-praesentationsattributter), saa de ogsaa kan ses i moerk tilstand.
+      (i < niveau ? 'fill="' + farve + '"' : 'style="fill:var(--ui-kant)"') + '/>'
     ).join('');
     // viewBox holder de samme indre koordinater uanset str -- kun den viste stoerrelse skalerer.
     return '<svg width="' + str + '" height="' + (str * 13 / 17).toFixed(1) + '" viewBox="0 0 17 13" style="vertical-align:middle;"><title>' +
@@ -1706,7 +1892,7 @@
 
     wrap.innerHTML = '';
     if (!alleEnheder.length) {
-      wrap.innerHTML = '<div style="color:#888; font-size:13px;">Ingen enheder registreret endnu.</div>';
+      wrap.innerHTML = '<div style="color:var(--ui-tekst-888); font-size:13px;">Ingen enheder registreret endnu.</div>';
       const tom = document.getElementById('enhederAntal');
       if (tom) tom.textContent = '';
       return;
@@ -1727,7 +1913,7 @@
 
     sorterEnheder(alleEnheder, hvordan).forEach(e => {
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex; align-items:flex-start; gap:10px; background:#f7f7fb; border-radius:8px; padding:10px 12px; font-size:13px;';
+      row.style.cssText = 'display:flex; align-items:flex-start; gap:10px; background:var(--ui-flade-graa); border-radius:8px; padding:10px 12px; font-size:13px;';
 
       const dot = document.createElement('span');
       dot.style.cssText = 'width:10px; height:10px; border-radius:50%; background:' + enhedStatusFarve(e.sidst_set_at) + '; flex-shrink:0;';
@@ -1750,17 +1936,17 @@
       const info = document.createElement('div');
       info.style.flex = '1';
       info.innerHTML =
-        '<div style="font-weight:600;">' + escapeHtml(e.navn) + ' <span style="color:#aaa; font-weight:400; font-size:11px;">(' + enhedTypeNavn(e.type) + ')</span></div>' +
-        '<div style="color:#888; font-size:11px;">' + escapeHtml(e.butikker ? e.butikker.navn : '?') + ' · ' +
+        '<div style="font-weight:600;">' + escapeHtml(e.navn) + ' <span style="color:var(--ui-tekst-aaa); font-weight:400; font-size:11px;">(' + enhedTypeNavn(e.type) + ')</span></div>' +
+        '<div style="color:var(--ui-tekst-888); font-size:11px;">' + escapeHtml(e.butikker ? e.butikker.navn : '?') + ' · ' +
           tidSiden(e.sidst_set_at) + (e.lokal_ip ? ' · ' + escapeHtml(e.lokal_ip) : '') +
           (e.kommando ? ' · ⏳ ' + escapeHtml(kommandoLabel(e.kommando)) + ' afventer' : '') + '</div>' +
         memHtml +
-        '<div style="color:#aaa; font-size:10px; margin-top:2px;">ID (til check-in-scriptet): ' +
-          '<code class="enhedIdKopier" data-id="' + e.id + '" style="cursor:pointer; background:#eee; padding:1px 5px; border-radius:3px;" title="Klik for at kopiere">' +
+        '<div style="color:var(--ui-tekst-aaa); font-size:10px; margin-top:2px;">ID (til check-in-scriptet): ' +
+          '<code class="enhedIdKopier" data-id="' + e.id + '" style="cursor:pointer; background:var(--ui-flade-neutral); padding:1px 5px; border-radius:3px;" title="Klik for at kopiere">' +
           e.id + '</code></div>' +
         (e.tailscale_ip ?
-          '<div style="color:#aaa; font-size:10px; margin-top:2px;">Tailscale-IP (SSH herfra uanset netvaerk): ' +
-          '<code class="enhedTailscaleKopier" data-ip="' + escapeHtml(e.tailscale_ip) + '" style="cursor:pointer; background:#eee; padding:1px 5px; border-radius:3px;" title="Klik for at kopiere">' +
+          '<div style="color:var(--ui-tekst-aaa); font-size:10px; margin-top:2px;">Tailscale-IP (SSH herfra uanset netvaerk): ' +
+          '<code class="enhedTailscaleKopier" data-ip="' + escapeHtml(e.tailscale_ip) + '" style="cursor:pointer; background:var(--ui-flade-neutral); padding:1px 5px; border-radius:3px;" title="Klik for at kopiere">' +
           escapeHtml(e.tailscale_ip) + '</code></div>' : '') +
         // tailscale_ok er bevidst IKKE coalesced server-side (modsat tailscale_ip) -- den
         // afspejler check-in-scriptets seneste FAKTISKE test, saa en advarsel her opdager en
@@ -1778,12 +1964,12 @@
         (function () {
           const checkinFrisk = e.sidst_set_at && (Date.now() - new Date(e.sidst_set_at).getTime()) < 3 * 60 * 1000;
           if (e.tailscale_ok === false && checkinFrisk) {
-            return '<div style="color:#b92a15; font-size:11px; font-weight:600; margin-top:2px;">⚠️ Tailscale nede' +
+            return '<div style="color:var(--ui-fejl-tekst2); font-size:11px; font-weight:600; margin-top:2px;">⚠️ Tailscale nede' +
               (e.tailscale_ok_sidst_at ? ' (sidst OK ' + tidSiden(e.tailscale_ok_sidst_at) + ')' : '') +
               ' — check-in-loopet forsøger selv at genstarte den hvert minut</div>';
           }
           if (!checkinFrisk && e.sidst_set_at) {
-            return '<div style="color:#b96a15; font-size:11px; font-weight:600; margin-top:2px;">⚠️ Ingen check-in siden ' + tidSiden(e.sidst_set_at) +
+            return '<div style="color:var(--ui-orange-tekst); font-size:11px; font-weight:600; margin-top:2px;">⚠️ Ingen check-in siden ' + tidSiden(e.sidst_set_at) +
               ' — check-in-loopet på enheden kører ikke. Genstart boksen fysisk eller via Termux (echo "svc power reboot" | su) — "Genstart enhed"-knappen virker ikke her, den går gennem selve loopet.</div>';
           }
           return '';
@@ -1813,7 +1999,7 @@
       const konsolErAaben = konsolAabneEnheder.has(e.id);
       const konsolToggle = document.createElement('button');
       konsolToggle.textContent = konsolErAaben ? 'Skjul kommandolinje ▴' : 'Vis kommandolinje ▾';
-      konsolToggle.style.cssText = 'margin-top:6px; padding:3px 9px; font-size:11px; color:#666; background:#eee; border:1px solid #ddd; border-radius:4px; cursor:pointer;';
+      konsolToggle.style.cssText = 'margin-top:6px; padding:3px 9px; font-size:11px; color:var(--ui-tekst-666); background:var(--ui-flade-neutral); border:1px solid var(--ui-kant); border-radius:4px; cursor:pointer;';
       konsolToggle.addEventListener('click', () => {
         if (konsolAabneEnheder.has(e.id)) konsolAabneEnheder.delete(e.id); else konsolAabneEnheder.add(e.id);
         renderEnhederListe();
@@ -1831,7 +2017,7 @@
       cmdInput.className = 'enhedCmdInput';
       cmdInput.dataset.enhedId = e.id;
       cmdInput.placeholder = 'Fejlfindings-kommando, fx: df -h';
-      cmdInput.style.cssText = 'flex:1; font-size:12px; padding:5px 7px; border:1px solid #ddd; border-radius:4px;';
+      cmdInput.style.cssText = 'flex:1; font-size:12px; padding:5px 7px; border:1px solid var(--ui-kant); border-radius:4px;';
       const sendCmdBtn = document.createElement('button');
       sendCmdBtn.textContent = 'Send';
       sendCmdBtn.style.cssText = 'padding:5px 10px; font-size:12px;';
@@ -1846,7 +2032,7 @@
       const saveCmdBtn = document.createElement('button');
       saveCmdBtn.textContent = 'Gem som knap';
       saveCmdBtn.title = 'Gem denne kommando som en hurtig-knap til senere (kun i denne browser)';
-      saveCmdBtn.style.cssText = 'padding:5px 8px; font-size:11px; color:#666;';
+      saveCmdBtn.style.cssText = 'padding:5px 8px; font-size:11px; color:var(--ui-tekst-666);';
       saveCmdBtn.addEventListener('click', () => {
         const cmd = cmdInput.value.trim();
         if (!cmd) return;
@@ -1867,22 +2053,22 @@
         const presetBtn = document.createElement('button');
         presetBtn.textContent = preset;
         presetBtn.title = preset;
-        presetBtn.style.cssText = 'padding:3px 8px; font-size:11px; color:#555; background:#eee; border:1px solid #ddd; border-radius:12px; cursor:pointer;';
+        presetBtn.style.cssText = 'padding:3px 8px; font-size:11px; color:var(--ui-tekst-555); background:var(--ui-flade-neutral); border:1px solid var(--ui-kant); border-radius:12px; cursor:pointer;';
         presetBtn.addEventListener('click', () => sendCustomKommando(e.id, preset));
         presetWrap.appendChild(presetBtn);
       });
       hentGemteKommandoer().forEach(preset => {
         const pill = document.createElement('span');
-        pill.style.cssText = 'display:inline-flex; align-items:center; gap:4px; padding:3px 4px 3px 8px; font-size:11px; color:#555; background:#eef2ff; border:1px solid #dde3f7; border-radius:12px;';
+        pill.style.cssText = 'display:inline-flex; align-items:center; gap:4px; padding:3px 4px 3px 8px; font-size:11px; color:var(--ui-tekst-555); background:var(--ui-flade-blaa2); border:1px solid var(--ui-kant-blaa); border-radius:12px;';
         const presetBtn = document.createElement('button');
         presetBtn.textContent = preset;
         presetBtn.title = preset;
-        presetBtn.style.cssText = 'padding:0; font-size:11px; color:#555; background:none; border:none; cursor:pointer;';
+        presetBtn.style.cssText = 'padding:0; font-size:11px; color:var(--ui-tekst-555); background:none; border:none; cursor:pointer;';
         presetBtn.addEventListener('click', () => sendCustomKommando(e.id, preset));
         const fjernBtn = document.createElement('span');
         fjernBtn.textContent = '✕';
         fjernBtn.title = 'Fjern denne hurtig-knap';
-        fjernBtn.style.cssText = 'cursor:pointer; color:#999; padding:0 2px;';
+        fjernBtn.style.cssText = 'cursor:pointer; color:var(--ui-tekst-999); padding:0 2px;';
         fjernBtn.addEventListener('click', () => { fjernGemtKommando(preset); renderEnhederListe(); });
         pill.appendChild(presetBtn);
         pill.appendChild(fjernBtn);
@@ -1902,14 +2088,14 @@
       const svarErFriskere = erBesvaret && svarAlderMinutter < KOMMANDO_SVAR_STALE_MINUTTER;
       if (afventerSvar) {
         const afventer = document.createElement('div');
-        afventer.style.cssText = 'font-size:11px; color:#888; margin-top:4px;';
+        afventer.style.cssText = 'font-size:11px; color:var(--ui-tekst-888); margin-top:4px;';
         afventer.textContent = '⏳ Afventer svar (køres ved næste check-in, op til et minuts tid)...';
         info.appendChild(afventer);
       } else if (svarErFriskere) {
         const svarWrap = document.createElement('div');
         svarWrap.style.cssText = 'margin-top:4px;';
         const svarLabel = document.createElement('div');
-        svarLabel.style.cssText = 'font-size:10px; color:#aaa;';
+        svarLabel.style.cssText = 'font-size:10px; color:var(--ui-tekst-aaa);';
         svarLabel.textContent = 'Svar (' + tidSiden(e.custom_kommando_besvaret_at) + '):';
         const svarPre = document.createElement('pre');
         svarPre.style.cssText = 'font-size:11px; background:#111; color:#0f0; padding:6px 8px; border-radius:4px; max-height:120px; overflow:auto; white-space:pre-wrap; word-break:break-all; margin:2px 0 0 0;';
@@ -1925,7 +2111,7 @@
       if (typeof e.wifi_rssi === 'number') {
         const wifiBoks = document.createElement('div');
         wifiBoks.style.cssText = 'display:flex; flex-direction:column; align-items:center; gap:2px; flex-shrink:0; padding:0 6px;';
-        wifiBoks.innerHTML = '<div style="font-size:9px; color:#aaa;">WiFi</div>' + wifiIkonHtml(e.wifi_rssi, 26);
+        wifiBoks.innerHTML = '<div style="font-size:9px; color:var(--ui-tekst-aaa);">WiFi</div>' + wifiIkonHtml(e.wifi_rssi, 26);
         row.appendChild(wifiBoks);
       }
 
@@ -2066,11 +2252,11 @@
     });
     const liste = document.getElementById('aktivitetslogListe');
     if (error) {
-      liste.innerHTML = '<div style="color:#c0392b; font-size:13px;">Kunne ikke hente aktivitetslog: ' + escapeHtml(error.message) + '</div>';
+      liste.innerHTML = '<div style="color:var(--ui-fejl-tekst); font-size:13px;">Kunne ikke hente aktivitetslog: ' + escapeHtml(error.message) + '</div>';
       return;
     }
     if (!data || !data.length) {
-      liste.innerHTML = '<div style="color:#888; font-size:13px;">Ingen hændelser endnu.</div>';
+      liste.innerHTML = '<div style="color:var(--ui-tekst-888); font-size:13px;">Ingen hændelser endnu.</div>';
       return;
     }
     liste.innerHTML = data.map(row => {
@@ -2078,11 +2264,11 @@
       const brugerEmail = row.bruger_email || '(ukendt bruger)';
       const label = HANDLING_LABELS[row.handling] || row.handling;
       const erFejl = row.handling === 'js_fejl';
-      return '<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px; background:' + (erFejl ? '#fdecea' : '#f7f7fb') + '; border-radius:8px; padding:8px 12px; font-size:13px;">' +
+      return '<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px; background:' + (erFejl ? 'var(--ui-flade-fejl)' : 'var(--ui-flade-graa)') + '; border-radius:8px; padding:8px 12px; font-size:13px;">' +
         '<div><b>' + escapeHtml(butikNavn) + '</b> — ' + escapeHtml(label) +
-        ' <span style="color:#888;">(' + escapeHtml(brugerEmail) + ')</span>' +
-        (row.detaljer ? '<br><span style="color:' + (erFejl ? '#b92a15' : '#888') + '; font-size:12px; white-space:pre-wrap; font-family:monospace; display:block; max-height:160px; overflow-y:auto; margin-top:4px;">' + escapeHtml(row.detaljer) + '</span>' : '') + '</div>' +
-        '<div style="color:#aaa; font-size:11px; white-space:nowrap;">' + tidSiden(row.oprettet_at) + '</div>' +
+        ' <span style="color:var(--ui-tekst-888);">(' + escapeHtml(brugerEmail) + ')</span>' +
+        (row.detaljer ? '<br><span style="color:' + (erFejl ? 'var(--ui-fejl-tekst2)' : 'var(--ui-tekst-888)') + '; font-size:12px; white-space:pre-wrap; font-family:monospace; display:block; max-height:160px; overflow-y:auto; margin-top:4px;">' + escapeHtml(row.detaljer) + '</span>' : '') + '</div>' +
+        '<div style="color:var(--ui-tekst-aaa); font-size:11px; white-space:nowrap;">' + tidSiden(row.oprettet_at) + '</div>' +
         '</div>';
     }).join('');
   }
@@ -2116,28 +2302,28 @@
     });
     const liste = document.getElementById('feedbackAdminListe');
     if (error) {
-      liste.innerHTML = '<div style="color:#c0392b; font-size:13px;">Kunne ikke hente feedback: ' + escapeHtml(error.message) + '</div>';
+      liste.innerHTML = '<div style="color:var(--ui-fejl-tekst); font-size:13px;">Kunne ikke hente feedback: ' + escapeHtml(error.message) + '</div>';
       return;
     }
     if (!data || !data.length) {
-      liste.innerHTML = '<div style="color:#888; font-size:13px;">Ingen feedback endnu.</div>';
+      liste.innerHTML = '<div style="color:var(--ui-tekst-888); font-size:13px;">Ingen feedback endnu.</div>';
       return;
     }
     liste.innerHTML = data.map(row => {
       const label = FEEDBACK_TYPE_LABELS[row.type] || row.type;
-      return '<div style="background:#f7f7fb; border-radius:8px; padding:12px 14px; font-size:13px;">' +
+      return '<div style="background:var(--ui-flade-graa); border-radius:8px; padding:12px 14px; font-size:13px;">' +
         '<div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">' +
         '<div><b>' + label + ' — ' + escapeHtml(row.titel) + '</b></div>' +
         '<div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">' +
-        '<span style="color:#aaa; font-size:11px; white-space:nowrap;">' + tidSiden(row.oprettet_at) + '</span>' +
-        '<span class="feedback-del-btn" data-id="' + row.id + '" title="Slet" style="cursor:pointer; color:#c0392b; font-size:14px; line-height:1;">✕</span>' +
+        '<span style="color:var(--ui-tekst-aaa); font-size:11px; white-space:nowrap;">' + tidSiden(row.oprettet_at) + '</span>' +
+        '<span class="feedback-del-btn" data-id="' + row.id + '" title="Slet" style="cursor:pointer; color:var(--ui-fejl-tekst); font-size:14px; line-height:1;">✕</span>' +
         '</div>' +
         '</div>' +
-        '<div style="color:#888; font-size:12px; margin-top:4px;">' + escapeHtml(row.butik_navn || '(ukendt butik)') + ' · ' + escapeHtml(row.bruger_email || '(ukendt bruger)') + '</div>' +
+        '<div style="color:var(--ui-tekst-888); font-size:12px; margin-top:4px;">' + escapeHtml(row.butik_navn || '(ukendt butik)') + ' · ' + escapeHtml(row.bruger_email || '(ukendt bruger)') + '</div>' +
         (row.beskrivelse ? '<div style="margin-top:8px; white-space:pre-wrap;">' + escapeHtml(row.beskrivelse) + '</div>' : '') +
-        (row.hvor ? '<div style="margin-top:6px; font-size:12px; color:#666;"><b>Hvor:</b> ' + escapeHtml(row.hvor) + '</div>' : '') +
-        (row.teknisk_info ? '<details style="margin-top:8px;"><summary style="cursor:pointer; color:#888; font-size:11px;">Teknisk info</summary>' +
-          '<div style="white-space:pre-wrap; font-family:monospace; font-size:11px; color:#666; margin-top:4px; max-height:160px; overflow-y:auto;">' + escapeHtml(row.teknisk_info) + '</div></details>' : '') +
+        (row.hvor ? '<div style="margin-top:6px; font-size:12px; color:var(--ui-tekst-666);"><b>Hvor:</b> ' + escapeHtml(row.hvor) + '</div>' : '') +
+        (row.teknisk_info ? '<details style="margin-top:8px;"><summary style="cursor:pointer; color:var(--ui-tekst-888); font-size:11px;">Teknisk info</summary>' +
+          '<div style="white-space:pre-wrap; font-family:monospace; font-size:11px; color:var(--ui-tekst-666); margin-top:4px; max-height:160px; overflow-y:auto;">' + escapeHtml(row.teknisk_info) + '</div></details>' : '') +
         '</div>';
     }).join('');
   }
@@ -2300,7 +2486,7 @@
     document.getElementById('guideTitel').textContent = typeof trin.titel === 'function' ? trin.titel() : trin.titel;
     document.getElementById('guideBody').textContent = trin.body;
     document.getElementById('guideDots').innerHTML = GUIDE_TRIN.map((_, i) =>
-      '<span style="width:6px; height:6px; border-radius:50%; background:' + (i === guideTrinIdx ? '#040DB1' : '#ddd') + ';"></span>'
+      '<span style="width:6px; height:6px; border-radius:50%; background:' + (i === guideTrinIdx ? 'var(--ui-brand-tekst)' : 'var(--ui-kant)') + ';"></span>'
     ).join('');
     const erSidsteTrin = guideTrinIdx === GUIDE_TRIN.length - 1;
     document.getElementById('guideNextBtn').textContent = erSidsteTrin ? 'Forstået!' : 'Næste';
@@ -2440,7 +2626,7 @@
     const bar = document.createElement('div');
     bar.id = 'offlineVarsel';
     bar.style.cssText = 'display:flex; align-items:flex-start; justify-content:space-between; gap:16px;' +
-      ' background:#fdecea; color:#7d1c0c; border-bottom:1px solid #f5c6c0; padding:12px 20px; font-size:13px; line-height:1.55;';
+      ' background:var(--ui-flade-fejl); color:var(--ui-fejl-moerk-tekst); border-bottom:1px solid var(--ui-kant-fejl); padding:12px 20px; font-size:13px; line-height:1.55;';
 
     const tekst = document.createElement('div');
     if (erSuperadmin) {
@@ -2544,13 +2730,13 @@
     wrap.innerHTML = '';
 
     if (!slides.length) {
-      wrap.innerHTML = '<div style="color:#888; font-size:12px; padding:8px 0;">Ingen fælles slides endnu. Byg et, eller tilføj et billede.</div>';
+      wrap.innerHTML = '<div style="color:var(--ui-tekst-888); font-size:12px; padding:8px 0;">Ingen fælles slides endnu. Byg et, eller tilføj et billede.</div>';
       return;
     }
 
     slides.forEach((s, i) => {
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex; align-items:center; gap:10px; background:#f7f7fb; border-radius:8px; padding:10px 12px; font-size:13px;';
+      row.style.cssText = 'display:flex; align-items:center; gap:10px; background:var(--ui-flade-graa); border-radius:8px; padding:10px 12px; font-size:13px;';
 
       const ikon = document.createElement('span');
       ikon.textContent = s.type === 'video' ? '🎬' : s.type === 'side' ? '📄' : '🖼️';
@@ -2561,8 +2747,8 @@
       info.style.flex = '1';
       info.innerHTML =
         '<div style="font-weight:600;">' + escapeHtml(s.faellesNavn || s.url || 'Uden navn') +
-        '<span class="omdoebFaelles" data-i="' + i + '" style="color:#999; font-size:10px; text-decoration:underline; cursor:pointer; margin-left:6px; font-weight:400;">omdøb</span></div>' +
-        '<div style="font-size:11px; color:' + (s.udkast ? '#b96a15' : '#1a9b4b') + ';">' +
+        '<span class="omdoebFaelles" data-i="' + i + '" style="color:var(--ui-tekst-999); font-size:10px; text-decoration:underline; cursor:pointer; margin-left:6px; font-weight:400;">omdøb</span></div>' +
+        '<div style="font-size:11px; color:' + (s.udkast ? 'var(--ui-orange-tekst)' : 'var(--ui-groen-tekst)') + ';">' +
         (s.udkast ? '● Udkast — vises ikke i butikkerne endnu' : '● Vises i alle butikkers diasshow') +
         '</div>';
       row.appendChild(info);
@@ -2604,7 +2790,7 @@
 
       const fjern = document.createElement('button');
       fjern.textContent = 'Fjern';
-      fjern.style.cssText = 'padding:5px 10px; font-size:12px; background:#fff; border:1px solid #c0392b; color:#c0392b;';
+      fjern.style.cssText = 'padding:5px 10px; font-size:12px; background:var(--ui-flade); border:1px solid var(--ui-fejl-tekst); color:var(--ui-fejl-tekst);';
       fjern.addEventListener('click', () => fjernFaellesSlide(i));
       row.appendChild(fjern);
 
@@ -3537,7 +3723,7 @@
       tab.appendChild(label);
       const omdoebLink = document.createElement('span');
       omdoebLink.textContent = 'omdøb';
-      omdoebLink.style.cssText = 'color:#999; font-size:10px; text-decoration:underline; cursor:pointer; margin-left:4px;';
+      omdoebLink.style.cssText = 'color:var(--ui-tekst-999); font-size:10px; text-decoration:underline; cursor:pointer; margin-left:4px;';
       omdoebLink.addEventListener('click', startOmdoeb);
       tab.appendChild(omdoebLink);
       const del = document.createElement('span');
@@ -3818,7 +4004,7 @@
     ledigeSlotIds.forEach(slotId => {
       const knap = document.createElement('button');
       knap.textContent = slotId;
-      knap.style.cssText = 'padding:10px; font-size:13px; text-align:left; border-radius:6px; border:1px solid #ddd; background:white; cursor:pointer;';
+      knap.style.cssText = 'padding:10px; font-size:13px; text-align:left; border-radius:6px; border:1px solid var(--ui-kant); background:var(--ui-flade); cursor:pointer;';
       knap.addEventListener('click', () => vaelgSlot(slotId));
       liste.appendChild(knap);
     });
@@ -3929,7 +4115,7 @@
   // canvas der er valgt.
   function updateSlideOverlay() {
     if (slideOverlayNode) { slideOverlayNode.remove(); slideOverlayNode = null; }
-    if (masterEditMode || !selectedElementId) return;
+    if (masterEditMode || !selectedElementId || aktivFane !== 'butik') return;
     const el = elements.find(e => e.id === selectedElementId);
     if (!el || el.type !== 'rotator') return;
     if (el.locked && !masterEditMode) return;
@@ -3970,6 +4156,8 @@
   let resizeTimer = null;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
+    // Paa vagtplan-fanen er canvas'et skjult -- det gentegnes i stedet i skiftFane('butik').
+    if (aktivFane !== 'butik') return;
     resizeTimer = setTimeout(renderCanvas, 150);
   });
 
@@ -3982,6 +4170,9 @@
     const t = e.target;
     const isEditable = t.isContentEditable || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT';
     if (isEditable) return;
+    // Paa vagtplan-fanen er canvas'et skjult -- Delete/piletaster maa ikke ramme et element
+    // man ikke kan se.
+    if (aktivFane !== 'butik') return;
     if (!selectedElementId) return;
     const selEl = elements.find(x => x.id === selectedElementId);
     if (!selEl) return;
