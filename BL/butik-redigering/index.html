@@ -427,6 +427,9 @@
           </div>
         </div>
       </div>
+      <!-- Vagtplan: separat side, kun for brugere i vagtplan_adgang (se visVagtplanKnap) --
+           ikke koblet til superadmin eller butik. -->
+      <a id="vagtplanLink" href="../vagtplan/" style="display:none; margin-left:8px; background:#eef0fd; color:#040DB1; font-weight:700; font-size:12px; padding:4px 10px; border-radius:20px; text-decoration:none;">Vagtplan</a>
     </div>
     <div class="topbar-actions">
       <div class="msg" id="saveMsg" style="display:none;"></div>
@@ -1278,11 +1281,22 @@
     // Bevidst ikke await'et - en langsom eller fejlende forespoergsel maa aldrig forsinke
     // eller blokere selve redigeringssiden.
     tjekOfflineSkaerme();
+    visVagtplanKnap(user.id);
 
     // Foerste-gangs-guide: vist automatisk én gang pr. browser, derefter kun paa
     // forespoergsel via "?"-knappen. Et lokalt flag (ikke i databasen) er bevidst simpelt --
     // skifter en admin browser/enhed, ser de bare guiden igen, hvilket er en harmlos gentagelse.
     if (!localStorage.getItem('blho_guide_set')) aabnGuide();
+  }
+
+  // Vagtplan-knappen vises kun for brugere med en raekke i vagtplan_adgang (RLS lader hver
+  // bruger se sin egen raekke og intet andet). Selve vagtplanens data er beskyttet af RLS
+  // uanset knappen -- den skjules kun, saa andre ikke ser en menu de ikke kan bruge.
+  async function visVagtplanKnap(brugerId) {
+    const link = document.getElementById('vagtplanLink');
+    link.style.display = 'none';
+    const { data } = await client.from('vagtplan_adgang').select('bruger_id').eq('bruger_id', brugerId).maybeSingle();
+    if (data) link.style.display = 'inline-block';
   }
 
   document.getElementById('loginBtn').addEventListener('click', async () => {
@@ -1316,6 +1330,7 @@
 
   document.getElementById('logoutBtn').addEventListener('click', async () => {
     await client.auth.signOut();
+    document.getElementById('vagtplanLink').style.display = 'none';
     app.style.display = 'none';
     loginWrap.style.display = 'flex';
     loginMsg.className = 'msg';
