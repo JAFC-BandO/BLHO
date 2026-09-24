@@ -19,7 +19,7 @@
     $('#mdTitel').textContent = 'Medarbejdere';
     $('#mdListeVis').hidden = false; $('#mdFormVis').hidden = true;
     $('#mdListe').innerHTML = model.length ? model.map(m => `<li>
-      <div class="md-navn"><b>${esc(m.navn)}</b> <span class="md-job">${esc(job(m.type))}</span></div>
+      <div class="md-navn"><b>${esc(m.navn)}</b> <span class="md-job">${esc(job(m.type))}</span>${m.email ? `<span class="md-email">${esc(m.email)}</span>` : ''}</div>
       <div class="md-resume">${esc(O.beskriv(m))}</div>
       <div class="md-knapper"><button type="button" data-md-ret="${esc(m.id)}">Ret</button><button type="button" class="md-fjern" data-md-fjern="${esc(m.id)}">Fjern</button></div>
     </li>`).join('') : '<li class="s">Ingen medarbejdere endnu.</li>';
@@ -34,7 +34,7 @@
   function visForm(id) {
     const m = id ? model.find(x => x.id == id) : null;
     aaben = m ? JSON.parse(JSON.stringify(m)) : {
-      id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), navn: '', type: 'S',
+      id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), navn: '', email: '', type: 'S',
       dage: [0, 1, 2, 3, 4].map(() => [O.AABEN, O.LUK_HVERDAG]).concat([null, null]), timer: { art: 'ingen' },
       kunFaste: false, fordeles: true, vagter: [], ny: true,
     };
@@ -42,6 +42,7 @@
     $('#mdListeVis').hidden = true; $('#mdFormVis').hidden = false;
     const a = aaben;
     $('#mdNavn').value = a.navn;
+    $('#mdEmail').value = a.email || '';
     // Fast raekkefoelge (databasen gemmer jobtyperne alfabetisk efter noegle)
     const orden = k => { const i = ['L', 'S', 'F', 'U'].indexOf(k); return i < 0 ? 99 : i; };
     $('#mdType').innerHTML = Object.keys(raekke.opsaetning.jobtyper || {}).sort((x, y) => orden(x) - orden(y)).map(k => `<option value="${esc(k)}">${esc(job(k))}</option>`).join('');
@@ -126,6 +127,9 @@
   function laesForm() {
     const a = aaben, fejl = [];
     a.navn = $('#mdNavn').value.trim();
+    a.email = $('#mdEmail').value.trim();
+    if (a.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a.email)) fejl.push('E-mailen ser ikke rigtig ud – tjek den, eller lad feltet være tomt.');
+    else if (a.email && model.some(m => m.id != a.id && (m.email || '').toLowerCase() == a.email.toLowerCase())) fejl.push('En anden medarbejder har allerede den e-mail.');
     a.type = $('#mdType').value;
     if (!a.navn) fejl.push('Skriv et navn.');
     else if (model.some(m => m.id != a.id && m.navn.toLowerCase() == a.navn.toLowerCase())) fejl.push('Der findes allerede en medarbejder med det navn.');

@@ -23,8 +23,8 @@ window.addEventListener('storage', e => { if (e.key === 'blho-tema') saetTema();
 if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('change', saetTema);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="motor.js?v=2026-09-24-12"></script>
-<script src="opsaetning.js?v=2026-09-24-12"></script>
+<script src="motor.js?v=2026-09-24-13"></script>
+<script src="opsaetning.js?v=2026-09-24-13"></script>
 <style>
 /* Farverne ligger som variabler, saa lys/moerk tilstand styres ét sted. Temaet vaelges med
    knappen i butik-redigerings topbar og deles via localStorage 'blho-tema' (se <head>). */
@@ -72,6 +72,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .indhold .uger .tab{border:0;background:none;border-radius:16px;padding:5px 12px;color:var(--brand-tekst);font-weight:600;font-size:13px}
 .indhold .uger .tab:hover{background:rgba(4,13,177,.08)}
 .indhold .uger .tab.on{background:var(--brand);color:#fff}
+/* + / - 3 uger: sidder i enden af uge-vaelgeren, adskilt med en tynd streg */
+.indhold .uger .uge-knap{border:0;background:none;border-radius:16px;padding:5px 10px;color:var(--brand-tekst);font-weight:700;font-size:13px}
+.indhold .uger .uge-knap:hover:not(:disabled){background:rgba(4,13,177,.08)}
+.indhold .uger .uge-knap:disabled{opacity:.35;cursor:default}
+.uger .uge-skille{width:1px;align-self:stretch;margin:4px 2px;background:var(--bd)}
 /* Indstillinger for forslaget: én rolig linje under uge-vaelgeren */
 .indstillinger{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;font-size:14px;color:var(--mut);margin:0 0 10px}
 .indstillinger label{display:inline-flex;align-items:center;gap:6px}
@@ -120,7 +125,7 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
 .md-hjaelp{font-size:13px;color:var(--mut);margin:2px 0 8px}
 #mdListe{list-style:none;padding:0;margin:8px 0;max-height:58vh;overflow:auto}
 #mdListe li{display:grid;grid-template-columns:1fr auto;gap:2px 12px;padding:10px 4px;border-bottom:1px solid var(--bd)}
-.md-navn{grid-column:1}.md-job{font-size:12px;color:var(--mut);margin-left:4px}
+.md-navn{grid-column:1}.md-email{font-size:12px;color:var(--mut);margin-left:6px}.md-job{font-size:12px;color:var(--mut);margin-left:4px}
 .md-resume{grid-column:1;font-size:13px;color:var(--mut)}
 .md-knapper{grid-column:2;grid-row:1/span 2;display:flex;gap:6px;align-items:center}
 .md-knapper .md-fjern{color:var(--bad);min-width:8.5em}
@@ -236,7 +241,6 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
   <div class="handlinger"><button id="gen">Foreslå ny plan</button><button id="rules">Regler</button><button class="pri" id="exp">Kopiér til SmartPlan</button></div>
 </div>
 <div class="indstillinger">
-  <label>Uger <select id="uger" title="Hvor mange uger planen gentager sig over. Går op i 3, fordi weekend-holdene skiftes hver 3. weekend."><option value="3">3</option><option value="6">6</option><option value="9">9</option><option value="12">12</option></select></label>
   <label>2 personer fra <select id="t2" title="Hvornår der skal være 2 på arbejde igen om eftermiddagen"><option value="900">15:00</option><option value="915">15:15</option></select></label>
   <label>Ekstra personer <select id="ekstra" title="Hvor mange ekstra personer planen må bruge. De overtager den ene weekenddag for dem, der ellers skal arbejde både lørdag og søndag."></select></label>
   <label>Ekstra må arbejde <select id="ekstraRegel" title="Hvor tit de ekstra personer må arbejde weekend. Alle weekend-ønsker kræver ca. 13 timers weekendarbejde om ugen fra ekstra folk — jo sjældnere hver enkelt må arbejde, jo flere ekstra personer skal der til.">
@@ -267,12 +271,14 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
 </div>
 <div id="mdFormVis" hidden>
   <label>Navn<input id="mdNavn" type="text" autocomplete="off" maxlength="40"></label>
+  <label>E-mail<input id="mdEmail" type="email" autocomplete="off" maxlength="120" placeholder="navn@eksempel.dk"></label>
   <label>Jobtype<select id="mdType"></select></label>
   <p class="md-hjaelp">Ungarbejdere kan ikke stå alene og tæller ikke som ansvarlig. Alle andre jobtyper tæller som ansvarlig.</p>
   <fieldset><legend>Hvornår kan personen arbejde?</legend>
+    <p class="md-hjaelp">De tider planlæggeren <b>må</b> give personen vagter i. Det er ikke vagter i sig selv – "Foreslå ny plan" vælger selv, hvilke af dagene personen får.</p>
     <div class="md-hurtig"><button type="button" data-vaelg="hverdage">Hverdage</button><button type="button" data-vaelg="weekend">Weekend</button><button type="button" data-vaelg="alle">Alle dage</button><button type="button" data-vaelg="ingen">Ingen</button><button type="button" data-vaelg="samme" title="Brug tiderne fra den første valgte dag på alle valgte dage">Samme tider på alle valgte dage</button></div>
     <div id="mdDage"></div>
-    <p class="md-hjaelp">Sæt kryds ved de dage, personen kan arbejde, og hvornår. Butikken har åbent 08:45–18:15 på hverdage og 08:45–17:15 i weekenden.</p>
+    <p class="md-hjaelp">Butikken har åbent 08:45–18:15 på hverdage og 08:45–17:15 i weekenden.</p>
   </fieldset>
   <fieldset><legend>Timer</legend>
     <div class="md-linje"><select id="mdTimerArt" aria-label="Timekrav">
@@ -284,7 +290,7 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
     <div class="md-linje" id="mdFridagFelt"><label><input type="checkbox" id="mdFridag"> Fridag imellem vagterne (man/ons/fre eller tirs/tors)</label></div>
   </fieldset>
   <fieldset><legend>Faste vagter</legend>
-    <p class="md-hjaelp">Vagter personen altid har. Weekend-vagter ligger i et hold, fordi alle højst arbejder hver 3. weekend: hold 1 = uge 1 og 4, hold 2 = uge 2 og 5, hold 3 = uge 3 og 6.</p>
+    <p class="md-hjaelp">Vagter personen <b>altid</b> har, uanset hvad planlæggeren foreslår – fx en leder der altid står mandag 08:45–18:15. Lad den være tom, hvis planlæggeren selv må fordele personens vagter. Weekend-vagter ligger i et hold, fordi alle højst arbejder hver 3. weekend: hold 1 = uge 1, 4, 7 …, hold 2 = uge 2, 5, 8 …, hold 3 = uge 3, 6, 9 ….</p>
     <div id="mdVagter"></div>
     <button type="button" id="mdNyVagt">+ Tilføj fast vagt</button>
   </fieldset>
@@ -686,7 +692,6 @@ document.addEventListener('keydown', e => {
 });
 // Indstillings-felterne afspejler motorens tilstand (ogsaa efter fortryd/gentag)
 function opdaterKontroller() {
-  $('#uger').value = M.NW;
   $('#t2').value = M.T2;
   const maxE = Math.max(M.maxAflastning, M.EKSTRA);
   $('#ekstra').innerHTML = Array.from({ length: maxE + 1 }, (_, n) => `<option value="${n}">${n}</option>`).join('');
@@ -756,7 +761,8 @@ function render() {
   const { P, R, D, f, WK, NW } = M;
   M.ext(); const EX = M.EX;
   const A = M.check(), I = A.filter(i => !i.soft), Q = A.filter(i => i.soft);
-  $('#tabs').innerHTML = WK.map(w => { const p = I.some(i => i.w == w); return `<button class="tab ${w == W ? 'on' : ''}" data-w="${w}" aria-pressed="${w == W}"${p ? ' title="Ugen har problemer"' : ''}>Uge ${w + 1}<span class="adv ${p ? '' : 'ingen'}" aria-hidden="true"></span></button>`; }).join('');
+  $('#tabs').innerHTML = WK.map(w => { const p = I.some(i => i.w == w); return `<button class="tab ${w == W ? 'on' : ''}" data-w="${w}" aria-pressed="${w == W}"${p ? ' title="Ugen har problemer"' : ''}>Uge ${w + 1}<span class="adv ${p ? '' : 'ingen'}" aria-hidden="true"></span></button>`; }).join('')
+    + `<span class="uge-skille" aria-hidden="true"></span><button class="uge-knap" data-uger="-3" title="Fjern de 3 sidste uger" aria-label="Fjern de 3 sidste uger" ${NW <= 3 ? 'disabled' : ''}>− 3 uger</button><button class="uge-knap" data-uger="3" title="Tilføj 3 uger (én weekend-runde). De nye uger starter som en kopi af de 3 sidste." aria-label="Tilføj 3 uger" ${NW >= 12 ? 'disabled' : ''}>+ 3 uger</button>`;
   const uh = M.S.filter(x => x.p == 'uk').reduce((a, x) => a + (x.e - x.s) / 60, 0);
   $('#stat').innerHTML = (I.length ? `<span class="status-maerke bad">${I.length} ${I.length == 1 ? 'problem' : 'problemer'}</span>` : `<span class="status-maerke ok">✓ Planen går op</span>`) + (uh ? ` <span class="s">Bruger ${Math.max(0, ...EX.filter(Boolean))} af ${M.EKSTRA} ekstra ${M.EKSTRA == 1 ? 'person' : 'personer'} (${uh} timer på 6 uger)</span>` : '');
   // Farveforklaring: kun de jobtyper der er i planen
@@ -783,6 +789,7 @@ document.addEventListener('click', e => {
   if (t.dataset.i !== undefined) openE(+t.dataset.i, M.S[+t.dataset.i].d);
   if (t.dataset.add !== undefined) openE(null, +t.dataset.add);
   if (t.dataset.person !== undefined) aabnMedarbejdere(t.dataset.person);
+  if (t.dataset.uger !== undefined && !t.disabled) skiftUger(+t.dataset.uger);
 });
 function openE(i, d) {
   const { P, R, D, O, f } = M;
@@ -809,16 +816,25 @@ $('#ekstraRegel').onchange = e => { const [a, b] = e.target.value.split('-').map
 const txt = w => M.D.map((n, d) => n + '\n' + (grp(w, d).map(a => M.f(a[0].s) + ' - ' + M.f(a[0].e) + ': ' + a.map(x => M.nmi(x.i) + ' (' + M.R[M.P[x.p][1]] + ')').join(', ')).join('\n') || '–')).join('\n\n');
 const csv = () => 'Uge;Dag;Start;Slut;Medarbejder;Jobtype\n' + M.S.map((x, i) => ({ ...x, i })).sort((a, b) => a.w - b.w || a.d - b.d || a.s - b.s).map(x => [x.w + 1, M.D[x.d], M.f(x.s), M.f(x.e), M.nmi(x.i), M.R[M.P[x.p][1]]].join(';')).join('\n');
 $('#t2').onchange = e => { M.T2 = +e.target.value; render(); aendret(); };
-// Antal uger: opsaetningen faar det nye antal, vagter i uger der forsvinder smides vaek, og nye
-// uger er tomme, til man trykker "Foreslå ny plan".
-$('#uger').onchange = e => {
-  const n = +e.target.value;
+// + / - 3 uger. Altid 3 ad gangen: weekend-holdene skiftes hver 3. weekend, og planen er
+// rullende, saa et antal uger der ikke gaar op i 3 ville faa et hold til at arbejde to
+// weekender i traek, naar planen starter forfra. Nye uger starter som en kopi af de 3 sidste
+// (samme weekend-hold), saa de er faerdigplanlagte med det samme; "Foreslå ny plan" kan
+// bagefter fordele det hele paa ny. Kan fortrydes som alt andet.
+function skiftUger(delta) {
+  const gl = M.NW, n = gl + delta;
+  if (n < 3 || n > 12) return;
   genopbygMotor(Object.assign({}, raekke.opsaetning, { uger: n }));
-  M.S = M.S.filter(x => x.w < n);
-  if (W >= n) W = 0;
-  $('#ekstraHint').hidden = false;
-  visTitel(); render(); aendret();
-};
+  if (delta > 0) {
+    M.S = M.S.concat(M.S.filter(x => x.w >= gl - 3 && x.w < gl).map(x => Object.assign({}, x, { w: x.w + 3 })));
+    W = gl;
+  } else {
+    M.S = M.S.filter(x => x.w < n);
+    if (W >= n) W = n - 1;
+  }
+  visTitel(); render(); aendret(); // aendret() rydder status-teksten -- derfor beskeden bagefter
+  gemStatus(delta > 0 ? `Uge ${gl + 1}–${n} er tilføjet som kopi af uge ${gl - 2}–${gl}.` : `Uge ${n + 1}–${gl} er fjernet.`, 'ok');
+}
 $('#rules').onclick = () => $('#rd').showModal();
 $('#exp').onclick = () => { $('#xa').value = txt(W); $('#xd').showModal(); };
 $('#xt').onclick = () => $('#xa').value = txt(W); $('#xc').onclick = () => $('#xa').value = csv();
@@ -832,5 +848,5 @@ if (window.top !== window) {
   start().catch(() => vis('loginVis'));
 }
 </script>
-<script src="medarbejdere.js?v=2026-09-24-12"></script>
+<script src="medarbejdere.js?v=2026-09-24-13"></script>
 </body></html>
