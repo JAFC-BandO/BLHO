@@ -4,7 +4,8 @@
 // maa staa her, fordi repoet er offentligt. Det der staar her er kun butikkens generelle
 // regler (aabningstider, bemanding, vagtlaengder), som i forvejen er offentlige.
 //
-// Tider er minutter efter midnat (525 = 08:45). Dage er 0-6 (mandag-soendag). Uger er 0-5.
+// Tider er minutter efter midnat (525 = 08:45). Dage er 0-6 (mandag-soendag). Uger er 0 til
+// planens antal uger - 1 (C.uger: 3, 6, 9 eller 12; standard 6).
 (function (root) {
   function lavMotor(C) {
     const R = C.jobtyper;
@@ -17,7 +18,8 @@
     const O = d => [525, d > 4 ? 1035 : 1095];
     const f = m => String(m / 60 | 0).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
     const LEN = [180, 195, 210, 225, 240, 255, 270, 300, 330, 360, 390, 420, 435, 480, 510];
-    const NW = 6, WK = [...Array(NW).keys()];
+    // Planens laengde i uger. Skal gaa op i 3, fordi weekend-holdene skiftes hver 3. weekend.
+    const NW = [3, 6, 9, 12].includes(C.uger) ? C.uger : 6, WK = [...Array(NW).keys()];
     const ROT = C.weekendRotation || [], NR = ROT.length || 3;
     // EKSTRA: hvor mange ekstra personer der maa bruges (dropdown'en). null = ingen graense og
     // ingen weekend-aflastning -- saadan opfoerte den oprindelige vagtplan sig.
@@ -55,6 +57,19 @@
       const ud = new Set();
       if (N > 0) {
         const dob = WK.map(w => { const hold = ROT[w % NR] || []; return [...new Set(hold.filter(x => x.d == 6 && hold.some(y => y.d == 5 && y.p == x.p)).map(x => x.p))]; });
+        if (NW > 6) {
+          // Lange planer (9-12 uger): DP'en nedenfor bliver for stor. Vaelg i stedet uge for
+          // uge, og tag kun en aflastning med, hvis dagene stadig kan fordeles paa EKSTRA
+          // personer efter EKSTRA_REGEL.
+          const valgt = [];
+          WK.forEach(w => dob[w].forEach((p, j) => {
+            for (const d of j % 2 ? [5, 6] : [6, 5]) {
+              if (kanFordeles(valgt.concat([{ w, d }]), N, rg)) { valgt.push({ w, d }); ud.add(w + '|' + d + '|' + p); break; }
+            }
+          }));
+          aflNoegle = k; aflCache = ud;
+          return ud;
+        }
         // De weekend-moenstre én ekstra person maa have (uger med indbyrdes afstand >= afstand)
         const moenstre = [];
         for (let m = 1; m < 1 << NW; m++) {
@@ -87,6 +102,25 @@
       return ud;
     }
     const afloest = (w, x) => aflosning().has(w + '|' + x.d + '|' + x.p);
+    // Kan disse weekenddage ({w, d}) fordeles paa K ekstra personer efter reglen rg?
+    function kanFordeles(dage, K, rg) {
+      const hvem = Array.from({ length: K }, () => []);
+      const ok = (n, x) => hvem[n].every(y => {
+        if (y.w == x.w && y.d == x.d) return false;
+        const a = ugeAfstand(x.w, y.w); return a == 0 ? rg.begge : a >= rg.afstand;
+      });
+      const soeg = (j, maxN) => {
+        if (j == dage.length) return true;
+        for (let n = 0; n <= Math.min(maxN + 1, K - 1); n++) {
+          if (!ok(n, dage[j])) continue;
+          hvem[n].push(dage[j]);
+          if (soeg(j + 1, Math.max(maxN, n))) return true;
+          hvem[n].pop();
+        }
+        return false;
+      };
+      return soeg(0, -1);
+    }
 
     function ext() {
       const S = M.S, EX = []; const ex = [];

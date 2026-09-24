@@ -23,8 +23,8 @@ window.addEventListener('storage', e => { if (e.key === 'blho-tema') saetTema();
 if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('change', saetTema);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="motor.js?v=2026-09-24-11"></script>
-<script src="opsaetning.js?v=2026-09-24-11"></script>
+<script src="motor.js?v=2026-09-24-12"></script>
+<script src="opsaetning.js?v=2026-09-24-12"></script>
 <style>
 /* Farverne ligger som variabler, saa lys/moerk tilstand styres ét sted. Temaet vaelges med
    knappen i butik-redigerings topbar og deles via localStorage 'blho-tema' (se <head>). */
@@ -146,6 +146,22 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
 .md-dag.fri .md-tider{visibility:hidden}
 #mdFejl{color:var(--bad);font-size:14px;margin-top:8px}
 .indhold .navn-knap{border:0;background:none;padding:0;color:inherit;font:inherit;text-decoration:underline dotted;text-underline-offset:3px;cursor:pointer}
+/* Vagtplan-vaelgeren i sidehovedet */
+.sidehoved-hoejre{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end}
+.plan-vaelger{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.plan-vaelger select{font:inherit;font-size:14px;font-weight:600;padding:6px 8px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--fg);max-width:16em}
+.mere{position:relative}
+.mere-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:20;min-width:190px;padding:6px;border:1px solid var(--bd);border-radius:10px;background:var(--card);box-shadow:0 8px 24px rgba(0,0,0,.15);display:flex;flex-direction:column;gap:2px}
+.indhold .mere-menu button{border:0;background:none;text-align:left;padding:8px 10px;border-radius:6px}
+.indhold .mere-menu button:hover{background:var(--bg)}
+.indhold .mere-menu .farlig{color:var(--bad)}
+#nd .fra-valg{display:flex;flex-direction:column;gap:6px;margin:6px 0}
+#nd .fra-valg label{display:flex;align-items:center;gap:8px;margin:0}
+#nd .fra-valg input[type=radio]{width:auto;margin:0}
+#nd .skabelon-linje{display:flex;gap:6px;align-items:center;margin-left:26px}
+#nd .skabelon-linje select{width:auto;flex:1}
+#nd .skabelon-linje .farlig{color:var(--bad)}
+#nd label.slukket{opacity:.5}
 .ingen-plan{max-width:520px;margin:40px auto;padding:28px;text-align:center;background:var(--card);border:1px solid var(--bd);border-radius:12px}
 .ingen-plan h2{margin:0 0 6px}.ingen-plan .s{margin:0 0 16px}
 .indhold .ingen-plan .pri{padding:9px 18px}
@@ -193,8 +209,20 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
 <div class="indhold">
 <div class="sidehoved"><div>
 <h1 id="titel">Vagtplan</h1>
-<p class="s">Rullende 6-ugers plan. Klik på en vagt for at rette den, eller på "+ vagt" for at tilføje. Reglerne tjekkes automatisk, og intet gemmes før du trykker "Gem vagtplan".</p>
-</div><button id="medarbejdere" class="md-aabn" type="button" title="Tilføj, ret eller fjern medarbejdere og deres timer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Medarbejdere</button></div>
+<p class="s" id="planBeskrivelse">Rullende 6-ugers plan. Klik på en vagt for at rette den, eller på "+ vagt" for at tilføje. Reglerne tjekkes automatisk, og intet gemmes før du trykker "Gem vagtplan".</p>
+</div><div class="sidehoved-hoejre">
+<div class="plan-vaelger" id="planVaelger">
+  <select id="planListe" aria-label="Vælg vagtplan"></select>
+  <button type="button" id="nyPlanKnap">+ Ny vagtplan</button>
+  <div class="mere"><button type="button" id="mereKnap" aria-haspopup="menu" aria-expanded="false">Mere ▾</button>
+    <div class="mere-menu" id="mereMenu" role="menu" hidden>
+      <button type="button" role="menuitem" data-handling="omdoeb">Omdøb</button>
+      <button type="button" role="menuitem" data-handling="skabelon">Gem som skabelon</button>
+      <button type="button" role="menuitem" data-handling="slet" class="farlig">Slet vagtplan</button>
+    </div>
+  </div>
+</div>
+<button id="medarbejdere" class="md-aabn" type="button" title="Tilføj, ret eller fjern medarbejdere og deres timer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Medarbejdere</button></div></div>
 <div class="ingen-plan" id="ingenPlan" hidden>
   <h2 id="ingenPlanTitel">Ingen vagtplan endnu</h2>
   <p class="s">Opret en vagtplan, tilføj medarbejderne under "Medarbejdere", og tryk "Foreslå ny plan".</p>
@@ -208,6 +236,7 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
   <div class="handlinger"><button id="gen">Foreslå ny plan</button><button id="rules">Regler</button><button class="pri" id="exp">Kopiér til SmartPlan</button></div>
 </div>
 <div class="indstillinger">
+  <label>Uger <select id="uger" title="Hvor mange uger planen gentager sig over. Går op i 3, fordi weekend-holdene skiftes hver 3. weekend."><option value="3">3</option><option value="6">6</option><option value="9">9</option><option value="12">12</option></select></label>
   <label>2 personer fra <select id="t2" title="Hvornår der skal være 2 på arbejde igen om eftermiddagen"><option value="900">15:00</option><option value="915">15:15</option></select></label>
   <label>Ekstra personer <select id="ekstra" title="Hvor mange ekstra personer planen må bruge. De overtager den ene weekenddag for dem, der ellers skal arbejde både lørdag og søndag."></select></label>
   <label>Ekstra må arbejde <select id="ekstraRegel" title="Hvor tit de ekstra personer må arbejde weekend. Alle weekend-ønsker kræver ca. 13 timers weekendarbejde om ugen fra ekstra folk — jo sjældnere hver enkelt må arbejde, jo flere ekstra personer skal der til.">
@@ -267,6 +296,27 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
   <div class="row"><button class="pri" id="mdGem" type="button">Gem medarbejder</button><button id="mdAnnuller" type="button">Tilbage</button></div>
 </div>
 </dialog>
+<dialog id="nd" aria-labelledby="ndTitel"><button type="button" class="luk-x" aria-label="Luk" title="Luk">✕</button><h3 id="ndTitel">Ny vagtplan</h3>
+  <label>Navn<input id="ndNavn" type="text" maxlength="40" autocomplete="off"></label>
+  <label>Antal uger<select id="ndUger"><option value="3">3 uger</option><option value="6" selected>6 uger</option><option value="9">9 uger</option><option value="12">12 uger</option></select></label>
+  <p class="md-hjaelp">Planen gentager sig efter det antal uger. Det går op i 3, fordi weekend-holdene skiftes hver 3. weekend.</p>
+  <div class="fra-valg" role="radiogroup" aria-label="Start fra">
+    <label id="ndSammeL"><input type="radio" name="ndFra" value="samme" checked> <span>Samme medarbejdere som <b class="nd-nu"></b> – en ny plan laves automatisk</span></label>
+    <label id="ndKopiL"><input type="radio" name="ndFra" value="kopi"> <span>Kopi af <b class="nd-nu"></b> (medarbejdere og vagter)</span></label>
+    <label id="ndSkabelonL"><input type="radio" name="ndFra" value="skabelon"> <span>Fra en skabelon</span></label>
+    <div class="skabelon-linje" id="ndSkabelonLinje"><select id="ndSkabelon" aria-label="Skabelon"></select><button type="button" class="farlig" id="ndSletSkabelon">Slet skabelon</button></div>
+    <label><input type="radio" name="ndFra" value="tom"> <span>Helt tom (uden medarbejdere)</span></label>
+  </div>
+  <p class="fejltekst" id="ndFejl" role="alert"></p>
+  <div class="row"><button class="pri" id="ndOpret" type="button">Opret vagtplan</button></div>
+</dialog>
+<dialog id="sd" aria-labelledby="sdTitel"><button type="button" class="luk-x" aria-label="Luk" title="Luk">✕</button><h3 id="sdTitel">Gem som skabelon</h3>
+  <p class="md-hjaelp" id="sdHjaelp"></p>
+  <label>Navn<input id="sdNavn" type="text" maxlength="40" autocomplete="off"></label>
+  <label id="sdVagterL" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="sdVagter" checked style="width:auto;margin:0"> Tag vagterne med (ellers kun medarbejdere og indstillinger)</label>
+  <p class="fejltekst" id="sdFejl" role="alert"></p>
+  <div class="row"><button class="pri" id="sdGem" type="button">Gem</button></div>
+</dialog>
 <dialog id="rd" style="max-width:min(680px,94vw)"><button type="button" class="luk-x" aria-label="Luk" title="Luk">✕</button><h3>Regler i planen</h3><div id="rt" style="max-height:62vh;overflow:auto;font-size:14px"></div></dialog>
 <dialog id="xd"><button type="button" class="luk-x" aria-label="Luk" title="Luk">✕</button><h3>Kopiér til SmartPlan</h3>
 <div class="row"><button id="xt">Denne uge (tekst)</button><button id="xc">Alle uger (CSV)</button></div>
@@ -313,8 +363,10 @@ const lesPlan = p => {
 // Vagtplanen foelger den butik der er valgt i butik-redigerings topbar (vagtplanButik /
 // vagtplanApi.skiftButik). Ikke-gemte aendringer gemmes som kladde pr. butik, saa man kan
 // skifte frem og tilbage uden at miste dem (eller fortryd-historikken).
-const FELTER = 'id, butik_id, opsaetning, plan, opdateret_at, butikker(navn)';
-let kladder = {}, aktuelButik = null;
+const FELTER = 'id, butik_id, navn, opsaetning, plan, opdateret_at, butikker(navn)';
+// kladder: ikke-gemte aendringer pr. VAGTPLAN (id), saa man kan skifte baade vagtplan og butik
+// uden at miste dem. butikPlaner: den valgte butiks vagtplaner (id + navn) til vaelgeren.
+let kladder = {}, aktuelButik = null, butikPlaner = [];
 const STANDARD_REGLER = [
   { titel: 'Åbningstider', tekst: 'hverdage 08:45–18:15, weekender 08:45–17:15.' },
   { titel: 'Bemanding', tekst: '08:45–10:00 præcis 1 på arbejde. 10:00–13:00 2 på arbejde. 13:00–15:00 mindst 1. Fra 15:00 (eller 15:15) 2 på arbejde. Aldrig mere end 2 ad gangen. Der skal altid være en ansvarlig, som ikke er ungarbejder. Ungarbejdere kan ikke stå alene.' },
@@ -329,12 +381,43 @@ const nyOpsaetning = navn => ({
   hulFyldere: [], fyldere: [], ekstraDage: [], maalTimer: [], ugeTimer: [], minSnit: [],
   regler: STANDARD_REGLER,
 });
-function visPlanIndhold(ja) { $('#planIndhold').hidden = !ja; $('#ingenPlan').hidden = ja; $('#medarbejdere').hidden = !ja; }
+function visPlanIndhold(ja) {
+  $('#planIndhold').hidden = !ja; $('#ingenPlan').hidden = ja; $('#medarbejdere').hidden = !ja;
+  $('#planListe').hidden = !ja; $('#mereKnap').parentNode.hidden = !ja;
+}
+function gemKladde() { if (raekke) kladder[raekke.id] = { raekke, historik, hpos, gemtSnap, W }; }
+function tegnPlanListe() {
+  $('#planListe').innerHTML = butikPlaner.map(p => `<option value="${esc(p.id)}">${esc(p.navn)}</option>`).join('');
+  if (raekke) $('#planListe').value = raekke.id;
+}
 async function visButik(id, navn) {
   if (aktuelButik && aktuelButik.id == id && raekke && raekke.butik_id == id) return;
-  if (raekke) kladder[raekke.butik_id] = { raekke, historik, hpos, gemtSnap, W };
+  gemKladde();
   aktuelButik = { id, navn };
   $('#opretFejl').textContent = '';
+  const { data, error } = await client.from('vagtplan').select('id, navn, oprettet_at').eq('butik_id', id).eq('er_skabelon', false).order('oprettet_at');
+  if (!aktuelButik || aktuelButik.id != id) return; // der er skiftet butik igen imens
+  if (error) { vis('ingenAdgangVis'); $('#ingenAdgangTekst').textContent = 'Kunne ikke hente vagtplanen. Prøv igen om lidt.'; return; }
+  vis('app');
+  butikPlaner = data || [];
+  if (!butikPlaner.length) { visTom(); return; }
+  let husket = null;
+  try { husket = localStorage.getItem('vagtplan-valgt-' + id); } catch (e) {}
+  raekke = null; // den forrige butiks plan ligger nu i kladder
+  await visPlan((butikPlaner.find(p => p.id == husket) || butikPlaner[0]).id);
+}
+function visTom() {
+  raekke = null; M = null; historik = []; hpos = 0; gemtSnap = undefined; konflikt = false;
+  const navn = aktuelButik ? aktuelButik.navn : '';
+  $('#ingenPlanTitel').textContent = navn + ' har ingen vagtplan endnu';
+  $('#opretPlan').textContent = 'Opret vagtplan for ' + navn;
+  $('#titel').textContent = 'Vagtplan – ' + navn;
+  visPlanIndhold(false); meld();
+}
+async function visPlan(id) {
+  if (raekke && raekke.id == id) return;
+  gemKladde();
+  try { localStorage.setItem('vagtplan-valgt-' + aktuelButik.id, id); } catch (e) {}
   const k = kladder[id];
   if (k) {
     delete kladder[id];
@@ -344,29 +427,131 @@ async function visButik(id, navn) {
     anvendSnap(historik[hpos]);
     return;
   }
-  const { data, error } = await client.from('vagtplan').select(FELTER).eq('butik_id', id).maybeSingle();
-  if (!aktuelButik || aktuelButik.id != id) return; // der er skiftet butik igen imens
-  if (error) { vis('ingenAdgangVis'); $('#ingenAdgangTekst').textContent = 'Kunne ikke hente vagtplanen. Prøv igen om lidt.'; return; }
-  vis('app');
-  if (!data) {
-    raekke = null; M = null; historik = []; hpos = 0; gemtSnap = undefined; konflikt = false;
-    $('#ingenPlanTitel').textContent = navn + ' har ingen vagtplan endnu';
-    $('#opretPlan').textContent = 'Opret vagtplan for ' + navn;
-    $('#titel').textContent = 'Vagtplan – ' + navn;
-    visPlanIndhold(false); meld();
-    return;
-  }
+  const { data, error } = await client.from('vagtplan').select(FELTER).eq('id', id).maybeSingle();
+  if (error || !data) { gemStatus('Vagtplanen kunne ikke hentes. Prøv igen.', 'bad'); tegnPlanListe(); return; }
   W = 0;
   vaelgPlan(data);
 }
-$('#opretPlan').onclick = async () => {
+$('#planListe').onchange = e => visPlan(e.target.value);
+
+// ---------- Ny vagtplan ----------
+let skabeloner = [];
+async function aabnNyPlan() {
+  const nu = raekke ? raekke.navn : null;
+  $('#ndNavn').value = ''; $('#ndFejl').textContent = '';
+  $('#ndUger').value = String(M ? M.NW : 6);
+  document.querySelectorAll('#nd .nd-nu').forEach(b => { b.textContent = nu || ''; });
+  ['#ndSammeL', '#ndKopiL'].forEach(s => { $(s).classList.toggle('slukket', !nu); $(s).querySelector('input').disabled = !nu; });
+  const { data } = await client.from('vagtplan').select('id, navn, butikker(navn)').eq('er_skabelon', true).order('navn');
+  skabeloner = data || [];
+  $('#ndSkabelon').innerHTML = skabeloner.map(s => `<option value="${esc(s.id)}">${esc(s.navn)}${s.butikker && s.butikker.navn ? ' (' + esc(s.butikker.navn) + ')' : ''}</option>`).join('');
+  $('#ndSkabelonL').classList.toggle('slukket', !skabeloner.length);
+  $('#ndSkabelonL').querySelector('input').disabled = !skabeloner.length;
+  $('#ndSkabelonLinje').hidden = !skabeloner.length;
+  const fra = nu ? 'samme' : skabeloner.length ? 'skabelon' : 'tom';
+  document.querySelector(`#nd input[name=ndFra][value=${fra}]`).checked = true;
+  $('#nd').showModal(); $('#ndNavn').focus();
+}
+$('#nyPlanKnap').onclick = aabnNyPlan;
+$('#opretPlan').onclick = aabnNyPlan;
+$('#ndSkabelon').onchange = () => { document.querySelector('#nd input[name=ndFra][value=skabelon]').checked = true; };
+$('#ndOpret').onclick = async () => {
   if (!aktuelButik) return;
-  const b = aktuelButik, knap = $('#opretPlan');
-  knap.disabled = true;
-  const { data, error } = await client.from('vagtplan').insert({ butik_id: b.id, opsaetning: nyOpsaetning(b.navn) }).select(FELTER).single();
+  const navn = $('#ndNavn').value.trim(), uger = +$('#ndUger').value;
+  const fra = (document.querySelector('#nd input[name=ndFra]:checked') || {}).value;
+  if (!navn) { $('#ndFejl').textContent = 'Giv vagtplanen et navn, fx "Sommer 2026".'; return; }
+  if (butikPlaner.some(p => p.navn.toLowerCase() == navn.toLowerCase())) { $('#ndFejl').textContent = 'Der findes allerede en vagtplan med det navn i ' + aktuelButik.navn + '.'; return; }
+  let ops, plan = null;
+  if ((fra == 'samme' || fra == 'kopi') && raekke) {
+    const o = JSON.parse(snap()); ops = o.opsaetning; if (fra == 'kopi') plan = o.plan;
+  } else if (fra == 'skabelon') {
+    const { data } = await client.from('vagtplan').select('opsaetning, plan').eq('id', $('#ndSkabelon').value).maybeSingle();
+    if (!data) { $('#ndFejl').textContent = 'Skabelonen kunne ikke hentes. Prøv igen.'; return; }
+    ops = data.opsaetning; plan = data.plan;
+  } else ops = nyOpsaetning(aktuelButik.navn);
+  ops = Object.assign({}, ops, { uger });
+  if (plan) { const p = lesPlan(plan); plan = Object.assign({}, p, { vagter: p.vagter.filter(x => x.w < uger) }); }
+  const knap = $('#ndOpret'); knap.disabled = true;
+  const { data, error } = await client.from('vagtplan').insert({ butik_id: aktuelButik.id, navn, opsaetning: ops, plan }).select('id, navn, oprettet_at').single();
   knap.disabled = false;
-  if (error || !data) { $('#opretFejl').textContent = 'Vagtplanen blev ikke oprettet. Tjek at du har adgang til ' + b.navn + ', og prøv igen.'; return; }
-  if (aktuelButik && aktuelButik.id == b.id) { vaelgPlan(data); aabnMedarbejdere(); }
+  if (error || !data) { $('#ndFejl').textContent = 'Vagtplanen blev ikke oprettet. Prøv igen.'; return; }
+  butikPlaner.push(data);
+  $('#nd').close();
+  await visPlan(data.id);
+  if (fra == 'tom') aabnMedarbejdere();
+};
+
+// ---------- Mere: omdoeb, gem som skabelon, slet ----------
+let sletArmeret = false, sletTimer = null, sdTilstand = null;
+function lukMere() { $('#mereMenu').hidden = true; $('#mereKnap').setAttribute('aria-expanded', 'false'); nulstilSlet(); }
+function nulstilSlet() { sletArmeret = false; clearTimeout(sletTimer); document.querySelector('[data-handling=slet]').textContent = 'Slet vagtplan'; }
+$('#mereKnap').onclick = e => { e.stopPropagation(); const aaben = $('#mereMenu').hidden; $('#mereMenu').hidden = !aaben; $('#mereKnap').setAttribute('aria-expanded', String(aaben)); if (!aaben) nulstilSlet(); };
+document.addEventListener('click', e => { if (!$('#mereMenu').hidden && !e.target.closest('.mere')) lukMere(); });
+$('#mereMenu').addEventListener('click', async e => {
+  const b = e.target.closest('[data-handling]'); if (!b || !raekke) return;
+  const hvad = b.dataset.handling;
+  if (hvad == 'omdoeb' || hvad == 'skabelon') {
+    lukMere();
+    sdTilstand = hvad;
+    $('#sdTitel').textContent = hvad == 'omdoeb' ? 'Omdøb vagtplan' : 'Gem som skabelon';
+    $('#sdHjaelp').textContent = hvad == 'omdoeb' ? '' : 'En skabelon er en kopi af medarbejderne, indstillingerne og (hvis du vil) vagterne, som du kan starte nye vagtplaner fra — også i andre butikker.';
+    $('#sdVagterL').hidden = hvad == 'omdoeb';
+    $('#sdNavn').value = hvad == 'omdoeb' ? raekke.navn : raekke.navn + ' (skabelon)';
+    $('#sdFejl').textContent = '';
+    $('#sd').showModal(); $('#sdNavn').select();
+    return;
+  }
+  if (hvad == 'slet') {
+    if (!sletArmeret) {
+      sletArmeret = true; b.textContent = 'Sikker? Klik igen';
+      clearTimeout(sletTimer); sletTimer = setTimeout(nulstilSlet, 4000);
+      return;
+    }
+    lukMere();
+    const r = raekke;
+    const { error } = await client.from('vagtplan').delete().eq('id', r.id);
+    if (error) { gemStatus('Vagtplanen blev ikke slettet. Prøv igen.', 'bad'); return; }
+    delete kladder[r.id];
+    butikPlaner = butikPlaner.filter(p => p.id != r.id);
+    raekke = null; historik = []; hpos = 0; gemtSnap = undefined;
+    if (butikPlaner.length) await visPlan(butikPlaner[0].id); else visTom();
+  }
+});
+$('#sdGem').onclick = async () => {
+  const navn = $('#sdNavn').value.trim(), r = raekke;
+  if (!navn) { $('#sdFejl').textContent = 'Skriv et navn.'; return; }
+  const knap = $('#sdGem'); knap.disabled = true;
+  if (sdTilstand == 'omdoeb') {
+    if (butikPlaner.some(p => p.id != r.id && p.navn.toLowerCase() == navn.toLowerCase())) { knap.disabled = false; $('#sdFejl').textContent = 'Der findes allerede en vagtplan med det navn.'; return; }
+    // Samme vagt mod samtidige aendringer som "Gem vagtplan" (opdateret_at)
+    const { data, error } = await client.from('vagtplan').update({ navn }).eq('id', r.id).eq('opdateret_at', r.opdateret_at).select('opdateret_at');
+    knap.disabled = false;
+    if (error) { $('#sdFejl').textContent = 'Navnet blev ikke gemt. Prøv igen.'; return; }
+    if (!data || !data.length) { $('#sd').close(); konflikt = true; $('#konflikt').style.display = 'block'; meld(); return; }
+    r.navn = navn; r.opdateret_at = data[0].opdateret_at;
+    butikPlaner.forEach(p => { if (p.id == r.id) p.navn = navn; });
+    tegnPlanListe(); visTitel();
+  } else {
+    const o = JSON.parse(snap());
+    const { error } = await client.from('vagtplan').insert({ butik_id: r.butik_id, navn, er_skabelon: true, opsaetning: o.opsaetning, plan: $('#sdVagter').checked ? o.plan : null });
+    knap.disabled = false;
+    if (error) { $('#sdFejl').textContent = 'Skabelonen blev ikke gemt. Prøv igen.'; return; }
+    gemStatus('Skabelonen "' + navn + '" er gemt ✓', 'ok');
+  }
+  $('#sd').close();
+};
+// Slet en skabelon (fra "Ny vagtplan"-dialogen) -- klik to gange
+let sletSkArmeret = false;
+$('#ndSletSkabelon').onclick = async () => {
+  const id = $('#ndSkabelon').value; if (!id) return;
+  const b = $('#ndSletSkabelon');
+  if (!sletSkArmeret) { sletSkArmeret = true; b.textContent = 'Sikker? Klik igen'; setTimeout(() => { sletSkArmeret = false; b.textContent = 'Slet skabelon'; }, 4000); return; }
+  sletSkArmeret = false; b.textContent = 'Slet skabelon';
+  const { error } = await client.from('vagtplan').delete().eq('id', id);
+  if (error) { $('#ndFejl').textContent = 'Skabelonen blev ikke slettet.'; return; }
+  skabeloner = skabeloner.filter(s => s.id != id);
+  $('#ndSkabelon').querySelector(`option[value="${id}"]`).remove();
+  if (!skabeloner.length) { $('#ndSkabelonLinje').hidden = true; $('#ndSkabelonL').classList.add('slukket'); $('#ndSkabelonL').querySelector('input').disabled = true; document.querySelector('#nd input[name=ndFra][value=' + (raekke ? 'samme' : 'tom') + ']').checked = true; }
 };
 
 // ---------- Login / adgang ----------
@@ -389,17 +574,22 @@ async function start() {
   vis('app');
   vaelgPlan(planer[0]);
 }
+function visTitel() {
+  const t = (raekke.navn || 'Vagtplan') + ' – ' + (butikNavn(raekke) || (aktuelButik && aktuelButik.navn) || '');
+  $('#titel').textContent = t; document.title = t;
+  $('#planBeskrivelse').textContent = `Rullende ${M.NW}-ugers plan. Klik på en vagt for at rette den, eller på "+ vagt" for at tilføje. Reglerne tjekkes automatisk, og intet gemmes før du trykker "Gem vagtplan".`;
+}
 function vaelgPlan(r, bevar) {
   raekke = r; konflikt = false; $('#konflikt').style.display = 'none';
   visPlanIndhold(true);
   if (!aktuelButik || aktuelButik.id != r.butik_id) aktuelButik = { id: r.butik_id, navn: butikNavn(r) };
   const pl = lesPlan(r.plan);
   M = lavVagtplanMotor(r.opsaetning); M.T2 = pl.t2; M.EKSTRA = pl.ekstra; M.EKSTRA_REGEL = pl.ekstraRegel;
-  M.S = pl.vagter.filter(x => M.P[x.p]); // vagter for folk der er fjernet fra medarbejderlisten
+  M.S = pl.vagter.filter(x => M.P[x.p] && x.w < M.NW); // vagter for folk der er fjernet, eller uger der ikke findes mere
   opdaterKontroller(); $('#ekstraHint').hidden = true;
   $('#butikNavn').textContent = butikNavn(r);
-  $('#titel').textContent = r.opsaetning.titel || 'Vagtplan';
-  document.title = r.opsaetning.titel || 'Vagtplan';
+  if (!butikPlaner.some(p => p.id == r.id)) butikPlaner.push({ id: r.id, navn: r.navn || 'Vagtplan' });
+  tegnPlanListe(); visTitel();
   $('#rt').innerHTML = reglerHtml(r.opsaetning);
   gemStatus('');
   if (bevar) { render(); return; }
@@ -450,8 +640,9 @@ function anvendSnap(s) {
   const o = JSON.parse(s);
   if (JSON.stringify(o.opsaetning) !== JSON.stringify(raekke.opsaetning)) genopbygMotor(o.opsaetning);
   M.T2 = o.plan.t2; M.EKSTRA = o.plan.ekstra; M.EKSTRA_REGEL = o.plan.ekstraRegel;
-  M.S = o.plan.vagter.filter(x => M.P[x.p]);
-  opdaterKontroller(); render(); meld();
+  M.S = o.plan.vagter.filter(x => M.P[x.p] && x.w < M.NW);
+  if (W >= M.NW) W = 0;
+  opdaterKontroller(); visTitel(); render(); meld();
 }
 const fortryd = () => { if (raekke) gaaTil(hpos - 1); }, gentag = () => { if (raekke) gaaTil(hpos + 1); };
 async function gem() {
@@ -468,7 +659,7 @@ async function gem() {
 }
 // Meld tilstanden til topbaren (eller vis egne knapper, hvis topbaren er en aeldre udgave)
 function meld() {
-  const andre = Object.values(kladder).filter(k => k.historik[k.hpos] !== k.gemtSnap).map(k => butikNavn(k.raekke));
+  const andre = Object.values(kladder).filter(k => k.historik[k.hpos] !== k.gemtSnap).map(k => '"' + (k.raekke.navn || 'Vagtplan') + '" (' + butikNavn(k.raekke) + ')');
   const st = { kanFortryde: hpos > 0, kanGentage: hpos < historik.length - 1, ugemt: ugemt(), ugemtAndre: andre.length > 0, gemmer, konflikt };
   $('#ugemtTekst').hidden = !st.ugemt || konflikt;
   $('#andreUgemt').hidden = !andre.length;
@@ -495,6 +686,7 @@ document.addEventListener('keydown', e => {
 });
 // Indstillings-felterne afspejler motorens tilstand (ogsaa efter fortryd/gentag)
 function opdaterKontroller() {
+  $('#uger').value = M.NW;
   $('#t2').value = M.T2;
   const maxE = Math.max(M.maxAflastning, M.EKSTRA);
   $('#ekstra').innerHTML = Array.from({ length: maxE + 1 }, (_, n) => `<option value="${n}">${n}</option>`).join('');
@@ -617,6 +809,16 @@ $('#ekstraRegel').onchange = e => { const [a, b] = e.target.value.split('-').map
 const txt = w => M.D.map((n, d) => n + '\n' + (grp(w, d).map(a => M.f(a[0].s) + ' - ' + M.f(a[0].e) + ': ' + a.map(x => M.nmi(x.i) + ' (' + M.R[M.P[x.p][1]] + ')').join(', ')).join('\n') || '–')).join('\n\n');
 const csv = () => 'Uge;Dag;Start;Slut;Medarbejder;Jobtype\n' + M.S.map((x, i) => ({ ...x, i })).sort((a, b) => a.w - b.w || a.d - b.d || a.s - b.s).map(x => [x.w + 1, M.D[x.d], M.f(x.s), M.f(x.e), M.nmi(x.i), M.R[M.P[x.p][1]]].join(';')).join('\n');
 $('#t2').onchange = e => { M.T2 = +e.target.value; render(); aendret(); };
+// Antal uger: opsaetningen faar det nye antal, vagter i uger der forsvinder smides vaek, og nye
+// uger er tomme, til man trykker "Foreslå ny plan".
+$('#uger').onchange = e => {
+  const n = +e.target.value;
+  genopbygMotor(Object.assign({}, raekke.opsaetning, { uger: n }));
+  M.S = M.S.filter(x => x.w < n);
+  if (W >= n) W = 0;
+  $('#ekstraHint').hidden = false;
+  visTitel(); render(); aendret();
+};
 $('#rules').onclick = () => $('#rd').showModal();
 $('#exp').onclick = () => { $('#xa').value = txt(W); $('#xd').showModal(); };
 $('#xt').onclick = () => $('#xa').value = txt(W); $('#xc').onclick = () => $('#xa').value = csv();
@@ -630,5 +832,5 @@ if (window.top !== window) {
   start().catch(() => vis('loginVis'));
 }
 </script>
-<script src="medarbejdere.js?v=2026-09-24-11"></script>
+<script src="medarbejdere.js?v=2026-09-24-12"></script>
 </body></html>
