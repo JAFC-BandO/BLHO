@@ -23,8 +23,8 @@ window.addEventListener('storage', e => { if (e.key === 'blho-tema') saetTema();
 if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('change', saetTema);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="motor.js?v=2026-09-24-14"></script>
-<script src="opsaetning.js?v=2026-09-24-14"></script>
+<script src="motor.js?v=2026-09-24-15"></script>
+<script src="opsaetning.js?v=2026-09-24-15"></script>
 <style>
 /* Farverne ligger som variabler, saa lys/moerk tilstand styres ét sted. Temaet vaelges med
    knappen i butik-redigerings topbar og deles via localStorage 'blho-tema' (se <head>). */
@@ -113,7 +113,12 @@ button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{ou
 .indhold .chip.rL{border-color:var(--L)}.indhold .chip.rS{border-color:var(--S)}.indhold .chip.rU{border-color:var(--U)}.indhold .chip.rF{border-color:var(--F)}.indhold .chip.uk{border-style:dashed;border-width:1px 1px 1px 5px;border-color:var(--mut);color:var(--mut)}
 .indhold .add{width:100%;margin-top:6px;border-style:dashed;color:var(--mut);font-size:13px}.di{font-size:12px;color:var(--bad);margin-top:5px}
 .indhold h2{font-size:16px;margin:18px 0 6px}ul.is{list-style:none;padding:0;margin:0}ul.is li{padding:4px 0;border-bottom:1px solid var(--bd)}.indhold ul.is button{border:0;background:none;padding:0;text-align:left;color:var(--bad)}
-table{border-collapse:collapse;background:var(--card)}td,th{border:1px solid var(--bd);padding:4px 10px;text-align:right}th:first-child,td:first-child{text-align:left}td.w{color:var(--bad);font-weight:700}
+table{border-collapse:collapse;background:var(--card)}
+/* Loen-kolonnerne adskilles fra ugerne, og "I alt"-raekken fra personerne */
+td.loen-start,th.loen-start{border-left:2px solid var(--bd)}
+tr.i-alt td{font-weight:700;border-top:2px solid var(--bd)}
+td.stille{color:var(--mut)}
+.loen-note{font-size:13px;color:var(--mut);margin:6px 0 0}td,th{border:1px solid var(--bd);padding:4px 10px;text-align:right}th:first-child,td:first-child{text-align:left}td.w{color:var(--bad);font-weight:700}
 dialog{border:1px solid var(--bd);border-radius:12px;background:var(--card);color:var(--fg);max-width:min(440px,92vw);width:100%;font-family:inherit}
 dialog::backdrop{background:rgba(0,0,0,.45)}
 /* Luk = et ✕ i hjoernet af hver dialog (ingen "Luk"/"Annullér"-knapper) */
@@ -272,11 +277,14 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
 <div id="mdListeVis">
   <p class="md-hjaelp">Her styrer du, hvem planen regner med. Ændringer gemmes, når du trykker "Gem vagtplan", og bruges næste gang du trykker "Foreslå ny plan".</p>
   <ul id="mdListe"></ul>
+  <label class="md-ekstra-loen">Timeløn for ekstra personer (kr. pr. time)<input id="mdEkstraLoen" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Valgfri"></label>
   <div class="row"><button class="pri" id="mdNy" type="button">+ Tilføj medarbejder</button></div>
 </div>
 <div id="mdFormVis" hidden>
   <label>Navn<input id="mdNavn" type="text" autocomplete="off" maxlength="40"></label>
   <label>E-mail<input id="mdEmail" type="email" autocomplete="off" maxlength="120" placeholder="navn@eksempel.dk"></label>
+  <label>Timeløn (kr. pr. time)<input id="mdTimeloen" type="number" min="0" step="0.01" inputmode="decimal" placeholder="fx 145"></label>
+  <p class="md-hjaelp">Valgfri. Bruges kun til at vise lønudgiften i timetabellen og kan kun ses af dem med adgang til vagtplanen.</p>
   <label>Jobtype<select id="mdType"></select></label>
   <p class="md-hjaelp">Ungarbejdere kan ikke stå alene og tæller ikke som ansvarlig. Alle andre jobtyper tæller som ansvarlig.</p>
   <fieldset><legend>Hvornår kan personen arbejde?</legend>
@@ -379,6 +387,7 @@ function isoUge(dt) {
 const dagDato = (w, d) => plusDage(tilDato(M.START), 7 * w + d);
 const ugeNr = w => isoUge(dagDato(w, 0));
 const datoKort = dt => dt.toLocaleDateString('da-DK', { day: 'numeric', month: 'short' });
+const kr = v => Math.round(v).toLocaleString('da-DK') + ' kr.';
 const datoTal = dt => dt.getDate() + '/' + (dt.getMonth() + 1);
 const ugeDatoer = w => datoKort(dagDato(w, 0)) + ' – ' + datoKort(dagDato(w, 6));
 const idagIndeks = () => { const i = ugerMellem(tilDato(M.START), new Date()); return i >= 0 && i < M.NW ? i : -1; };
@@ -827,13 +836,32 @@ function render() {
   $('#soft').innerHTML = Q.length ? Q.map(i => `<li>Uge ${ugeNr(i.w)}: ${esc(i.t)}</li>`).join('') : '<li>Ingen.</li>';
   $('#iss').innerHTML = I.length ? I.map(i => `<li><button data-w="${i.w < 0 ? W : i.w}">${i.w < 0 ? 'Alle uger' : 'Uge ' + ugeNr(i.w)}${i.d >= 0 ? ' ' + D[i.d] : ''}: ${esc(i.t)}</button></li>`).join('') : '<li class="ok">Ingen problemer.</li>';
   const ps = Object.keys(P).filter(p => p != 'uk'), nx = Math.max(0, ...EX.filter(Boolean));
-  $('#hrs').innerHTML = '<table><tr><th></th>' + WK.map(w => `<th title="${ugeDatoer(w)}">Uge ${ugeNr(w)}</th>`).join('') + '<th>Snit</th></tr>' + ps.map(p => {
+  // Timeloen: pr. medarbejder (personer[].timeloen) og for ekstra personer (ekstraTimeloen).
+  // Loen-kolonnerne vises kun, naar mindst én har en timeloen.
+  const C = raekke.opsaetning, tlP = {};
+  C.personer.forEach(p => { if (typeof p.timeloen == 'number') tlP[p.id] = p.timeloen; });
+  const tlE = typeof C.ekstraTimeloen == 'number' ? C.ekstraTimeloen : null;
+  const visLoen = Object.keys(tlP).length > 0 || tlE != null;
+  const tal = x => Math.round(x * 100) / 100;
+  const ugeLoen = WK.map(() => 0), ugeTimer = WK.map(() => 0); let uden = 0;
+  const loenCeller = (h, tl) => {
+    const sum = h.reduce((x, y) => x + y, 0);
+    h.forEach((x, w) => { ugeTimer[w] += x; if (tl != null) ugeLoen[w] += x * tl; });
+    if (tl == null && sum > 0) uden++;
+    return !visLoen ? '' : `<td class="loen-start">${tal(sum)}</td><td class="${tl == null ? 'stille' : ''}">${tl == null ? '–' : kr(tl)}</td><td class="${tl == null ? 'stille' : ''}">${tl == null ? '–' : kr(sum * tl)}</td>`;
+  };
+  const rk = ps.map(p => {
     const h = WK.map(w => M.hrs(p, w)), a = h.reduce((x, y) => x + y) / NW, m = M.minSnit(p), u = M.ugeTimer(p), bad = (m && a < m) || (u != null && h.some(x => x != u));
-    return `<tr><td><button type="button" class="navn-knap" data-person="${esc(p)}" title="Ret ${esc(P[p][0])}">${esc(P[p][0])}</button> <small>${esc(R[P[p][1]])}</small></td>${h.map(x => `<td>${x}</td>`).join('')}<td class="${bad ? 'w' : ''}">${a.toFixed(1)}${m ? ' (min ' + m + ')' : ''}</td></tr>`;
+    return `<tr><td><button type="button" class="navn-knap" data-person="${esc(p)}" title="Ret ${esc(P[p][0])}">${esc(P[p][0])}</button> <small>${esc(R[P[p][1]])}</small></td>${h.map(x => `<td>${x}</td>`).join('')}<td class="${bad ? 'w' : ''}">${a.toFixed(1)}${m ? ' (min ' + m + ')' : ''}</td>${loenCeller(h, tlP[p] != null ? tlP[p] : null)}</tr>`;
   }).join('') + Array.from({ length: Math.max(nx, M.EKSTRA) }, (_, k) => {
     const hh = WK.map(w => M.S.reduce((a, x, i) => a + (EX[i] == k + 1 && x.w == w ? (x.e - x.s) / 60 : 0), 0));
-    return `<tr><td>Ekstra person ${k + 1} <small>skal findes</small></td>${hh.map(x => `<td>${x}</td>`).join('')}<td>${(hh.reduce((a, b) => a + b) / NW).toFixed(1)}</td></tr>`;
-  }).join('') + '</table>';
+    return `<tr><td>Ekstra person ${k + 1} <small>skal findes</small></td>${hh.map(x => `<td>${x}</td>`).join('')}<td>${(hh.reduce((a, b) => a + b) / NW).toFixed(1)}</td>${loenCeller(hh, tlE)}</tr>`;
+  }).join('');
+  const iAlt = ugeLoen.reduce((x, y) => x + y, 0);
+  const fod = !visLoen ? '' : `<tr class="i-alt"><td>I alt</td>${WK.map(w => `<td title="${tal(ugeTimer[w])} timer">${kr(ugeLoen[w])}</td>`).join('')}<td>${kr(iAlt / NW)}</td><td class="loen-start">${tal(ugeTimer.reduce((x, y) => x + y, 0))}</td><td></td><td>${kr(iAlt)}</td></tr>`;
+  $('#hrs').innerHTML = '<table><tr><th></th>' + WK.map(w => `<th title="${ugeDatoer(w)}">Uge ${ugeNr(w)}</th>`).join('') + '<th>Snit</th>'
+    + (visLoen ? '<th class="loen-start">Timer i alt</th><th>Timeløn</th><th>Løn i alt</th>' : '') + '</tr>' + rk + fod + '</table>'
+    + (visLoen ? `<p class="loen-note">Lønudgift for perioden: <b>${kr(iAlt)}</b> (timeløn × timer, uden tillæg, pension og feriepenge). "I alt"-rækken viser lønudgiften pr. uge.${uden ? ` ${uden} med timer har ingen timeløn og er ikke regnet med.` : ''}</p>` : '');
 }
 document.addEventListener('click', e => {
   const t = e.target.closest('button'); if (!t || !M) return;
@@ -908,5 +936,5 @@ if (window.top !== window) {
   start().catch(() => vis('loginVis'));
 }
 </script>
-<script src="medarbejdere.js?v=2026-09-24-14"></script>
+<script src="medarbejdere.js?v=2026-09-24-15"></script>
 </body></html>

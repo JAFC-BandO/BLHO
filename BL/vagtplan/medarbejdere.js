@@ -16,10 +16,11 @@
   function visListe() {
     aaben = null;
     model = O.tilModel(raekke.opsaetning);
+    $('#mdEkstraLoen').value = raekke.opsaetning.ekstraTimeloen != null ? raekke.opsaetning.ekstraTimeloen : '';
     $('#mdTitel').textContent = 'Medarbejdere';
     $('#mdListeVis').hidden = false; $('#mdFormVis').hidden = true;
     $('#mdListe').innerHTML = model.length ? model.map(m => `<li>
-      <div class="md-navn"><b>${esc(m.navn)}</b> <span class="md-job">${esc(job(m.type))}</span>${m.email ? `<span class="md-email">${esc(m.email)}</span>` : ''}</div>
+      <div class="md-navn"><b>${esc(m.navn)}</b> <span class="md-job">${esc(job(m.type))}</span>${m.email ? `<span class="md-email">${esc(m.email)}</span>` : ''}${m.timeloen != null ? `<span class="md-email">${esc(String(m.timeloen).replace('.', ','))} kr./t</span>` : ''}</div>
       <div class="md-resume">${esc(O.beskriv(m))}</div>
       <div class="md-knapper"><button type="button" data-md-ret="${esc(m.id)}">Ret</button><button type="button" class="md-fjern" data-md-fjern="${esc(m.id)}">Fjern</button></div>
     </li>`).join('') : '<li class="s">Ingen medarbejdere endnu.</li>';
@@ -43,6 +44,7 @@
     const a = aaben;
     $('#mdNavn').value = a.navn;
     $('#mdEmail').value = a.email || '';
+    $('#mdTimeloen').value = a.timeloen != null ? a.timeloen : '';
     // Fast raekkefoelge (databasen gemmer jobtyperne alfabetisk efter noegle)
     const orden = k => { const i = ['L', 'S', 'F', 'U'].indexOf(k); return i < 0 ? 99 : i; };
     $('#mdType').innerHTML = Object.keys(raekke.opsaetning.jobtyper || {}).sort((x, y) => orden(x) - orden(y)).map(k => `<option value="${esc(k)}">${esc(job(k))}</option>`).join('');
@@ -130,6 +132,9 @@
     const a = aaben, fejl = [];
     a.navn = $('#mdNavn').value.trim();
     a.email = $('#mdEmail').value.trim();
+    const tl = String($('#mdTimeloen').value).trim().replace(',', '.');
+    a.timeloen = tl === '' ? null : Number(tl);
+    if (a.timeloen != null && !(a.timeloen > 0 && a.timeloen < 2000)) fejl.push('Timelønnen skal være et tal mellem 0 og 2000 kr. – eller lad feltet være tomt.');
     if (a.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a.email)) fejl.push('E-mailen ser ikke rigtig ud – tjek den, eller lad feltet være tomt.');
     else if (a.email && model.some(m => m.id != a.id && (m.email || '').toLowerCase() == a.email.toLowerCase())) fejl.push('En anden medarbejder har allerede den e-mail.');
     a.type = $('#mdType').value;
@@ -188,6 +193,13 @@
     visListe();
   });
   $('#mdNy').onclick = () => visForm(null);
+  $('#mdEkstraLoen').addEventListener('change', e => {
+    const v = String(e.target.value).trim().replace(',', '.'), n = v === '' ? null : Number(v);
+    if (n != null && !(n > 0 && n < 2000)) { e.target.value = raekke.opsaetning.ekstraTimeloen != null ? raekke.opsaetning.ekstraTimeloen : ''; return; }
+    const C = Object.assign({}, raekke.opsaetning);
+    if (n == null) delete C.ekstraTimeloen; else C.ekstraTimeloen = n;
+    genopbygMotor(C); render(); aendret();
+  });
 
   // Gemmer den nye opsaetning, fjerner vagter for folk der ikke findes mere, og tegner planen
   // igen med de nye regler. Den eksisterende plan roeres ellers ikke -- "Foreslå ny plan"
