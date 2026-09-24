@@ -19,10 +19,25 @@
     const LEN = [180, 195, 210, 225, 240, 255, 270, 300, 330, 360, 390, 420, 435, 480, 510];
     const NW = 6, WK = [...Array(NW).keys()];
     const ROT = C.weekendRotation || [], NR = ROT.length || 3;
+    // EKSTRA: hvor mange ekstra personer der maa bruges (dropdown'en). null = ingen graense og
+    // ingen weekend-aflastning -- saadan opfoerte den oprindelige vagtplan sig.
     const M = {
-      P, R, D, O, f, NW, WK, S: [], EX: [], T2: 900,
+      P, R, D, O, f, NW, WK, S: [], EX: [], T2: 900, EKSTRA: null,
     };
     const need = t => t < 600 || (t >= 780 && t < M.T2) ? 1 : 2;
+
+    // Weekend-aflastning: i weekend-rotationen er der folk der tager baade loerdag og soendag,
+    // fordi der ikke er folk nok. Hver ekstra person kan tage én weekenddag pr. 3 uger (samme
+    // regel som ext() nedenfor), saa med N ekstra personer overtages soendagen for de N foerste
+    // af dem. Raekkefoelgen skifter mellem rotationens uger, saa aflastningen fordeles.
+    const DOBBELT = (() => {
+      const pr = ROT.map(hold => hold.filter(x => x.d == 6 && hold.some(y => y.d == 5 && y.p == x.p)));
+      const ud = [];
+      for (let j = 0; pr.some(l => l[j]); j++) pr.forEach((l, r) => { if (l[j]) ud.push({ r, x: l[j] }); });
+      return ud;
+    })();
+    M.maxAflastning = DOBBELT.length;
+    const afloest = (r, x) => M.EKSTRA > 0 && DOBBELT.slice(0, M.EKSTRA).some(y => y.r == r && y.x == x);
 
     function ext() {
       const S = M.S, EX = []; const ex = [];
@@ -98,7 +113,7 @@
       };
       // Faste vagter. `rotation` = kun de uger hvor uge % (antal weekend-hold) er lig vaerdien.
       (C.faste || []).forEach(x => { if (x.rotation == null || w % NR == x.rotation) add(x.d, x.p, x.s, x.e); });
-      (ROT[w % NR] || []).forEach(x => add(x.d, x.p, x.s, x.e));
+      (ROT[w % NR] || []).forEach(x => add(x.d, afloest(w % NR, x) ? 'uk' : x.p, x.s, x.e));
       for (let d = 0; d < 5; d++) uk(d, 2);
       for (let d = 0; d < 7; d++) { (C.hulFyldere || []).forEach(p => { if (run(w, d, 0) && !has(d, p)) put(p, d, LEN, 1); }); uk(d, 0); }
       (C.ekstraDage || []).forEach(x => {
@@ -125,6 +140,9 @@
     }
     function check() {
       const I = [], S = M.S;
+      ext();
+      const nx = Math.max(0, ...M.EX.filter(Boolean));
+      if (M.EKSTRA != null && nx > M.EKSTRA) I.push({ w: -1, d: -1, t: `Planen bruger ${nx} ekstra ${nx == 1 ? 'person' : 'personer'}, men der er kun valgt ${M.EKSTRA}` });
       for (let w = 0; w < NW; w++) {
         for (let d = 0; d < 7; d++) {
           const sh = S.map((x, i) => ({ ...x, i })).filter(x => x.w == w && x.d == d);
