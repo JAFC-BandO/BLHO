@@ -139,10 +139,11 @@
 
     // Hvornaar en medarbejder kan arbejde en given dag. tid.hverdag/tid.weekend: udeladt =
     // hele aabningstiden, null = aldrig, [start, slut] hvor null i et felt = aabning/lukning.
+    // tid.dage: { dag: [start, slut] } for enkelte dage med andre tider end resten.
     function av(p, d) {
       const [a, b] = O(d), t = TID[p] || {};
       if (t.ikkeDage && t.ikkeDage.includes(d)) return null;
-      const v = d > 4 ? t.weekend : t.hverdag;
+      const v = t.dage && t.dage[d] !== undefined ? t.dage[d] : d > 4 ? t.weekend : t.hverdag;
       if (v === null) return null;
       if (v === undefined) return [a, b];
       return [v[0] == null ? a : v[0], v[1] == null ? b : v[1]];
