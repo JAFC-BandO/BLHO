@@ -4,15 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Butik Indhold - Redigering</title>
-<!-- Lys/moerk tilstand (kun redigerings-UI'et, aldrig skaermindholdet). Saettes her i <head>,
-     FOER stylesheets og <body>, saa siden ikke naar at blinke lys frem ved indlaesning i moerk
-     tilstand. Samme noegle ('blho-tema') laeses af vagtplanen i iframen. -->
+<!-- Tema: system/lys/moerk (kun redigerings-UI'et, aldrig skaermindholdet). Saettes her i
+     <head>, FOER stylesheets og <body>, saa siden ikke naar at blinke lys frem ved indlaesning
+     i moerk tilstand. Samme noegle ('blho-tema') laeses af vagtplanen i iframen. 'system'
+     (eller ingen vaerdi) foelger computerens egen indstilling. -->
 <script>
-  try {
-    document.documentElement.setAttribute('data-tema', localStorage.getItem('blho-tema') === 'moerk' ? 'moerk' : 'lys');
-  } catch (e) {
-    document.documentElement.setAttribute('data-tema', 'lys');
-  }
+  (function () {
+    let valg = 'system';
+    try { const v = localStorage.getItem('blho-tema'); if (v === 'lys' || v === 'moerk') valg = v; } catch (e) {}
+    const moerk = valg === 'moerk' || (valg === 'system' && !!window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.setAttribute('data-tema', moerk ? 'moerk' : 'lys');
+  })();
 </script>
 <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=4">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -126,8 +128,12 @@
   .hovedfane.aktiv { background: #040DB1; color: white; }
   #vagtplanVisning { display: none; }
   body.fane-vagtplan #app { display: flex !important; flex-direction: column; height: 100vh; }
-  body.fane-vagtplan #app > :not(.topbar):not(#vagtplanVisning):not(#feedbackOverlay):not(#feedbackFloatBtn) { display: none !important; }
-  body.fane-vagtplan .kun-butik, body.fane-vagtplan #saveMsg { display: none !important; }
+  /* Kun selve redigeringsfladen og dens tilstands-bannere skjules. Topbaren er uaendret
+     (butik, Admin-menu, ikoner bliver hvor de er), og overlays som Enheder/Aktivitetslog
+     kan stadig aabnes oven paa vagtplanen. */
+  body.fane-vagtplan #app > .main,
+  body.fane-vagtplan #faellesSlideBanner,
+  body.fane-vagtplan #masterEditBanner { display: none !important; }
   body.fane-vagtplan #vagtplanVisning { display: block; flex: 1; min-height: 0; }
   #vagtplanVisning iframe { width: 100%; height: 100%; border: 0; display: block; }
 
@@ -457,8 +463,9 @@
   /* --- Tema-knap (topbar + login) --- */
   .tema-knap {
     display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;
-    border-radius: 50%; padding: 0; background: #eef0fd; color: #040DB1; font-size: 15px; line-height: 1;
+    border-radius: 50%; padding: 0; background: #eef0fd; color: #040DB1; line-height: 1;
   }
+  .tema-knap svg { width: 16px; height: 16px; display: block; }
   .tema-knap:hover { background: #dde1fb; }
   html[data-tema="moerk"] .tema-knap { background: var(--ui-flade-blaa); color: #ffd24d; }
   html[data-tema="moerk"] .tema-knap:hover { background: #313866; }
@@ -519,14 +526,14 @@
 <div id="app">
   <div class="topbar">
     <div style="display:flex; align-items:center;">
-      <div class="butik-badge kun-butik" id="butikNavn"></div>
+      <div class="butik-badge" id="butikNavn"></div>
       <!-- Kun for almindelige admins med adgang til flere butikker (bruger_butikker) --
            erstatter badget ovenfor, som saa skjules. Se loadMineButikker/skiftMinButik. -->
-      <span id="mineButikkerWrap" class="kun-butik" style="display:none; align-items:center; gap:6px;">
+      <span id="mineButikkerWrap" style="display:none; align-items:center; gap:6px;">
         <label for="mineButikkerSelect" style="font-size:12px; color:var(--ui-tekst-888);">Skift butik:</label>
         <select id="mineButikkerSelect" class="butik-badge" style="border:none; cursor:pointer;"></select>
       </span>
-      <div class="kun-butik" style="position:relative; display:inline-block; margin-left:8px;">
+      <div style="position:relative; display:inline-block; margin-left:8px;">
         <span id="superadminBadge" style="display:none; background:#ffd700; color:#5a4600; font-weight:700; font-size:12px; padding:4px 10px; border-radius:20px; cursor:pointer; user-select:none;">Admin ▾</span>
         <div id="superadminMenu" style="display:none; position:absolute; top:100%; left:0; margin-top:6px; background:var(--ui-flade); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.2); padding:14px; width:280px; z-index:1000;">
           <h2 style="margin:0 0 10px 0; font-size:13px; text-transform:uppercase; letter-spacing:.03em; color:var(--ui-tekst-888);">Admin</h2>
@@ -552,10 +559,10 @@
       </nav>
     </div>
     <div class="topbar-actions">
-      <div class="msg kun-butik" id="saveMsg" style="display:none;"></div>
-      <span id="guideOpenBtn" class="kun-butik" title="Se guiden til systemet" style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:var(--ui-flade-blaa); color:var(--ui-brand-tekst); font-weight:700; font-size:14px; cursor:pointer; user-select:none;">?</span>
+      <div class="msg" id="saveMsg" style="display:none;"></div>
+      <span id="guideOpenBtn" title="Se guiden til systemet" style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:var(--ui-flade-blaa); color:var(--ui-brand-tekst); font-weight:700; font-size:14px; cursor:pointer; user-select:none;">?</span>
       <button type="button" class="tema-knap" id="temaKnap"></button>
-      <button id="saveBtn" class="kun-butik">Gem ændringer</button>
+      <button id="saveBtn">Gem ændringer</button>
       <div class="logout" id="logoutBtn">Log ud</div>
     </div>
   </div>
@@ -1097,32 +1104,46 @@
   let storeElementsBackup = null;
   let storeBackgroundBackup = null;
 
-  // ---------- Lys/moerk tilstand ----------
+  // ---------- Tema: system / lys / moerk ----------
   // Kun redigerings-UI'et -- skaermindholdet (canvas/Live View) har sine egne, faste farver.
-  // Valget huskes pr. browser i localStorage ('blho-tema'), som ogsaa vagtplanen i iframen
-  // laeser; 'storage'-eventet holder andre aabne faner (og iframen) i sync.
-  function anvendTema(tema) {
-    document.documentElement.setAttribute('data-tema', tema);
-    const moerk = tema === 'moerk';
+  // Valget huskes pr. browser i localStorage ('blho-tema': 'system' | 'lys' | 'moerk'), som
+  // ogsaa vagtplanen i iframen laeser; 'storage'-eventet holder andre aabne faner (og
+  // iframen) i sync. Knappen skifter i ring: System -> Lys -> Moerk -> System.
+  const TEMA_IKON = {
+    system: '<path d="M12 8a2.83 2.83 0 0 0 4 4 4 4 0 1 1-4-4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+    lys: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+    moerk: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  };
+  const TEMA_NAVN = { system: 'System', lys: 'Lys', moerk: 'Mørk' };
+  const TEMA_NAESTE = { system: 'lys', lys: 'moerk', moerk: 'system' };
+  const systemMoerk = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+  function temaValg() {
+    try { const v = localStorage.getItem('blho-tema'); if (v === 'lys' || v === 'moerk') return v; } catch (e) {}
+    return 'system';
+  }
+  function anvendTema() {
+    const valg = temaValg();
+    const moerk = valg === 'moerk' || (valg === 'system' && !!systemMoerk && systemMoerk.matches);
+    document.documentElement.setAttribute('data-tema', moerk ? 'moerk' : 'lys');
+    const tekst = 'Tema: ' + TEMA_NAVN[valg] + ' (klik for ' + TEMA_NAVN[TEMA_NAESTE[valg]] + ')';
     ['temaKnap', 'temaKnapLogin'].forEach(id => {
       const knap = document.getElementById(id);
       if (!knap) return;
-      knap.textContent = moerk ? '☀' : '☾';
-      knap.title = moerk ? 'Skift til lys tilstand' : 'Skift til mørk tilstand';
-      knap.setAttribute('aria-label', knap.title);
+      knap.innerHTML = '<span class="tema-ikon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' + TEMA_IKON[valg] + '</svg></span>';
+      knap.title = tekst;
+      knap.setAttribute('aria-label', tekst);
     });
   }
   function skiftTema() {
-    const nyt = document.documentElement.getAttribute('data-tema') === 'moerk' ? 'lys' : 'moerk';
-    try { localStorage.setItem('blho-tema', nyt); } catch (e) { /* blokeret -- gaelder saa kun denne visning */ }
-    anvendTema(nyt);
+    try { localStorage.setItem('blho-tema', TEMA_NAESTE[temaValg()]); } catch (e) { /* blokeret -- saa skifter den ikke */ }
+    anvendTema();
   }
-  anvendTema(document.documentElement.getAttribute('data-tema') === 'moerk' ? 'moerk' : 'lys');
+  anvendTema();
   document.getElementById('temaKnap').addEventListener('click', skiftTema);
   document.getElementById('temaKnapLogin').addEventListener('click', skiftTema);
-  window.addEventListener('storage', (e) => {
-    if (e.key === 'blho-tema') anvendTema(e.newValue === 'moerk' ? 'moerk' : 'lys');
-  });
+  window.addEventListener('storage', (e) => { if (e.key === 'blho-tema') anvendTema(); });
+  // I system-tilstand foelger siden med, hvis computeren skifter lys/moerk mens den er aaben.
+  if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('change', anvendTema);
 
   const loginWrap = document.getElementById('loginWrap');
   // Er der en gemt session (fx naar man kommer tilbage fra vagtplanen), skjules login-kortet
@@ -1488,6 +1509,12 @@
     }
   }
   document.querySelectorAll('.hovedfane').forEach(b => b.addEventListener('click', () => skiftFane(b.dataset.fane)));
+  // Det der arbejder direkte paa canvas'et (faelles skabelon/slide og guiden, som peger paa
+  // elementer i redigeringsfladen) skifter foerst tilbage til Butik-redigering. Capture-fasen
+  // sikrer at fanen er skiftet, foer knappens egen handling koerer.
+  ['masterEditBtn', 'faellesSlideBtn', 'guideOpenBtn'].forEach(id => {
+    document.getElementById(id).addEventListener('click', () => skiftFane('butik'), true);
+  });
 
   document.getElementById('loginBtn').addEventListener('click', async () => {
     const email = document.getElementById('email').value.trim();
