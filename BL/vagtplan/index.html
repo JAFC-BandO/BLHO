@@ -23,8 +23,8 @@ window.addEventListener('storage', e => { if (e.key === 'blho-tema') saetTema();
 if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('change', saetTema);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="motor.js?v=2026-09-24-13"></script>
-<script src="opsaetning.js?v=2026-09-24-13"></script>
+<script src="motor.js?v=2026-09-24-14"></script>
+<script src="opsaetning.js?v=2026-09-24-14"></script>
 <style>
 /* Farverne ligger som variabler, saa lys/moerk tilstand styres ét sted. Temaet vaelges med
    knappen i butik-redigerings topbar og deles via localStorage 'blho-tema' (se <head>). */
@@ -76,6 +76,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .indhold .uger .uge-knap{border:0;background:none;border-radius:16px;padding:5px 10px;color:var(--brand-tekst);font-weight:700;font-size:13px}
 .indhold .uger .uge-knap:hover:not(:disabled){background:rgba(4,13,177,.08)}
 .indhold .uger .uge-knap:disabled{opacity:.35;cursor:default}
+.indhold .uger .tab.nu:not(.on){box-shadow:inset 0 0 0 1.5px var(--brand-tekst)}
+.day h3 .dato{font-weight:400;font-size:13px;color:var(--mut);margin-left:4px}
+.day.idag{border-color:var(--brand-tekst);box-shadow:inset 0 0 0 1px var(--brand-tekst)}
+.indstillinger input[type=date]{font:inherit;font-size:14px;padding:3px 6px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--fg)}
 .uger .uge-skille{width:1px;align-self:stretch;margin:4px 2px;background:var(--bd)}
 /* Indstillinger for forslaget: én rolig linje under uge-vaelgeren */
 .indstillinger{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;font-size:14px;color:var(--mut);margin:0 0 10px}
@@ -241,6 +245,7 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
   <div class="handlinger"><button id="gen">Foreslå ny plan</button><button id="rules">Regler</button><button class="pri" id="exp">Kopiér til SmartPlan</button></div>
 </div>
 <div class="indstillinger">
+  <label>Første uge starter <input type="date" id="start" title="En vagtplan starter altid en mandag"></label>
   <label>2 personer fra <select id="t2" title="Hvornår der skal være 2 på arbejde igen om eftermiddagen"><option value="900">15:00</option><option value="915">15:15</option></select></label>
   <label>Ekstra personer <select id="ekstra" title="Hvor mange ekstra personer planen må bruge. De overtager den ene weekenddag for dem, der ellers skal arbejde både lørdag og søndag."></select></label>
   <label>Ekstra må arbejde <select id="ekstraRegel" title="Hvor tit de ekstra personer må arbejde weekend. Alle weekend-ønsker kræver ca. 13 timers weekendarbejde om ugen fra ekstra folk — jo sjældnere hver enkelt må arbejde, jo flere ekstra personer skal der til.">
@@ -290,7 +295,7 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
     <div class="md-linje" id="mdFridagFelt"><label><input type="checkbox" id="mdFridag"> Fridag imellem vagterne (man/ons/fre eller tirs/tors)</label></div>
   </fieldset>
   <fieldset><legend>Faste vagter</legend>
-    <p class="md-hjaelp">Vagter personen <b>altid</b> har, uanset hvad planlæggeren foreslår – fx en leder der altid står mandag 08:45–18:15. Lad den være tom, hvis planlæggeren selv må fordele personens vagter. Weekend-vagter ligger i et hold, fordi alle højst arbejder hver 3. weekend: hold 1 = uge 1, 4, 7 …, hold 2 = uge 2, 5, 8 …, hold 3 = uge 3, 6, 9 ….</p>
+    <p class="md-hjaelp">Vagter personen <b>altid</b> har, uanset hvad planlæggeren foreslår – fx en leder der altid står mandag 08:45–18:15. Lad den være tom, hvis planlæggeren selv må fordele personens vagter. <span id="mdHoldHjaelp"></span></p>
     <div id="mdVagter"></div>
     <button type="button" id="mdNyVagt">+ Tilføj fast vagt</button>
   </fieldset>
@@ -304,8 +309,9 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
 </dialog>
 <dialog id="nd" aria-labelledby="ndTitel"><button type="button" class="luk-x" aria-label="Luk" title="Luk">✕</button><h3 id="ndTitel">Ny vagtplan</h3>
   <label>Navn<input id="ndNavn" type="text" maxlength="40" autocomplete="off"></label>
-  <label>Antal uger<select id="ndUger"><option value="3">3 uger</option><option value="6" selected>6 uger</option><option value="9">9 uger</option><option value="12">12 uger</option></select></label>
-  <p class="md-hjaelp">Planen gentager sig efter det antal uger. Det går op i 3, fordi weekend-holdene skiftes hver 3. weekend.</p>
+  <label>Første uge starter<input id="ndStart" type="date"></label>
+  <label>Antal uger<select id="ndUger"><option value="1">1 uge</option><option value="2">2 uger</option><option value="3">3 uger</option><option value="4">4 uger</option><option value="5">5 uger</option><option value="6">6 uger</option><option value="7">7 uger</option><option value="8">8 uger</option><option value="9">9 uger</option><option value="10">10 uger</option><option value="11">11 uger</option><option value="12">12 uger</option></select></label>
+  <p class="md-hjaelp">Du kan altid tilføje eller fjerne uger bagefter. Starter den lige efter den nuværende plan, fortsætter weekend-holdene, hvor den slap.</p>
   <div class="fra-valg" role="radiogroup" aria-label="Start fra">
     <label id="ndSammeL"><input type="radio" name="ndFra" value="samme" checked> <span>Samme medarbejdere som <b class="nd-nu"></b> – en ny plan laves automatisk</span></label>
     <label id="ndKopiL"><input type="radio" name="ndFra" value="kopi"> <span>Kopi af <b class="nd-nu"></b> (medarbejdere og vagter)</span></label>
@@ -356,13 +362,39 @@ function vis(id) { ['laeserVis', 'loginVis', 'ingenAdgangVis', 'app'].forEach(x 
 // alle gemmes sammen med planen, ellers passer planen ikke til indstillingerne, naar siden
 // aabnes igen. (Aeldre format: bare vagt-listen.)
 const EKSTRA_STANDARD = 1; // I ansaetter 1 ekstra person nu
+// ---------- Datoer ----------
+// En vagtplan er en periode, der starter en mandag (plan.start, 'YYYY-MM-DD'). Planens uge w er
+// start + 7*w dage. plan.holdStart: hvilket weekend-hold planens foerste uge har (motor.js), saa
+// holdene fortsaetter fra én periode til den naeste.
+const tilDato = s => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, m - 1, d); };
+const tilStreng = dt => dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+const mandagI = dt => { const x = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()); x.setDate(x.getDate() - (x.getDay() + 6) % 7); return x; };
+const plusDage = (dt, n) => { const x = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()); x.setDate(x.getDate() + n); return x; };
+const ugerMellem = (a, b) => Math.round((mandagI(b) - mandagI(a)) / (7 * 864e5)); // round: sommertid
+function isoUge(dt) {
+  const t = new Date(Date.UTC(dt.getFullYear(), dt.getMonth(), dt.getDate())), n = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - n);
+  return Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7);
+}
+const dagDato = (w, d) => plusDage(tilDato(M.START), 7 * w + d);
+const ugeNr = w => isoUge(dagDato(w, 0));
+const datoKort = dt => dt.toLocaleDateString('da-DK', { day: 'numeric', month: 'short' });
+const datoTal = dt => dt.getDate() + '/' + (dt.getMonth() + 1);
+const ugeDatoer = w => datoKort(dagDato(w, 0)) + ' – ' + datoKort(dagDato(w, 6));
+const idagIndeks = () => { const i = ugerMellem(tilDato(M.START), new Date()); return i >= 0 && i < M.NW ? i : -1; };
+const gyldigStart = s => /^\d{4}-\d{2}-\d{2}$/.test(s || '') && !isNaN(tilDato(s)) ? tilStreng(mandagI(tilDato(s))) : tilStreng(mandagI(new Date()));
+const nyMotor = (C, holdStart) => lavVagtplanMotor(C, { rullende: false, holdStart });
+// Weekend-hold h's uger i den aabne plan, fx "41, 44" (bruges af medarbejder-dialogen)
+function holdUger(h) { const u = M.WK.filter(w => M.holdAf(w) == h).map(ugeNr); return u.length ? 'uge ' + u.join(', ') : 'ingen uger i denne plan'; }
+
 const lesPlan = p => {
-  const o = Array.isArray(p) ? { vagter: p } : p && Array.isArray(p.vagter) ? p : { vagter: [] };
+  const o = Array.isArray(p) ? { vagter: p } : (p || {});
   // ekstraRegel: hvor tit de ekstra maa arbejde weekend. Aeldre planer havde kun ekstraAlle
   // (true = hver weekend, begge dage; false = hver 3. weekend, én dag).
   const r = o.ekstraRegel && [1, 2, 3].includes(o.ekstraRegel.afstand) ? { afstand: o.ekstraRegel.afstand, begge: !!o.ekstraRegel.begge }
     : o.ekstraAlle === false ? { afstand: 3, begge: false } : { afstand: 1, begge: true };
-  return { t2: o.t2 == 915 ? 915 : 900, ekstra: Number.isInteger(o.ekstra) ? o.ekstra : EKSTRA_STANDARD, ekstraRegel: r, vagter: o.vagter };
+  return { t2: o.t2 == 915 ? 915 : 900, ekstra: Number.isInteger(o.ekstra) ? o.ekstra : EKSTRA_STANDARD, ekstraRegel: r,
+    start: gyldigStart(o.start), holdStart: [0, 1, 2].includes(o.holdStart) ? o.holdStart : 0, vagter: Array.isArray(o.vagter) ? o.vagter : [] };
 };
 
 // ---------- Vagtplan pr. butik ----------
@@ -446,6 +478,8 @@ async function aabnNyPlan() {
   const nu = raekke ? raekke.navn : null;
   $('#ndNavn').value = ''; $('#ndFejl').textContent = '';
   $('#ndUger').value = String(M ? M.NW : 6);
+  // Standard: lige efter den nuvaerende plan (naeste periode), ellers denne uges mandag
+  $('#ndStart').value = raekke ? tilStreng(dagDato(M.NW, 0)) : tilStreng(mandagI(new Date()));
   document.querySelectorAll('#nd .nd-nu').forEach(b => { b.textContent = nu || ''; });
   ['#ndSammeL', '#ndKopiL'].forEach(s => { $(s).classList.toggle('slukket', !nu); $(s).querySelector('input').disabled = !nu; });
   const { data } = await client.from('vagtplan').select('id, navn, butikker(navn)').eq('er_skabelon', true).order('navn');
@@ -467,16 +501,29 @@ $('#ndOpret').onclick = async () => {
   const fra = (document.querySelector('#nd input[name=ndFra]:checked') || {}).value;
   if (!navn) { $('#ndFejl').textContent = 'Giv vagtplanen et navn, fx "Sommer 2026".'; return; }
   if (butikPlaner.some(p => p.navn.toLowerCase() == navn.toLowerCase())) { $('#ndFejl').textContent = 'Der findes allerede en vagtplan med det navn i ' + aktuelButik.navn + '.'; return; }
-  let ops, plan = null;
+  const start = gyldigStart($('#ndStart').value);
+  // Weekend-holdene fortsaetter i forhold til den nuvaerende plan (ellers starter de forfra)
+  const holdStart = raekke ? ((M.HOLD_START + ugerMellem(tilDato(M.START), tilDato(start))) % 3 + 3) % 3 : 0;
+  let ops, kilde = null; // kilde: { vagter, nw, holdStart } der kopieres fra
   if ((fra == 'samme' || fra == 'kopi') && raekke) {
-    const o = JSON.parse(snap()); ops = o.opsaetning; if (fra == 'kopi') plan = o.plan;
+    const o = JSON.parse(snap()); ops = o.opsaetning;
+    if (fra == 'kopi') kilde = { vagter: o.plan.vagter, nw: M.NW, holdStart: M.HOLD_START, p: o.plan };
   } else if (fra == 'skabelon') {
     const { data } = await client.from('vagtplan').select('opsaetning, plan').eq('id', $('#ndSkabelon').value).maybeSingle();
     if (!data) { $('#ndFejl').textContent = 'Skabelonen kunne ikke hentes. Prøv igen.'; return; }
-    ops = data.opsaetning; plan = data.plan;
+    ops = data.opsaetning;
+    const p = lesPlan(data.plan);
+    if (data.plan) kilde = { vagter: p.vagter, nw: data.opsaetning.uger || 6, holdStart: p.holdStart, p };
   } else ops = nyOpsaetning(aktuelButik.navn);
   ops = Object.assign({}, ops, { uger });
-  if (plan) { const p = lesPlan(plan); plan = Object.assign({}, p, { vagter: p.vagter.filter(x => x.w < uger) }); }
+  // Kopierede vagter flyttes, saa hver uge faar vagter fra en uge med SAMME weekend-hold
+  const vagter = [];
+  if (kilde) for (let w = 0; w < uger; w++) {
+    let fraUge = w + ((holdStart - kilde.holdStart) % 3 + 3) % 3;
+    while (fraUge >= kilde.nw) fraUge -= 3;
+    if (fraUge >= 0) kilde.vagter.filter(x => x.w == fraUge).forEach(x => vagter.push(Object.assign({}, x, { w })));
+  }
+  const plan = Object.assign(kilde ? { t2: kilde.p.t2, ekstra: kilde.p.ekstra, ekstraRegel: kilde.p.ekstraRegel } : {}, { start, holdStart, vagter });
   const knap = $('#ndOpret'); knap.disabled = true;
   const { data, error } = await client.from('vagtplan').insert({ butik_id: aktuelButik.id, navn, opsaetning: ops, plan }).select('id, navn, oprettet_at').single();
   knap.disabled = false;
@@ -583,14 +630,15 @@ async function start() {
 function visTitel() {
   const t = (raekke.navn || 'Vagtplan') + ' – ' + (butikNavn(raekke) || (aktuelButik && aktuelButik.navn) || '');
   $('#titel').textContent = t; document.title = t;
-  $('#planBeskrivelse').textContent = `Rullende ${M.NW}-ugers plan. Klik på en vagt for at rette den, eller på "+ vagt" for at tilføje. Reglerne tjekkes automatisk, og intet gemmes før du trykker "Gem vagtplan".`;
+  const s = dagDato(0, 0), e = dagDato(M.NW - 1, 6), uger = M.NW == 1 ? 'uge ' + ugeNr(0) : 'uge ' + ugeNr(0) + '–' + ugeNr(M.NW - 1);
+  $('#planBeskrivelse').textContent = `${datoKort(s)} – ${datoKort(e)} ${e.getFullYear()} (${uger}). Klik på en vagt for at rette den, eller på "+ vagt" for at tilføje. Reglerne tjekkes automatisk, og intet gemmes før du trykker "Gem vagtplan".`;
 }
 function vaelgPlan(r, bevar) {
   raekke = r; konflikt = false; $('#konflikt').style.display = 'none';
   visPlanIndhold(true);
   if (!aktuelButik || aktuelButik.id != r.butik_id) aktuelButik = { id: r.butik_id, navn: butikNavn(r) };
   const pl = lesPlan(r.plan);
-  M = lavVagtplanMotor(r.opsaetning); M.T2 = pl.t2; M.EKSTRA = pl.ekstra; M.EKSTRA_REGEL = pl.ekstraRegel;
+  M = nyMotor(r.opsaetning, pl.holdStart); M.T2 = pl.t2; M.EKSTRA = pl.ekstra; M.EKSTRA_REGEL = pl.ekstraRegel; M.START = pl.start;
   M.S = pl.vagter.filter(x => M.P[x.p] && x.w < M.NW); // vagter for folk der er fjernet, eller uger der ikke findes mere
   opdaterKontroller(); $('#ekstraHint').hidden = true;
   $('#butikNavn').textContent = butikNavn(r);
@@ -599,6 +647,7 @@ function vaelgPlan(r, bevar) {
   $('#rt').innerHTML = reglerHtml(r.opsaetning);
   gemStatus('');
   if (bevar) { render(); return; }
+  const idag = idagIndeks(); W = idag >= 0 ? idag : 0; // aabn paa denne uge, hvis den er i planen
   nulstilHistorik();
   if (!M.S.length && r.opsaetning.personer.length) { foreslaa(); return; }
   render();
@@ -624,7 +673,7 @@ $('#planValg').onchange = e => vaelgPlan(planer.find(p => p.id == e.target.value
 // Gemningen sker kun, hvis raekken stadig har det opdateret_at vi sidst saa: har en anden
 // (JC/MP) gemt imens, overskriver vi ikke deres plan, men viser en advarsel.
 let historik = [], hpos = 0, gemtSnap = null, gemmer = false;
-const snap = () => JSON.stringify({ plan: { t2: M.T2, ekstra: M.EKSTRA, ekstraRegel: M.EKSTRA_REGEL, vagter: M.S }, opsaetning: raekke.opsaetning });
+const snap = () => JSON.stringify({ plan: { t2: M.T2, ekstra: M.EKSTRA, ekstraRegel: M.EKSTRA_REGEL, start: M.START, holdStart: M.HOLD_START, vagter: M.S }, opsaetning: raekke.opsaetning });
 const ugemt = () => historik[hpos] !== gemtSnap;
 function gemStatus(t, cls) { $('#gemStatus').textContent = t; $('#gemStatus').className = cls || ''; }
 function nulstilHistorik() { historik = [snap()]; hpos = 0; gemtSnap = historik[0]; meld(); }
@@ -644,7 +693,8 @@ function gaaTil(i) {
 }
 function anvendSnap(s) {
   const o = JSON.parse(s);
-  if (JSON.stringify(o.opsaetning) !== JSON.stringify(raekke.opsaetning)) genopbygMotor(o.opsaetning);
+  if (JSON.stringify(o.opsaetning) !== JSON.stringify(raekke.opsaetning) || o.plan.holdStart !== M.HOLD_START) genopbygMotor(o.opsaetning, o.plan.holdStart);
+  M.START = o.plan.start;
   M.T2 = o.plan.t2; M.EKSTRA = o.plan.ekstra; M.EKSTRA_REGEL = o.plan.ekstraRegel;
   M.S = o.plan.vagter.filter(x => M.P[x.p] && x.w < M.NW);
   if (W >= M.NW) W = 0;
@@ -692,6 +742,7 @@ document.addEventListener('keydown', e => {
 });
 // Indstillings-felterne afspejler motorens tilstand (ogsaa efter fortryd/gentag)
 function opdaterKontroller() {
+  $('#start').value = M.START;
   $('#t2').value = M.T2;
   const maxE = Math.max(M.maxAflastning, M.EKSTRA);
   $('#ekstra').innerHTML = Array.from({ length: maxE + 1 }, (_, n) => `<option value="${n}">${n}</option>`).join('');
@@ -725,10 +776,10 @@ function reglerHtml(C) {
 }
 // Ny medarbejder-opsaetning: motoren bygges om med samme indstillinger, og vagter for folk der
 // ikke findes mere fjernes fra planen.
-function genopbygMotor(C) {
-  const t2 = M.T2, ek = M.EKSTRA, rg = M.EKSTRA_REGEL, S = M.S;
+function genopbygMotor(C, holdStart) {
+  const t2 = M.T2, ek = M.EKSTRA, rg = M.EKSTRA_REGEL, S = M.S, start = M.START;
   raekke.opsaetning = C;
-  M = lavVagtplanMotor(C); M.T2 = t2; M.EKSTRA = ek; M.EKSTRA_REGEL = rg;
+  M = nyMotor(C, holdStart != null ? holdStart : M.HOLD_START); M.T2 = t2; M.EKSTRA = ek; M.EKSTRA_REGEL = rg; M.START = start;
   M.S = S.filter(x => M.P[x.p]);
   $('#rt').innerHTML = reglerHtml(C);
 }
@@ -761,21 +812,22 @@ function render() {
   const { P, R, D, f, WK, NW } = M;
   M.ext(); const EX = M.EX;
   const A = M.check(), I = A.filter(i => !i.soft), Q = A.filter(i => i.soft);
-  $('#tabs').innerHTML = WK.map(w => { const p = I.some(i => i.w == w); return `<button class="tab ${w == W ? 'on' : ''}" data-w="${w}" aria-pressed="${w == W}"${p ? ' title="Ugen har problemer"' : ''}>Uge ${w + 1}<span class="adv ${p ? '' : 'ingen'}" aria-hidden="true"></span></button>`; }).join('')
-    + `<span class="uge-skille" aria-hidden="true"></span><button class="uge-knap" data-uger="-3" title="Fjern de 3 sidste uger" aria-label="Fjern de 3 sidste uger" ${NW <= 3 ? 'disabled' : ''}>− 3 uger</button><button class="uge-knap" data-uger="3" title="Tilføj 3 uger (én weekend-runde). De nye uger starter som en kopi af de 3 sidste." aria-label="Tilføj 3 uger" ${NW >= 12 ? 'disabled' : ''}>+ 3 uger</button>`;
+  const nu = idagIndeks();
+  $('#tabs').innerHTML = WK.map(w => { const p = I.some(i => i.w == w); return `<button class="tab ${w == W ? 'on' : ''} ${w == nu ? 'nu' : ''}" data-w="${w}" aria-pressed="${w == W}" title="${ugeDatoer(w)}${w == nu ? ', denne uge' : ''}${p ? ', har problemer' : ''}">Uge ${ugeNr(w)}<span class="adv ${p ? '' : 'ingen'}" aria-hidden="true"></span></button>`; }).join('')
+    + `<span class="uge-skille" aria-hidden="true"></span><button class="uge-knap" data-uger="-1" title="Fjern uge ${ugeNr(NW - 1)}" aria-label="Fjern den sidste uge" ${NW <= 1 ? 'disabled' : ''}>− uge</button><button class="uge-knap" data-uger="1" title="Tilføj uge ${isoUge(dagDato(NW, 0))}" aria-label="Tilføj en uge" ${NW >= 12 ? 'disabled' : ''}>+ uge</button>`;
   const uh = M.S.filter(x => x.p == 'uk').reduce((a, x) => a + (x.e - x.s) / 60, 0);
-  $('#stat').innerHTML = (I.length ? `<span class="status-maerke bad">${I.length} ${I.length == 1 ? 'problem' : 'problemer'}</span>` : `<span class="status-maerke ok">✓ Planen går op</span>`) + (uh ? ` <span class="s">Bruger ${Math.max(0, ...EX.filter(Boolean))} af ${M.EKSTRA} ekstra ${M.EKSTRA == 1 ? 'person' : 'personer'} (${uh} timer på 6 uger)</span>` : '');
+  $('#stat').innerHTML = (I.length ? `<span class="status-maerke bad">${I.length} ${I.length == 1 ? 'problem' : 'problemer'}</span>` : `<span class="status-maerke ok">✓ Planen går op</span>`) + (uh ? ` <span class="s">Bruger ${Math.max(0, ...EX.filter(Boolean))} af ${M.EKSTRA} ekstra ${M.EKSTRA == 1 ? 'person' : 'personer'} (${uh} timer på ${NW} ${NW == 1 ? 'uge' : 'uger'})</span>` : '');
   // Farveforklaring: kun de jobtyper der er i planen
   const typer = [...new Set(Object.keys(P).filter(p => p != 'uk').map(p => P[p][1]))];
   $('#forklaring').innerHTML = typer.map(t => `<span><i style="border-color:var(--${esc(t)},var(--mut))"></i>${esc(R[t] || t)}</span>`).join('') + '<span><i class="uk"></i>Ekstra person</span>';
   $('#grid').innerHTML = D.map((n, d) => {
-    const di = I.filter(i => i.w == W && i.d == d);
-    return `<div class="day ${d > 4 ? 'weekend' : ''} ${di.length ? 'err' : ''}"><h3>${n}</h3>${grp(W, d).map(a => `<div class="blk"><div class="bh">${f(a[0].s)} - ${f(a[0].e)}</div>${a.map(x => `<button class="chip r${P[x.p][1]} ${x.p == 'uk' ? 'uk' : ''}" data-i="${x.i}">${x.p == 'uk' ? 'Ekstra person' : esc(P[x.p][0])}</button>`).join('')}</div>`).join('')}<button class="add" data-add="${d}">+ vagt</button>${di.map(i => `<div class="di">${esc(i.t)}</div>`).join('')}</div>`;
+    const di = I.filter(i => i.w == W && i.d == d), dato = dagDato(W, d), idag = tilStreng(dato) == tilStreng(new Date());
+    return `<div class="day ${d > 4 ? 'weekend' : ''} ${idag ? 'idag' : ''} ${di.length ? 'err' : ''}"><h3>${n}<span class="dato">${datoKort(dato)}</span></h3>${grp(W, d).map(a => `<div class="blk"><div class="bh">${f(a[0].s)} - ${f(a[0].e)}</div>${a.map(x => `<button class="chip r${P[x.p][1]} ${x.p == 'uk' ? 'uk' : ''}" data-i="${x.i}">${x.p == 'uk' ? 'Ekstra person' : esc(P[x.p][0])}</button>`).join('')}</div>`).join('')}<button class="add" data-add="${d}">+ vagt</button>${di.map(i => `<div class="di">${esc(i.t)}</div>`).join('')}</div>`;
   }).join('');
-  $('#soft').innerHTML = Q.length ? Q.map(i => `<li>Uge ${i.w + 1}: ${esc(i.t)}</li>`).join('') : '<li>Ingen.</li>';
-  $('#iss').innerHTML = I.length ? I.map(i => `<li><button data-w="${i.w < 0 ? W : i.w}">${i.w < 0 ? 'Alle uger' : 'Uge ' + (i.w + 1)}${i.d >= 0 ? ' ' + D[i.d] : ''}: ${esc(i.t)}</button></li>`).join('') : '<li class="ok">Ingen problemer.</li>';
+  $('#soft').innerHTML = Q.length ? Q.map(i => `<li>Uge ${ugeNr(i.w)}: ${esc(i.t)}</li>`).join('') : '<li>Ingen.</li>';
+  $('#iss').innerHTML = I.length ? I.map(i => `<li><button data-w="${i.w < 0 ? W : i.w}">${i.w < 0 ? 'Alle uger' : 'Uge ' + ugeNr(i.w)}${i.d >= 0 ? ' ' + D[i.d] : ''}: ${esc(i.t)}</button></li>`).join('') : '<li class="ok">Ingen problemer.</li>';
   const ps = Object.keys(P).filter(p => p != 'uk'), nx = Math.max(0, ...EX.filter(Boolean));
-  $('#hrs').innerHTML = '<table><tr><th></th>' + WK.map(w => `<th>Uge ${w + 1}</th>`).join('') + '<th>Snit</th></tr>' + ps.map(p => {
+  $('#hrs').innerHTML = '<table><tr><th></th>' + WK.map(w => `<th title="${ugeDatoer(w)}">Uge ${ugeNr(w)}</th>`).join('') + '<th>Snit</th></tr>' + ps.map(p => {
     const h = WK.map(w => M.hrs(p, w)), a = h.reduce((x, y) => x + y) / NW, m = M.minSnit(p), u = M.ugeTimer(p), bad = (m && a < m) || (u != null && h.some(x => x != u));
     return `<tr><td><button type="button" class="navn-knap" data-person="${esc(p)}" title="Ret ${esc(P[p][0])}">${esc(P[p][0])}</button> <small>${esc(R[P[p][1]])}</small></td>${h.map(x => `<td>${x}</td>`).join('')}<td class="${bad ? 'w' : ''}">${a.toFixed(1)}${m ? ' (min ' + m + ')' : ''}</td></tr>`;
   }).join('') + Array.from({ length: Math.max(nx, M.EKSTRA) }, (_, k) => {
@@ -813,28 +865,36 @@ $('#gen').onclick = e => {
 };
 $('#ekstra').onchange = e => { M.EKSTRA = +e.target.value; $('#ekstraHint').hidden = false; render(); aendret(); };
 $('#ekstraRegel').onchange = e => { const [a, b] = e.target.value.split('-').map(Number); M.EKSTRA_REGEL = { afstand: a, begge: b == 1 }; $('#ekstraHint').hidden = false; render(); aendret(); };
-const txt = w => M.D.map((n, d) => n + '\n' + (grp(w, d).map(a => M.f(a[0].s) + ' - ' + M.f(a[0].e) + ': ' + a.map(x => M.nmi(x.i) + ' (' + M.R[M.P[x.p][1]] + ')').join(', ')).join('\n') || '–')).join('\n\n');
-const csv = () => 'Uge;Dag;Start;Slut;Medarbejder;Jobtype\n' + M.S.map((x, i) => ({ ...x, i })).sort((a, b) => a.w - b.w || a.d - b.d || a.s - b.s).map(x => [x.w + 1, M.D[x.d], M.f(x.s), M.f(x.e), M.nmi(x.i), M.R[M.P[x.p][1]]].join(';')).join('\n');
+const txt = w => `Uge ${ugeNr(w)} (${ugeDatoer(w)})\n\n` + M.D.map((n, d) => n + ' ' + datoTal(dagDato(w, d)) + '\n' + (grp(w, d).map(a => M.f(a[0].s) + ' - ' + M.f(a[0].e) + ': ' + a.map(x => M.nmi(x.i) + ' (' + M.R[M.P[x.p][1]] + ')').join(', ')).join('\n') || '–')).join('\n\n');
+const datoCsv = dt => String(dt.getDate()).padStart(2, '0') + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + dt.getFullYear();
+const csv = () => 'Dato;Uge;Dag;Start;Slut;Medarbejder;Jobtype\n' + M.S.map((x, i) => ({ ...x, i })).sort((a, b) => a.w - b.w || a.d - b.d || a.s - b.s).map(x => [datoCsv(dagDato(x.w, x.d)), ugeNr(x.w), M.D[x.d], M.f(x.s), M.f(x.e), M.nmi(x.i), M.R[M.P[x.p][1]]].join(';')).join('\n');
 $('#t2').onchange = e => { M.T2 = +e.target.value; render(); aendret(); };
-// + / - 3 uger. Altid 3 ad gangen: weekend-holdene skiftes hver 3. weekend, og planen er
-// rullende, saa et antal uger der ikke gaar op i 3 ville faa et hold til at arbejde to
-// weekender i traek, naar planen starter forfra. Nye uger starter som en kopi af de 3 sidste
-// (samme weekend-hold), saa de er faerdigplanlagte med det samme; "Foreslå ny plan" kan
-// bagefter fordele det hele paa ny. Kan fortrydes som alt andet.
+// + / - én uge i enden af planen. En ny uge starter som kopi af ugen 3 uger foer (samme
+// weekend-hold), saa den er faerdigplanlagt med det samme; "Foreslå ny plan" kan bagefter
+// fordele det hele paa ny. Kan fortrydes som alt andet.
 function skiftUger(delta) {
   const gl = M.NW, n = gl + delta;
-  if (n < 3 || n > 12) return;
+  if (n < 1 || n > 12) return;
   genopbygMotor(Object.assign({}, raekke.opsaetning, { uger: n }));
   if (delta > 0) {
-    M.S = M.S.concat(M.S.filter(x => x.w >= gl - 3 && x.w < gl).map(x => Object.assign({}, x, { w: x.w + 3 })));
+    if (gl >= 3) M.S = M.S.concat(M.S.filter(x => x.w == gl - 3).map(x => Object.assign({}, x, { w: gl })));
     W = gl;
   } else {
     M.S = M.S.filter(x => x.w < n);
     if (W >= n) W = n - 1;
   }
   visTitel(); render(); aendret(); // aendret() rydder status-teksten -- derfor beskeden bagefter
-  gemStatus(delta > 0 ? `Uge ${gl + 1}–${n} er tilføjet som kopi af uge ${gl - 2}–${gl}.` : `Uge ${n + 1}–${gl} er fjernet.`, 'ok');
+  gemStatus(delta > 0 ? `Uge ${ugeNr(gl)} er tilføjet${gl >= 3 ? ' som kopi af uge ' + ugeNr(gl - 3) + ' (samme weekend-hold)' : ''}.` : `Uge ${ugeNr(n)} er fjernet.`, 'ok');
 }
+// Startdato: altid en mandag. Hele planen flytter med (vagterne ligger pr. uge i planen).
+$('#start').onchange = e => {
+  if (!e.target.value) { e.target.value = M.START; return; }
+  const ny = gyldigStart(e.target.value), flyttet = ny != e.target.value;
+  M.START = ny; e.target.value = ny;
+  const idag = idagIndeks(); if (idag >= 0) W = idag;
+  visTitel(); render(); aendret();
+  if (flyttet) gemStatus('En vagtplan starter altid en mandag – den starter nu mandag ' + datoKort(tilDato(ny)), 'ok');
+};
 $('#rules').onclick = () => $('#rd').showModal();
 $('#exp').onclick = () => { $('#xa').value = txt(W); $('#xd').showModal(); };
 $('#xt').onclick = () => $('#xa').value = txt(W); $('#xc').onclick = () => $('#xa').value = csv();
@@ -848,5 +908,5 @@ if (window.top !== window) {
   start().catch(() => vis('loginVis'));
 }
 </script>
-<script src="medarbejdere.js?v=2026-09-24-13"></script>
+<script src="medarbejdere.js?v=2026-09-24-14"></script>
 </body></html>

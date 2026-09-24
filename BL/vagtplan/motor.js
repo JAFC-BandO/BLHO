@@ -7,7 +7,14 @@
 // Tider er minutter efter midnat (525 = 08:45). Dage er 0-6 (mandag-soendag). Uger er 0 til
 // planens antal uger - 1 (C.uger: 3, 6, 9 eller 12; standard 6).
 (function (root) {
-  function lavMotor(C) {
+  // valg.rullende (standard true): planen gentager sig, saa sidste uge efterfoelges af foerste
+  //   (saadan var den oprindelige vagtplan). false = en periode med datoer, der ikke gentager
+  //   sig -- saa kan den have et vilkaarligt antal uger.
+  // valg.holdStart (0-2): hvilket weekend-hold planens foerste uge har. Saa fortsaetter holdene
+  //   fra én periode til den naeste, uanset hvor mange uger perioderne har.
+  function lavMotor(C, valg) {
+    valg = valg || {};
+    const RULLENDE = valg.rullende !== false, HOLD_START = [0, 1, 2].includes(valg.holdStart) ? valg.holdStart : 0;
     const R = C.jobtyper;
     // Raekkefoelgen i C.personer bestemmer raekkefoelgen i dropdown, timetabel og advarsler.
     // 'uk' (ekstra person) er motorens eget begreb og tilfoejes altid sidst.
@@ -18,13 +25,16 @@
     const O = d => [525, d > 4 ? 1035 : 1095];
     const f = m => String(m / 60 | 0).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
     const LEN = [180, 195, 210, 225, 240, 255, 270, 300, 330, 360, 390, 420, 435, 480, 510];
-    // Planens laengde i uger. Skal gaa op i 3, fordi weekend-holdene skiftes hver 3. weekend.
-    const NW = [3, 6, 9, 12].includes(C.uger) ? C.uger : 6, WK = [...Array(NW).keys()];
+    // Planens laengde i uger. En rullende plan skal gaa op i 3 (weekend-holdene skiftes hver 3.
+    // weekend, og efter sidste uge kommer foerste igen); en periode kan have 1-12 uger.
+    const NW = RULLENDE ? ([3, 6, 9, 12].includes(C.uger) ? C.uger : 6) : (Number.isInteger(C.uger) && C.uger >= 1 && C.uger <= 12 ? C.uger : 6);
+    const WK = [...Array(NW).keys()];
     const ROT = C.weekendRotation || [], NR = ROT.length || 3;
+    const holdAf = w => (w + HOLD_START) % NR; // weekend-hold for planens uge w
     // EKSTRA: hvor mange ekstra personer der maa bruges (dropdown'en). null = ingen graense og
     // ingen weekend-aflastning -- saadan opfoerte den oprindelige vagtplan sig.
     const M = {
-      P, R, D, O, f, NW, WK, S: [], EX: [], T2: 900, EKSTRA: null,
+      P, R, D, O, f, NW, WK, S: [], EX: [], T2: 900, EKSTRA: null, RULLENDE, HOLD_START, holdAf,
       // Hvor tit en ekstra person maa arbejde weekend: afstand = mindst hver N. weekend
       // (1 = hver weekend), begge = maa tage baade loerdag og soendag samme weekend.
       // Standard = samme regel som personalet (hver 3. weekend, én dag).
@@ -49,14 +59,15 @@
     // aflaster flest "dobbelt-weekender" (samme person loerdag OG soendag). Uge for uge faar
     // den foerste dobbelt-person soendagen overtaget, den naeste loerdagen osv.
     let aflCache = null, aflNoegle = null;
-    const ugeAfstand = (a, b) => { const q = Math.abs(a - b); return Math.min(q, NW - q); };
+    // Antal uger mellem to uger -- rundt om, hvis planen er rullende.
+    const ugeAfstand = (a, b) => { const q = Math.abs(a - b); return RULLENDE ? Math.min(q, NW - q) : q; };
     function aflosning() {
       const rg = M.EKSTRA_REGEL, N = M.EKSTRA > 0 ? M.EKSTRA : 0;
       const k = N + '|' + rg.afstand + '|' + rg.begge;
       if (k === aflNoegle) return aflCache;
       const ud = new Set();
       if (N > 0) {
-        const dob = WK.map(w => { const hold = ROT[w % NR] || []; return [...new Set(hold.filter(x => x.d == 6 && hold.some(y => y.d == 5 && y.p == x.p)).map(x => x.p))]; });
+        const dob = WK.map(w => { const hold = ROT[holdAf(w)] || []; return [...new Set(hold.filter(x => x.d == 6 && hold.some(y => y.d == 5 && y.p == x.p)).map(x => x.p))]; });
         if (NW > 6) {
           // Lange planer (9-12 uger): DP'en nedenfor bliver for stor. Vaelg i stedet uge for
           // uge, og tag kun en aflastning med, hvis dagene stadig kan fordeles paa EKSTRA
@@ -131,7 +142,7 @@
           if (e.D.has(x.w + '-' + x.d)) continue;
           // Weekend-reglen for ekstra personer (EKSTRA_REGEL). Med standard-reglen (afstand 3,
           // ikke begge dage) er det praecis den oprindelige vagtplans regel.
-          if (x.d > 4 && e.K.some(k => { const q = Math.abs(k - x.w), a = Math.min(q, NW - q); return a == 0 ? !M.EKSTRA_REGEL.begge : a < M.EKSTRA_REGEL.afstand; })) continue;
+          if (x.d > 4 && e.K.some(k => { const a = ugeAfstand(k, x.w); return a == 0 ? !M.EKSTRA_REGEL.begge : a < M.EKSTRA_REGEL.afstand; })) continue;
           e.D.add(x.w + '-' + x.d); if (x.d > 4) e.K.push(x.w); EX[i] = n + 1; break;
         }
       });
@@ -230,8 +241,8 @@
         }
       };
       // Faste vagter. `rotation` = kun de uger hvor uge % (antal weekend-hold) er lig vaerdien.
-      (C.faste || []).forEach(x => { if (x.rotation == null || w % NR == x.rotation) add(x.d, x.p, x.s, x.e); });
-      (ROT[w % NR] || []).forEach(x => add(x.d, afloest(w, x) ? 'uk' : x.p, x.s, x.e));
+      (C.faste || []).forEach(x => { if (x.rotation == null || holdAf(w) == x.rotation) add(x.d, x.p, x.s, x.e); });
+      (ROT[holdAf(w)] || []).forEach(x => add(x.d, afloest(w, x) ? 'uk' : x.p, x.s, x.e));
       for (let d = 0; d < 5; d++) uk(d, 2);
       for (let d = 0; d < 7; d++) { (C.hulFyldere || []).forEach(p => { if (run(w, d, 0) && !has(d, p)) put(p, d, LEN, 1); }); uk(d, 0); }
       (C.ekstraDage || []).forEach(x => {
@@ -265,8 +276,8 @@
     const KUN_FASTE = new Set(C.personer.filter(p => p.kunFaste).map(p => p.id));
     const FASTE_VAGTER = new Set();
     WK.forEach(w => {
-      (C.faste || []).forEach(x => { if (KUN_FASTE.has(x.p) && (x.rotation == null || w % NR == x.rotation)) FASTE_VAGTER.add([w, x.d, x.p, x.s, x.e].join()); });
-      (ROT[w % NR] || []).forEach(x => { if (KUN_FASTE.has(x.p)) FASTE_VAGTER.add([w, x.d, x.p, x.s, x.e].join()); });
+      (C.faste || []).forEach(x => { if (KUN_FASTE.has(x.p) && (x.rotation == null || holdAf(w) == x.rotation)) FASTE_VAGTER.add([w, x.d, x.p, x.s, x.e].join()); });
+      (ROT[holdAf(w)] || []).forEach(x => { if (KUN_FASTE.has(x.p)) FASTE_VAGTER.add([w, x.d, x.p, x.s, x.e].join()); });
     });
     function gennemgaa(emit) {
       const S = M.S;
@@ -306,7 +317,11 @@
       }
       (C.minSnit || []).forEach(({ p, timer: m }) => {
         let mn = 1e9;
-        for (let s = 0; s < NW; s++) { let a = 0; for (let k = 0; k < 4; k++) a += h(p, (s + k) % NW); mn = Math.min(mn, a / 4); }
+        // Snit over hver 4-ugers periode (rundt om, hvis rullende; en periode paa under 4 uger
+        // bruger snittet over hele perioden).
+        const vinduer = RULLENDE ? WK.map(s => [0, 1, 2, 3].map(k => (s + k) % NW))
+          : NW >= 4 ? WK.slice(0, NW - 3).map(s => [0, 1, 2, 3].map(k => s + k)) : [WK];
+        vinduer.forEach(v => { mn = Math.min(mn, v.reduce((a, w) => a + h(p, w), 0) / v.length); });
         if (mn < m) emit(-1, -1, 0, () => `${P[p][0]}: snit ${mn.toFixed(1)} t/uge over 4 uger (min ${m})`);
       });
       const wd = (w, d, p) => dag[w * 7 + d].some(x => x.p == p);
@@ -314,7 +329,7 @@
         const a = WK.map(w => wd(w, 5, p) || wd(w, 6, p));
         WK.forEach(w => {
           if (!a[w]) return;
-          if (a[(w + 1) % NW] || a[(w + 2) % NW]) emit(w, -1, 0, () => `${P[p][0]} arbejder weekender for tæt (max hver 3. weekend)`);
+          if (RULLENDE ? (a[(w + 1) % NW] || a[(w + 2) % NW]) : (a[w + 1] || a[w + 2])) emit(w, -1, 0, () => `${P[p][0]} arbejder weekender for tæt (max hver 3. weekend)`);
           if (wd(w, 5, p) && wd(w, 6, p)) emit(w, -1, 1, () => `${P[p][0]} arbejder både lørdag og søndag (helst kun én dag)`);
         });
       });
@@ -375,15 +390,15 @@
     function fasteNoegler() {
       const k = new Set();
       WK.forEach(w => {
-        (C.faste || []).forEach(x => { if (x.rotation == null || w % NR == x.rotation) k.add([w, x.d, x.p, x.s, x.e].join()); });
-        (ROT[w % NR] || []).forEach(x => { k.add([w, x.d, x.p, x.s, x.e].join()); k.add([w, x.d, 'uk', x.s, x.e].join()); });
+        (C.faste || []).forEach(x => { if (x.rotation == null || holdAf(w) == x.rotation) k.add([w, x.d, x.p, x.s, x.e].join()); });
+        (ROT[holdAf(w)] || []).forEach(x => { k.add([w, x.d, x.p, x.s, x.e].join()); k.add([w, x.d, 'uk', x.s, x.e].join()); });
       });
       return k;
     }
     function dobbeltVagter() {
       const ud = [];
       WK.forEach(w => {
-        const hold = ROT[w % NR] || [];
+        const hold = ROT[holdAf(w)] || [];
         hold.filter(x => (x.d == 5 || x.d == 6) && hold.some(y => y != x && y.p == x.p && (y.d == 5 || y.d == 6) && y.d != x.d)).forEach(x => {
           const v = M.S.find(y => y.w == w && y.d == x.d && y.s == x.s && y.e == x.e && (y.p == x.p || y.p == 'uk') && !ud.some(u => u.x == y));
           if (v) ud.push({ x: v, p: x.p });

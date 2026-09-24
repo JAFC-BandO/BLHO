@@ -54,6 +54,8 @@
     $('#mdKunFaste').checked = a.kunFaste;
     $('#mdFordeles').checked = a.fordeles;
     $('#mdFejl').textContent = '';
+    // Weekend-holdenes rigtige uger i den aabne plan
+    $('#mdHoldHjaelp').textContent = 'Weekend-vagter ligger i et hold, fordi alle højst arbejder hver 3. weekend. I denne plan: ' + [0, 1, 2].map(h => 'hold ' + (h + 1) + ' = ' + holdUger(h)).join('; ') + '.';
     tegnVagter(); opdaterFelter();
     $('#mdNavn').focus();
   }
@@ -104,7 +106,7 @@
       <input type="time" step="900" data-v="${i}" data-f="s" value="${kl(x.s)}" aria-label="Fra"><span>–</span>
       <input type="time" step="900" data-v="${i}" data-f="e" value="${kl(x.e)}" aria-label="Til">
       <select data-v="${i}" data-f="hold" aria-label="Hvornår">${x.d > 4
-        ? [0, 1, 2].map(h => `<option value="${h}" ${x.hold === h ? 'selected' : ''}>Weekend-hold ${h + 1} (uge ${h + 1} og ${h + 4})</option>`).join('')
+        ? [0, 1, 2].map(h => `<option value="${h}" ${x.hold === h ? 'selected' : ''}>Weekend-hold ${h + 1} (${esc(holdUger(h))})</option>`).join('')
         : '<option value="">Hver uge</option>'}</select>
       <button type="button" class="md-slet-vagt" data-slet-vagt="${i}" title="Fjern den faste vagt" aria-label="Fjern den faste vagt">✕</button>
     </div>`).join('') : '<p class="s md-ingen">Ingen faste vagter.</p>';
