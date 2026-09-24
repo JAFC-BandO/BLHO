@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="da"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Vagtplan</title>
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="motor.js?v=2026-09-24-1"></script>
+<style>
+:root{--bg:#f7f5f2;--fg:#231f2b;--mut:#6c6577;--card:#fff;--bd:#ddd6e4;--L:#7355c7;--S:#1f8f83;--U:#d9822b;--bad:#c93a3a;--ok:#2b8a4f;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17141c;--fg:#efeaf5;--mut:#a59db3;--card:#221e2b;--bd:#3a3347;--L:#a68cf0;--S:#4fc4b6;--U:#f0a14f;--bad:#ff7a7a;--ok:#6fd49a}}
+:root[data-theme="dark"]{--bg:#17141c;--fg:#efeaf5;--mut:#a59db3;--card:#221e2b;--bd:#3a3347;--L:#a68cf0;--S:#4fc4b6;--U:#f0a14f;--bad:#ff7a7a;--ok:#6fd49a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 "Trebuchet MS",Verdana,sans-serif;padding:14px}
+h1{font:700 22px/1.2 Georgia,"Times New Roman",serif;margin:0 0 2px}p.s{margin:0 0 12px;color:var(--mut)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+button{font:inherit;cursor:pointer;border:1px solid var(--bd);background:var(--card);color:var(--fg);border-radius:8px;padding:6px 12px}
+button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--L);outline-offset:1px}
+.tab.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}.pri{background:var(--L);color:#fff;border-color:var(--L)}
+.bad{color:var(--bad)}.ok{color:var(--ok)}#stat{margin-left:auto}
+.wrap{overflow-x:auto;padding-bottom:6px}.grid{display:grid;grid-template-columns:repeat(7,minmax(158px,1fr));gap:8px;min-width:1150px}
+.day{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:8px}.day.err{border-color:var(--bad)}
+.day h3{margin:0 0 6px;font-size:15px}.blk{border-top:1px solid var(--bd);padding:4px 0}.bh{font-size:12px;color:var(--mut);margin-bottom:3px}
+.chip{display:block;width:100%;text-align:left;margin:2px 0;padding:4px 8px;border:0;border-left:5px solid;font-size:13px;background:var(--bg)}
+.chip.rL{border-color:var(--L)}.chip.rS{border-color:var(--S)}.chip.rU{border-color:var(--U)}.chip.uk{border-style:dashed;border-width:1px 1px 1px 5px;border-color:var(--mut);color:var(--mut)}
+.add{width:100%;margin-top:6px;border-style:dashed;color:var(--mut);font-size:13px}.di{font-size:12px;color:var(--bad);margin-top:5px}
+h2{font:700 16px Georgia,serif;margin:18px 0 6px}ul.is{list-style:none;padding:0;margin:0}ul.is li{padding:4px 0;border-bottom:1px solid var(--bd)}ul.is button{border:0;background:none;padding:0;text-align:left;color:var(--bad)}
+table{border-collapse:collapse;background:var(--card)}td,th{border:1px solid var(--bd);padding:4px 10px;text-align:right}th:first-child,td:first-child{text-align:left}td.w{color:var(--bad);font-weight:700}
+dialog{border:1px solid var(--bd);border-radius:12px;background:var(--card);color:var(--fg);max-width:min(440px,92vw);width:100%}
+dialog label{display:block;margin:8px 0}dialog select,dialog input,textarea{width:100%;font:inherit;padding:6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--fg)}
+textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+/* Login, adgang og gem-status -- ikke en del af den oprindelige vagtplan */
+.top{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:13px;color:var(--mut)}
+.top a{color:var(--L)}.top .hojre{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.boks{max-width:360px;margin:12vh auto 0;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:22px}
+.boks label{display:block;margin:10px 0 4px;font-size:13px;color:var(--mut)}.boks input{width:100%;font:inherit;padding:8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--fg)}
+.boks .pri{width:100%;margin-top:16px;padding:9px}.fejl{color:var(--bad);font-size:13px;margin-top:10px;min-height:1em}
+#gemStatus.bad{font-weight:700}
+.konflikt{display:none;background:var(--card);border:1px solid var(--bad);border-radius:10px;padding:10px 12px;margin:8px 0;color:var(--bad)}
+</style></head><body>
+
+<div id="loginVis" class="boks" hidden>
+  <h1>Vagtplan</h1>
+  <p class="s">Log ind med din Børneloppen-konto.</p>
+  <form id="loginForm">
+    <label for="email">Email</label><input id="email" type="email" autocomplete="username" required>
+    <label for="password">Adgangskode</label><input id="password" type="password" autocomplete="current-password" required>
+    <button class="pri" type="submit">Log ind</button>
+    <div class="fejl" id="loginFejl"></div>
+  </form>
+</div>
+
+<div id="ingenAdgangVis" class="boks" hidden>
+  <h1>Ingen adgang</h1>
+  <p class="s">Din konto har ikke adgang til vagtplanen.</p>
+  <div class="row"><a href="../butik-redigering/">Til butik-redigering</a><button id="logudIngenAdgang">Log ud</button></div>
+</div>
+
+<div id="app" hidden>
+<div class="top"><a href="../butik-redigering/">← Butik-redigering</a><span class="hojre"><select id="planValg" hidden aria-label="Vælg butik"></select><span id="gemStatus"></span><button id="logud">Log ud</button></span></div>
+<h1 id="titel">Vagtplan</h1>
+<p class="s">Rullende 4-ugers plan. Klik på en vagt for at rette den, eller på "+ vagt" for at tilføje. Reglerne tjekkes automatisk.</p>
+<div class="konflikt" id="konflikt">Planen er blevet ændret af en anden, siden du åbnede den. Din seneste ændring er <b>ikke</b> gemt. <button id="genindlaes">Hent den nyeste plan</button></div>
+<div class="bar"><span id="tabs"></span><button id="t2" title="Tidspunkt hvor der skal være 2 på arbejde igen">2 pers. fra 15:00</button><button id="gen">Foreslå ny plan</button><button id="rules">Regler</button><button class="pri" id="exp">Kopiér til SmartPlan</button><span id="stat"></span></div>
+<div class="wrap"><div class="grid" id="grid"></div></div>
+<h2>Problemer</h2><ul class="is" id="iss"></ul>
+<h2>Ønsker der ikke er opfyldt</h2><ul class="is" id="soft"></ul>
+<h2>Timer pr. uge</h2><div class="wrap" id="hrs"></div>
+</div>
+
+<dialog id="dlg"><h3 id="dt">Vagt</h3>
+<label>Medarbejder<select id="dp"></select></label>
+<label>Start<input id="ds" type="time" step="900"></label>
+<label>Slut<input id="de" type="time" step="900"></label>
+<div class="di" id="dm"></div>
+<div class="row"><button class="pri" id="dsave">Gem</button><button id="ddel">Slet</button><button id="dcx">Annullér</button></div></dialog>
+<dialog id="rd" style="max-width:min(680px,94vw)"><h3>Regler i planen</h3><div id="rt" style="max-height:62vh;overflow:auto;font-size:14px"></div><div class="row"><button id="rx">Luk</button></div></dialog>
+<dialog id="xd"><h3>Kopiér til SmartPlan</h3>
+<div class="row"><button id="xt">Denne uge (tekst)</button><button id="xc">Alle uger (CSV)</button></div>
+<textarea id="xa" readonly></textarea>
+<div class="row"><button class="pri" id="xcopy">Kopiér</button><button id="xx">Luk</button></div></dialog>
+
+<script>
+// Al persondata (navne, vagtregler pr. person) og selve planen ligger i Supabase-tabellen
+// `vagtplan`, bag RLS der kun lukker brugere i `vagtplan_adgang` ind (JC og MP). Denne fil og
+// motor.js er offentlige paa GitHub og maa aldrig indeholde navne eller persondata.
+const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
+// Samme storageKey som butik-redigering, saa man er logget ind her, naar man kommer derfra.
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { storageKey: 'sb-butik-redigering-auth' } });
+
+const $ = s => document.querySelector(s);
+const esc = v => String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pm = t => { const [a, b] = t.split(':'); return a * 60 + +b; };
+
+let planer = [];        // de vagtplan-raekker brugeren kan se (i praksis kun Horsens)
+let raekke = null;      // den valgte raekke: { id, opdateret_at, ... }
+let M = null;           // motoren for den valgte raekkes opsaetning
+let W = 0, armed = false, E = null;
+let gemKaede = Promise.resolve(), konflikt = false;
+
+function vis(id) { ['loginVis', 'ingenAdgangVis', 'app'].forEach(x => { $('#' + x).hidden = x != id; }); }
+
+// ---------- Login / adgang ----------
+async function start() {
+  const { data: { user } } = await client.auth.getUser();
+  if (!user) { vis('loginVis'); return; }
+  // RLS paa vagtplan_adgang viser kun brugerens egen raekke -- findes den ikke, er der ingen adgang.
+  // (Selve data er ogsaa beskyttet af RLS, saa dette er kun for at vise en paen besked.)
+  const { data: adg } = await client.from('vagtplan_adgang').select('bruger_id').eq('bruger_id', user.id).maybeSingle();
+  if (!adg) { vis('ingenAdgangVis'); return; }
+  const { data, error } = await client.from('vagtplan').select('id, butik_id, opsaetning, plan, opdateret_at, butikker(navn)');
+  if (error || !data || !data.length) { vis('ingenAdgangVis'); $('#ingenAdgangVis .s').textContent = error ? 'Kunne ikke hente vagtplanen. Prøv igen om lidt.' : 'Der er ikke oprettet nogen vagtplan endnu.'; return; }
+  planer = data.sort((a, b) => ((a.butikker && a.butikker.navn) || '').localeCompare((b.butikker && b.butikker.navn) || '', 'da'));
+  $('#planValg').innerHTML = planer.map(p => `<option value="${esc(p.id)}">${esc(p.butikker ? p.butikker.navn : p.id)}</option>`).join('');
+  $('#planValg').hidden = planer.length < 2;
+  vis('app');
+  vaelgPlan(planer[0]);
+}
+function vaelgPlan(r) {
+  raekke = r; konflikt = false; $('#konflikt').style.display = 'none';
+  const t2 = M ? M.T2 : 900;
+  M = lavVagtplanMotor(r.opsaetning); M.T2 = t2;
+  M.S = Array.isArray(r.plan) ? r.plan : [];
+  $('#titel').textContent = r.opsaetning.titel || 'Vagtplan';
+  document.title = r.opsaetning.titel || 'Vagtplan';
+  $('#rt').innerHTML = (r.opsaetning.regler || []).map(x => `<p><b>${esc(x.titel)}:</b> ${esc(x.tekst)}</p>`).join('');
+  $('#gemStatus').textContent = ''; $('#gemStatus').className = '';
+  if (!M.S.length) { M.gen(); save(); }
+  render();
+}
+$('#loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('#loginFejl').textContent = '';
+  const { error } = await client.auth.signInWithPassword({ email: $('#email').value.trim(), password: $('#password').value });
+  if (error) { $('#loginFejl').textContent = 'Forkert email eller adgangskode.'; return; }
+  $('#password').value = '';
+  start();
+});
+async function logud() { await client.auth.signOut(); location.reload(); }
+$('#logud').onclick = logud; $('#logudIngenAdgang').onclick = logud;
+$('#planValg').onchange = e => vaelgPlan(planer.find(p => p.id == e.target.value));
+
+// ---------- Gem ----------
+// Hele planen gemmes ved hver aendring (den er lille). Opdateringen sker kun, hvis raekken
+// stadig har det opdateret_at vi sidst saa -- har en anden (JC/MP) gemt imens, rammer den 0
+// raekker, og vi viser en advarsel i stedet for stille at overskrive deres aendringer.
+function gemStatus(t, cls) { $('#gemStatus').textContent = t; $('#gemStatus').className = cls || ''; }
+function save() {
+  if (konflikt) return;
+  const r = raekke, plan = JSON.parse(JSON.stringify(M.S));
+  gemStatus('Gemmer…');
+  gemKaede = gemKaede.then(async () => {
+    if (konflikt || r != raekke) return;
+    const { data, error } = await client.from('vagtplan').update({ plan }).eq('id', r.id).eq('opdateret_at', r.opdateret_at).select('opdateret_at');
+    if (error) { gemStatus('⚠ Kunne ikke gemme – prøv igen', 'bad'); return; }
+    if (!data || !data.length) { konflikt = true; $('#konflikt').style.display = 'block'; gemStatus('⚠ Ikke gemt', 'bad'); return; }
+    r.opdateret_at = data[0].opdateret_at; r.plan = plan;
+    gemStatus('Gemt ✓', 'ok');
+  });
+}
+async function hentIgen() {
+  const { data } = await client.from('vagtplan').select('id, butik_id, opsaetning, plan, opdateret_at, butikker(navn)').eq('id', raekke.id).maybeSingle();
+  if (!data) return;
+  planer = planer.map(p => p.id == data.id ? data : p);
+  vaelgPlan(data);
+}
+$('#genindlaes').onclick = hentIgen;
+// Kommer man tilbage til fanen, og har den anden gemt imens, hentes den nyeste plan -- men kun
+// hvis der ikke er noget af ens eget undervejs, og ingen dialog er aaben.
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState != 'visible' || !raekke || konflikt || document.querySelector('dialog[open]')) return;
+  await gemKaede;
+  const { data } = await client.from('vagtplan').select('opdateret_at').eq('id', raekke.id).maybeSingle();
+  if (data && data.opdateret_at != raekke.opdateret_at) hentIgen();
+});
+
+// ---------- Visning (som i den oprindelige vagtplan) ----------
+const grp = (w, d) => { const g = {}; M.S.map((x, i) => ({ ...x, i })).filter(x => x.w == w && x.d == d).sort((a, b) => a.s - b.s || a.e - b.e).forEach(x => (g[x.s + '-' + x.e] = g[x.s + '-' + x.e] || []).push(x)); return Object.values(g); };
+function render() {
+  const { P, R, D, f, WK, NW } = M;
+  M.ext(); const EX = M.EX;
+  const A = M.check(), I = A.filter(i => !i.soft), Q = A.filter(i => i.soft);
+  $('#tabs').innerHTML = WK.map(w => `<button class="tab ${w == W ? 'on' : ''}" data-w="${w}">Uge ${w + 1}${I.some(i => i.w == w) ? ' ⚠' : ''}</button>`).join(' ');
+  const uh = M.S.filter(x => x.p == 'uk').reduce((a, x) => a + (x.e - x.s) / 60, 0);
+  $('#stat').innerHTML = (I.length ? `<b class="bad">⚠ ${I.length} problemer</b>` : `<b class="ok">✓ Planen går op</b>`) + (uh ? ` <span class="s">· mangler ${Math.max(0, ...EX.filter(Boolean))} ekstra personer (${uh} t)</span>` : '');
+  $('#grid').innerHTML = D.map((n, d) => {
+    const di = I.filter(i => i.w == W && i.d == d);
+    return `<div class="day ${di.length ? 'err' : ''}"><h3>${n}</h3>${grp(W, d).map(a => `<div class="blk"><div class="bh">${f(a[0].s)} - ${f(a[0].e)}</div>${a.map(x => `<button class="chip r${P[x.p][1]} ${x.p == 'uk' ? 'uk' : ''}" data-i="${x.i}">${x.p == 'uk' ? 'Ekstra person' : esc(P[x.p][0])}</button>`).join('')}</div>`).join('')}<button class="add" data-add="${d}">+ vagt</button>${di.map(i => `<div class="di">${esc(i.t)}</div>`).join('')}</div>`;
+  }).join('');
+  $('#soft').innerHTML = Q.length ? Q.map(i => `<li>Uge ${i.w + 1}: ${esc(i.t)}</li>`).join('') : '<li>Ingen.</li>';
+  $('#iss').innerHTML = I.length ? I.map(i => `<li><button data-w="${i.w < 0 ? W : i.w}">${i.w < 0 ? 'Alle uger' : 'Uge ' + (i.w + 1)}${i.d >= 0 ? ' ' + D[i.d] : ''}: ${esc(i.t)}</button></li>`).join('') : '<li class="ok">Ingen problemer.</li>';
+  const ps = Object.keys(P).filter(p => p != 'uk'), nx = Math.max(0, ...EX.filter(Boolean));
+  $('#hrs').innerHTML = '<table><tr><th></th>' + WK.map(w => `<th>Uge ${w + 1}</th>`).join('') + '<th>Snit</th></tr>' + ps.map(p => {
+    const h = WK.map(w => M.hrs(p, w)), a = h.reduce((x, y) => x + y) / NW, m = M.minSnit(p), u = M.ugeTimer(p), bad = (m && a < m) || (u != null && h.some(x => x != u));
+    return `<tr><td>${esc(P[p][0])} <small>${esc(R[P[p][1]])}</small></td>${h.map(x => `<td>${x}</td>`).join('')}<td class="${bad ? 'w' : ''}">${a.toFixed(1)}${m ? ' (min ' + m + ')' : ''}</td></tr>`;
+  }).join('') + Array.from({ length: nx }, (_, k) => {
+    const hh = WK.map(w => M.S.reduce((a, x, i) => a + (EX[i] == k + 1 && x.w == w ? (x.e - x.s) / 60 : 0), 0));
+    return `<tr><td>Ekstra person ${k + 1} <small>skal findes</small></td>${hh.map(x => `<td>${x}</td>`).join('')}<td>${(hh.reduce((a, b) => a + b) / NW).toFixed(1)}</td></tr>`;
+  }).join('') + '</table>';
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t || !M) return;
+  if (t.dataset.w !== undefined) { W = +t.dataset.w; render(); }
+  if (t.dataset.i !== undefined) openE(+t.dataset.i, M.S[+t.dataset.i].d);
+  if (t.dataset.add !== undefined) openE(null, +t.dataset.add);
+});
+function openE(i, d) {
+  const { P, R, D, O, f } = M;
+  E = { i, d };
+  $('#dp').innerHTML = Object.keys(P).map(p => `<option value="${p}">${p == 'uk' ? 'Ekstra person' : esc(P[p][0] + ' – ' + R[P[p][1]])}</option>`).join('');
+  const std = P[raekke.opsaetning.standardPerson] ? raekke.opsaetning.standardPerson : Object.keys(P)[0];
+  const x = i != null ? M.S[i] : { p: std, s: O(d)[0], e: O(d)[1] };
+  $('#dt').textContent = D[d] + (i != null ? ' – ret vagt' : ' – ny vagt'); $('#dp').value = x.p; $('#ds').value = f(x.s); $('#de').value = f(x.e); $('#dm').textContent = ''; $('#ddel').style.display = i != null ? '' : 'none'; $('#dlg').showModal();
+}
+$('#dsave').onclick = () => {
+  const s = pm($('#ds').value || '0:0'), e = pm($('#de').value || '0:0');
+  if (e - s < 180) { $('#dm').textContent = 'En vagt skal være mindst 3 timer.'; return; }
+  const x = { w: W, d: E.d, p: $('#dp').value, s, e }; if (E.i != null) M.S[E.i] = x; else M.S.push(x); save(); $('#dlg').close(); render();
+};
+$('#ddel').onclick = () => { M.S.splice(E.i, 1); save(); $('#dlg').close(); render(); };
+$('#dcx').onclick = () => $('#dlg').close();
+$('#gen').onclick = e => {
+  if (!armed) { armed = true; e.target.textContent = 'Sikker? Klik igen (overskriver alt)'; setTimeout(() => { armed = false; $('#gen').textContent = 'Foreslå ny plan'; }, 4000); return; }
+  armed = false; e.target.textContent = 'Foreslå ny plan'; M.gen(); save(); render();
+};
+const txt = w => M.D.map((n, d) => n + '\n' + (grp(w, d).map(a => M.f(a[0].s) + ' - ' + M.f(a[0].e) + ': ' + a.map(x => M.nmi(x.i) + ' (' + M.R[M.P[x.p][1]] + ')').join(', ')).join('\n') || '–')).join('\n\n');
+const csv = () => 'Uge;Dag;Start;Slut;Medarbejder;Jobtype\n' + M.S.map((x, i) => ({ ...x, i })).sort((a, b) => a.w - b.w || a.d - b.d || a.s - b.s).map(x => [x.w + 1, M.D[x.d], M.f(x.s), M.f(x.e), M.nmi(x.i), M.R[M.P[x.p][1]]].join(';')).join('\n');
+$('#t2').onclick = () => { M.T2 = M.T2 == 900 ? 915 : 900; $('#t2').textContent = '2 pers. fra ' + M.f(M.T2); render(); };
+$('#rules').onclick = () => $('#rd').showModal(); $('#rx').onclick = () => $('#rd').close();
+$('#exp').onclick = () => { $('#xa').value = txt(W); $('#xd').showModal(); };
+$('#xt').onclick = () => $('#xa').value = txt(W); $('#xc').onclick = () => $('#xa').value = csv();
+$('#xx').onclick = () => $('#xd').close();
+$('#xcopy').onclick = () => { const a = $('#xa'); a.select(); try { navigator.clipboard.writeText(a.value); } catch (e) { document.execCommand('copy'); } $('#xcopy').textContent = 'Kopieret ✓'; setTimeout(() => $('#xcopy').textContent = 'Kopiér', 1500); };
+
+start();
+</script></body></html>
