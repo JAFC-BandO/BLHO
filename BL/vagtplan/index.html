@@ -23,8 +23,8 @@ window.addEventListener('storage', e => { if (e.key === 'blho-tema') saetTema();
 if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('change', saetTema);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="motor.js?v=2026-09-24-15"></script>
-<script src="opsaetning.js?v=2026-09-24-15"></script>
+<script src="motor.js?v=2026-09-24-16"></script>
+<script src="opsaetning.js?v=2026-09-24-16"></script>
 <style>
 /* Farverne ligger som variabler, saa lys/moerk tilstand styres ét sted. Temaet vaelges med
    knappen i butik-redigerings topbar og deles via localStorage 'blho-tema' (se <head>). */
@@ -118,6 +118,17 @@ table{border-collapse:collapse;background:var(--card)}
 td.loen-start,th.loen-start{border-left:2px solid var(--bd)}
 tr.i-alt td{font-weight:700;border-top:2px solid var(--bd)}
 td.stille{color:var(--mut)}
+/* Regel-editoren */
+.rg-linje{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0}
+.rg-linje input[type=number]{width:4.2em}.rg-linje input{width:auto}
+.rg-linje .rg-eller{color:var(--mut);margin-left:6px}
+#rdForm h4{margin:10px 0 2px;font-size:14px}
+#rdForm .md-linje input[type=number]{width:4.5em}
+label.rg-tjek{display:flex;align-items:center;gap:8px;margin:8px 0}
+label.rg-tjek input{width:auto;margin:0}
+#rgNoter{height:auto;font:inherit;font-size:14px}
+.day .lukket-tekst{color:var(--mut);font-size:13px;margin:6px 0}
+.loen-linje select{width:auto}.loen-linje input{width:8em}
 .loen-note{font-size:13px;color:var(--mut);margin:6px 0 0}td,th{border:1px solid var(--bd);padding:4px 10px;text-align:right}th:first-child,td:first-child{text-align:left}td.w{color:var(--bad);font-weight:700}
 dialog{border:1px solid var(--bd);border-radius:12px;background:var(--card);color:var(--fg);max-width:min(440px,92vw);width:100%;font-family:inherit}
 dialog::backdrop{background:rgba(0,0,0,.45)}
@@ -251,7 +262,7 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
 </div>
 <div class="indstillinger">
   <label>Første uge starter <input type="date" id="start" title="En vagtplan starter altid en mandag"></label>
-  <label>2 personer fra <select id="t2" title="Hvornår der skal være 2 på arbejde igen om eftermiddagen"><option value="900">15:00</option><option value="915">15:15</option></select></label>
+  <label id="t2Label"><span id="t2Tekst">2 personer fra</span> <select id="t2" title="Bemandingens starttidspunkt, når reglerne giver to muligheder ('eller fra')"></select></label>
   <label>Ekstra personer <select id="ekstra" title="Hvor mange ekstra personer planen må bruge. De overtager den ene weekenddag for dem, der ellers skal arbejde både lørdag og søndag."></select></label>
   <label>Ekstra må arbejde <select id="ekstraRegel" title="Hvor tit de ekstra personer må arbejde weekend. Alle weekend-ønsker kræver ca. 13 timers weekendarbejde om ugen fra ekstra folk — jo sjældnere hver enkelt må arbejde, jo flere ekstra personer skal der til.">
 <option value="3-0">hver 3. weekend, én dag</option><option value="3-1">hver 3. weekend, begge dage</option>
@@ -283,15 +294,16 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
 <div id="mdFormVis" hidden>
   <label>Navn<input id="mdNavn" type="text" autocomplete="off" maxlength="40"></label>
   <label>E-mail<input id="mdEmail" type="email" autocomplete="off" maxlength="120" placeholder="navn@eksempel.dk"></label>
-  <label>Timeløn (kr. pr. time)<input id="mdTimeloen" type="number" min="0" step="0.01" inputmode="decimal" placeholder="fx 145"></label>
-  <p class="md-hjaelp">Valgfri. Bruges kun til at vise lønudgiften i timetabellen og kan kun ses af dem med adgang til vagtplanen.</p>
+  <div class="md-linje loen-linje"><label style="margin:0">Løn <select id="mdLoenType"><option value="ingen">Ikke angivet</option><option value="time">Timeløn</option><option value="fast">Fast månedsløn</option></select></label>
+    <span class="md-linje" id="mdLoenFelt"><input id="mdLoenBeloeb" type="number" min="0" step="0.01" inputmode="decimal" aria-label="Beløb"> <span id="mdLoenEnhed">kr. pr. time</span></span></div>
+  <p class="md-hjaelp">Valgfri. Bruges kun til at vise lønudgiften i timetabellen og kan kun ses af dem med adgang til vagtplanen. Fast månedsløn regnes som månedsløn × 12 / 52 pr. uge, uanset timerne.</p>
   <label>Jobtype<select id="mdType"></select></label>
   <p class="md-hjaelp">Ungarbejdere kan ikke stå alene og tæller ikke som ansvarlig. Alle andre jobtyper tæller som ansvarlig.</p>
   <fieldset><legend>Hvornår kan personen arbejde?</legend>
     <p class="md-hjaelp">De tider planlæggeren <b>må</b> give personen vagter i. Det er ikke vagter i sig selv – "Foreslå ny plan" vælger selv, hvilke af dagene personen får.</p>
     <div class="md-hurtig"><button type="button" data-vaelg="hverdage">Hverdage</button><button type="button" data-vaelg="weekend">Weekend</button><button type="button" data-vaelg="alle">Alle dage</button><button type="button" data-vaelg="ingen">Ingen</button><button type="button" data-vaelg="samme" title="Brug tiderne fra den første valgte dag på alle valgte dage">Samme tider på alle valgte dage</button></div>
     <div id="mdDage"></div>
-    <p class="md-hjaelp">Butikken har åbent 08:45–18:15 på hverdage og 08:45–17:15 i weekenden.</p>
+    <p class="md-hjaelp" id="mdAabentHjaelp"></p>
   </fieldset>
   <fieldset><legend>Timer</legend>
     <div class="md-linje"><select id="mdTimerArt" aria-label="Timekrav">
@@ -337,7 +349,37 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
   <p class="fejltekst" id="sdFejl" role="alert"></p>
   <div class="row"><button class="pri" id="sdGem" type="button">Gem</button></div>
 </dialog>
-<dialog id="rd" style="max-width:min(680px,94vw)"><button type="button" class="luk-x" aria-label="Luk" title="Luk">✕</button><h3>Regler i planen</h3><div id="rt" style="max-height:62vh;overflow:auto;font-size:14px"></div></dialog>
+<dialog id="rd" aria-labelledby="rdTitel" style="max-width:min(760px,96vw)"><button type="button" class="luk-x" aria-label="Luk" title="Luk">✕</button><h3 id="rdTitel">Regler</h3>
+<div id="rdVis">
+  <div class="row" style="margin:0 0 10px"><button class="pri" id="rdRet" type="button">Ret butikkens regler</button></div>
+  <div id="rt" style="max-height:62vh;overflow:auto;font-size:14px"></div>
+</div>
+<div id="rdForm" hidden>
+  <p class="md-hjaelp">Reglerne gælder denne vagtplan og kopieres med til nye vagtplaner og skabeloner. Regeltjekket bruger dem med det samme, og "Foreslå ny plan" laver en plan efter dem.</p>
+  <div style="max-height:60vh;overflow:auto;padding-right:4px">
+  <fieldset><legend>Åbningstider</legend><div id="rgAabning"></div><p class="md-hjaelp">Fjern krydset ved de dage, butikken har lukket.</p></fieldset>
+  <fieldset><legend>Bemanding</legend>
+    <p class="md-hjaelp">Hvor mange der skal være på arbejde. Hver linje gælder fra klokkeslættet og indtil næste linje eller lukketid. "Eller fra" er valgfri: så må planlæggeren også lade linjen starte senere, hvis det er nemmere – fx "fra 15:00, eller fra 15:15".</p>
+    <h4 id="rgHverdagTitel">Alle dage</h4>
+    <div id="rgHverdag"></div><button type="button" data-rg-ny="hverdag">+ Tilføj tidspunkt</button>
+    <label class="rg-tjek"><input type="checkbox" id="rgSammeWeekend"> Samme bemanding i weekenden</label>
+    <div id="rgWeekendBlok" hidden><h4>Weekend</h4><div id="rgWeekend"></div><button type="button" data-rg-ny="weekend">+ Tilføj tidspunkt</button></div>
+  </fieldset>
+  <fieldset><legend>Generelt</legend>
+    <div class="md-linje">Aldrig mere end <input type="number" id="rgMaks" min="1" max="20" aria-label="Aldrig mere end"> på arbejde ad gangen</div>
+    <div class="md-linje">En vagt er mindst <input type="number" id="rgMinVagt" min="0.5" max="12" step="0.25" aria-label="Mindste vagt i timer"> timer</div>
+    <label class="rg-tjek"><input type="checkbox" id="rgAnsvarlig"> Der skal altid være en ansvarlig, som ikke er ungarbejder (ungarbejdere kan ikke stå alene)</label>
+    <div class="md-linje">Alle arbejder højst hver <input type="number" id="rgWeekendHver" min="1" max="8" aria-label="Højst hver … weekend">. weekend</div>
+  </fieldset>
+  <fieldset><legend>Andre aftaler</legend>
+    <textarea id="rgNoter" rows="3" placeholder="Fx: Vi holder lukket 24.–26. december."></textarea>
+    <p class="md-hjaelp">Vises under Regler, men planlæggeren bruger dem ikke.</p>
+  </fieldset>
+  </div>
+  <div class="fejltekst" id="rgFejl" role="alert"></div>
+  <div class="row"><button class="pri" id="rgGem" type="button">Gem regler</button><button id="rgTilbage" type="button">Tilbage</button></div>
+</div>
+</dialog>
 <dialog id="xd"><button type="button" class="luk-x" aria-label="Luk" title="Luk">✕</button><h3>Kopiér til SmartPlan</h3>
 <div class="row"><button id="xt">Denne uge (tekst)</button><button id="xc">Alle uger (CSV)</button></div>
 <textarea id="xa" readonly></textarea>
@@ -402,7 +444,7 @@ const lesPlan = p => {
   // (true = hver weekend, begge dage; false = hver 3. weekend, én dag).
   const r = o.ekstraRegel && [1, 2, 3].includes(o.ekstraRegel.afstand) ? { afstand: o.ekstraRegel.afstand, begge: !!o.ekstraRegel.begge }
     : o.ekstraAlle === false ? { afstand: 3, begge: false } : { afstand: 1, begge: true };
-  return { t2: o.t2 == 915 ? 915 : 900, ekstra: Number.isInteger(o.ekstra) ? o.ekstra : EKSTRA_STANDARD, ekstraRegel: r,
+  return { t2: Number.isInteger(o.t2) ? o.t2 : null, ekstra: Number.isInteger(o.ekstra) ? o.ekstra : EKSTRA_STANDARD, ekstraRegel: r,
     start: gyldigStart(o.start), holdStart: [0, 1, 2].includes(o.holdStart) ? o.holdStart : 0, vagter: Array.isArray(o.vagter) ? o.vagter : [] };
 };
 
@@ -414,19 +456,12 @@ const FELTER = 'id, butik_id, navn, opsaetning, plan, opdateret_at, butikker(nav
 // kladder: ikke-gemte aendringer pr. VAGTPLAN (id), saa man kan skifte baade vagtplan og butik
 // uden at miste dem. butikPlaner: den valgte butiks vagtplaner (id + navn) til vaelgeren.
 let kladder = {}, aktuelButik = null, butikPlaner = [];
-const STANDARD_REGLER = [
-  { titel: 'Åbningstider', tekst: 'hverdage 08:45–18:15, weekender 08:45–17:15.' },
-  { titel: 'Bemanding', tekst: '08:45–10:00 præcis 1 på arbejde. 10:00–13:00 2 på arbejde. 13:00–15:00 mindst 1. Fra 15:00 (eller 15:15) 2 på arbejde. Aldrig mere end 2 ad gangen. Der skal altid være en ansvarlig, som ikke er ungarbejder. Ungarbejdere kan ikke stå alene.' },
-  { titel: 'Vagter', tekst: 'en vagt er mindst 3 timer.' },
-  { titel: 'Weekender', tekst: 'alle arbejder højst hver 3. weekend (weekend-hold 1, 2 og 3), og helst kun lørdag eller søndag.' },
-  { titel: 'Ekstra personer', tekst: 'dækker det, som personalet ikke kan dække efter reglerne. Vælg antallet og hvor tit de må arbejde weekend, og tryk "Foreslå ny plan".' },
-];
 const nyOpsaetning = navn => ({
   titel: 'Vagtplan – ' + navn,
   jobtyper: { L: 'Daglig leder', S: 'Salgsassistent', F: 'Flexjob', U: 'Ungarbejder' },
   standardPerson: null, personer: [], faste: [], weekendRotation: [[], [], []],
   hulFyldere: [], fyldere: [], ekstraDage: [], maalTimer: [], ugeTimer: [], minSnit: [],
-  regler: STANDARD_REGLER,
+  butiksregler: JSON.parse(JSON.stringify(window.VagtplanStandardRegler)),
 });
 function visPlanIndhold(ja) {
   $('#planIndhold').hidden = !ja; $('#ingenPlan').hidden = ja; $('#medarbejdere').hidden = !ja;
@@ -648,6 +683,7 @@ function vaelgPlan(r, bevar) {
   if (!aktuelButik || aktuelButik.id != r.butik_id) aktuelButik = { id: r.butik_id, navn: butikNavn(r) };
   const pl = lesPlan(r.plan);
   M = nyMotor(r.opsaetning, pl.holdStart); M.T2 = pl.t2; M.EKSTRA = pl.ekstra; M.EKSTRA_REGEL = pl.ekstraRegel; M.START = pl.start;
+  if (!M.T2VALG.includes(M.T2)) M.T2 = M.T2VALG[0];
   M.S = pl.vagter.filter(x => M.P[x.p] && x.w < M.NW); // vagter for folk der er fjernet, eller uger der ikke findes mere
   opdaterKontroller(); $('#ekstraHint').hidden = true;
   $('#butikNavn').textContent = butikNavn(r);
@@ -704,7 +740,7 @@ function anvendSnap(s) {
   const o = JSON.parse(s);
   if (JSON.stringify(o.opsaetning) !== JSON.stringify(raekke.opsaetning) || o.plan.holdStart !== M.HOLD_START) genopbygMotor(o.opsaetning, o.plan.holdStart);
   M.START = o.plan.start;
-  M.T2 = o.plan.t2; M.EKSTRA = o.plan.ekstra; M.EKSTRA_REGEL = o.plan.ekstraRegel;
+  M.T2 = M.T2VALG.includes(o.plan.t2) ? o.plan.t2 : M.T2VALG[0]; M.EKSTRA = o.plan.ekstra; M.EKSTRA_REGEL = o.plan.ekstraRegel;
   M.S = o.plan.vagter.filter(x => M.P[x.p] && x.w < M.NW);
   if (W >= M.NW) W = 0;
   opdaterKontroller(); visTitel(); render(); meld();
@@ -752,7 +788,14 @@ document.addEventListener('keydown', e => {
 // Indstillings-felterne afspejler motorens tilstand (ogsaa efter fortryd/gentag)
 function opdaterKontroller() {
   $('#start').value = M.START;
-  $('#t2').value = M.T2;
+  // "2 personer fra 15:00/15:15" findes kun, naar en bemandings-linje har et "eller fra"
+  const bl = [].concat(M.REGLER.bemanding.hverdag || [], M.REGLER.bemanding.weekend || []).find(b => b.ellerFra != null);
+  $('#t2Label').hidden = !bl;
+  if (bl) {
+    $('#t2Tekst').textContent = (bl.min == bl.max ? bl.min : bl.min + '–' + bl.max) + (bl.max == 1 ? ' person fra' : ' personer fra');
+    $('#t2').innerHTML = M.T2VALG.map(t => `<option value="${t}">${M.f(t)}</option>`).join('');
+    $('#t2').value = M.T2;
+  }
   const maxE = Math.max(M.maxAflastning, M.EKSTRA);
   $('#ekstra').innerHTML = Array.from({ length: maxE + 1 }, (_, n) => `<option value="${n}">${n}</option>`).join('');
   $('#ekstra').value = M.EKSTRA;
@@ -778,7 +821,8 @@ document.addEventListener('visibilitychange', async () => {
 // fra medarbejder-opsaetningen, saa teksten altid passer til det planen faktisk regner med.
 function reglerHtml(C) {
   const O = window.VagtplanOpsaetning, job = C.jobtyper || {};
-  return (C.regler || []).map(x => `<p><b>${esc(x.titel)}:</b> ${esc(x.tekst)}</p>`).join('')
+  return O.beskrivRegler(C).map(x => `<p><b>${esc(x.titel)}:</b> ${esc(x.tekst)}</p>`).join('')
+    + (C.noter ? `<p><b>Andre aftaler:</b> ${esc(C.noter).replace(/\n/g, '<br>')}</p>` : '')
     + '<h4 style="margin:14px 0 4px">Medarbejdere</h4>'
     + O.tilModel(C).map(m => `<p><b>${esc(m.navn)}</b> (${esc(job[m.type] || '')}): ${esc(O.beskriv(m))}.</p>`).join('')
     + FORSLAG_FORKLARING;
@@ -789,6 +833,7 @@ function genopbygMotor(C, holdStart) {
   const t2 = M.T2, ek = M.EKSTRA, rg = M.EKSTRA_REGEL, S = M.S, start = M.START;
   raekke.opsaetning = C;
   M = nyMotor(C, holdStart != null ? holdStart : M.HOLD_START); M.T2 = t2; M.EKSTRA = ek; M.EKSTRA_REGEL = rg; M.START = start;
+  if (!M.T2VALG.includes(M.T2)) M.T2 = M.T2VALG[0]; // reglerne kan have aendret "eller fra"
   M.S = S.filter(x => M.P[x.p]);
   $('#rt').innerHTML = reglerHtml(C);
 }
@@ -798,7 +843,7 @@ $('#medarbejdere').onclick = () => aabnMedarbejdere();
 // M.foreslaa() (motor.js) proever baade "2 pers. fra 15:00" og "fra 15:15" og tusindvis af
 // fordelinger, og vaelger den plan der overholder reglerne bedst. Det tager op mod et sekund,
 // saa knappen viser "Beregner…" -- setTimeout giver browseren tid til at tegne den foerst.
-const FORSLAG_FORKLARING = '<p><b>Sådan laves forslag:</b> "Foreslå ny plan" prøver både 2 personer fra 15:00 og fra 15:15 og tusindvis af måder at fordele vagterne på. Den vælger den plan, der overholder alle regler og derefter bedst: opfylder weekend-ønskerne, bruger færrest timer med ekstra personer, undgår mærkelige mødetider og fordeler timerne jævnt mellem dem, der ikke har faste vagter. 15:15 vælges kun, når 15:00 ville kræve ekstra folk. Faste vagter og weekend-rotationen flyttes aldrig.</p>';
+const FORSLAG_FORKLARING = '<p><b>Sådan laves forslag:</b> "Foreslå ny plan" prøver tusindvis af måder at fordele vagterne på og vælger den plan, der overholder alle regler og derefter bedst: opfylder weekend-ønskerne, bruger færrest timer med ekstra personer, undgår mærkelige mødetider og fordeler timerne jævnt mellem dem, der ikke har faste vagter. Har en bemanding et "eller fra"-tidspunkt, prøves begge, og det senere vælges kun, når det normale ville kræve ekstra folk. Ekstra personer dækker det, personalet ikke kan dække efter reglerne. Faste vagter og weekend-holdene flyttes aldrig.</p>';
 function foreslaa() {
   const knap = $('#gen');
   knap.disabled = true; knap.textContent = 'Beregner…';
@@ -831,28 +876,37 @@ function render() {
   $('#forklaring').innerHTML = typer.map(t => `<span><i style="border-color:var(--${esc(t)},var(--mut))"></i>${esc(R[t] || t)}</span>`).join('') + '<span><i class="uk"></i>Ekstra person</span>';
   $('#grid').innerHTML = D.map((n, d) => {
     const di = I.filter(i => i.w == W && i.d == d), dato = dagDato(W, d), idag = tilStreng(dato) == tilStreng(new Date());
-    return `<div class="day ${d > 4 ? 'weekend' : ''} ${idag ? 'idag' : ''} ${di.length ? 'err' : ''}"><h3>${n}<span class="dato">${datoKort(dato)}</span></h3>${grp(W, d).map(a => `<div class="blk"><div class="bh">${f(a[0].s)} - ${f(a[0].e)}</div>${a.map(x => `<button class="chip r${P[x.p][1]} ${x.p == 'uk' ? 'uk' : ''}" data-i="${x.i}">${x.p == 'uk' ? 'Ekstra person' : esc(P[x.p][0])}</button>`).join('')}</div>`).join('')}<button class="add" data-add="${d}">+ vagt</button>${di.map(i => `<div class="di">${esc(i.t)}</div>`).join('')}</div>`;
+    return `<div class="day ${d > 4 ? 'weekend' : ''} ${idag ? 'idag' : ''} ${di.length ? 'err' : ''}"><h3>${n}<span class="dato">${datoKort(dato)}</span></h3>${grp(W, d).map(a => `<div class="blk"><div class="bh">${f(a[0].s)} - ${f(a[0].e)}</div>${a.map(x => `<button class="chip r${P[x.p][1]} ${x.p == 'uk' ? 'uk' : ''}" data-i="${x.i}">${x.p == 'uk' ? 'Ekstra person' : esc(P[x.p][0])}</button>`).join('')}</div>`).join('')}${M.lukket(d) ? '<p class="lukket-tekst">Lukket</p>' : `<button class="add" data-add="${d}">+ vagt</button>`}${di.map(i => `<div class="di">${esc(i.t)}</div>`).join('')}</div>`;
   }).join('');
   $('#soft').innerHTML = Q.length ? Q.map(i => `<li>Uge ${ugeNr(i.w)}: ${esc(i.t)}</li>`).join('') : '<li>Ingen.</li>';
   $('#iss').innerHTML = I.length ? I.map(i => `<li><button data-w="${i.w < 0 ? W : i.w}">${i.w < 0 ? 'Alle uger' : 'Uge ' + ugeNr(i.w)}${i.d >= 0 ? ' ' + D[i.d] : ''}: ${esc(i.t)}</button></li>`).join('') : '<li class="ok">Ingen problemer.</li>';
   const ps = Object.keys(P).filter(p => p != 'uk'), nx = Math.max(0, ...EX.filter(Boolean));
-  // Timeloen: pr. medarbejder (personer[].timeloen) og for ekstra personer (ekstraTimeloen).
-  // Loen-kolonnerne vises kun, naar mindst én har en timeloen.
+  // Loen: timeloen (personer[].timeloen, kr./time) eller fast maanedsloen (personer[].maanedsloen,
+  // regnet som x 12 / 52 pr. uge uanset timer), og timeloen for ekstra personer (ekstraTimeloen).
+  // Loen-kolonnerne vises kun, naar mindst én har en loen.
   const C = raekke.opsaetning, tlP = {};
-  C.personer.forEach(p => { if (typeof p.timeloen == 'number') tlP[p.id] = p.timeloen; });
-  const tlE = typeof C.ekstraTimeloen == 'number' ? C.ekstraTimeloen : null;
+  C.personer.forEach(p => {
+    if (typeof p.timeloen == 'number') tlP[p.id] = { type: 'time', beloeb: p.timeloen };
+    else if (typeof p.maanedsloen == 'number') tlP[p.id] = { type: 'fast', beloeb: p.maanedsloen };
+  });
+  const tlE = typeof C.ekstraTimeloen == 'number' ? { type: 'time', beloeb: C.ekstraTimeloen } : null;
   const visLoen = Object.keys(tlP).length > 0 || tlE != null;
+  const harFast = Object.values(tlP).some(l => l.type == 'fast');
   const tal = x => Math.round(x * 100) / 100;
   const ugeLoen = WK.map(() => 0), ugeTimer = WK.map(() => 0); let uden = 0;
   const loenCeller = (h, tl) => {
     const sum = h.reduce((x, y) => x + y, 0);
-    h.forEach((x, w) => { ugeTimer[w] += x; if (tl != null) ugeLoen[w] += x * tl; });
-    if (tl == null && sum > 0) uden++;
-    return !visLoen ? '' : `<td class="loen-start">${tal(sum)}</td><td class="${tl == null ? 'stille' : ''}">${tl == null ? '–' : kr(tl)}</td><td class="${tl == null ? 'stille' : ''}">${tl == null ? '–' : kr(sum * tl)}</td>`;
+    // Fast loen: samme beloeb hver uge (maanedsloen x 12 / 52), uanset timer
+    const ugeFast = tl && tl.type == 'fast' ? tl.beloeb * 12 / 52 : 0;
+    h.forEach((x, w) => { ugeTimer[w] += x; if (tl) ugeLoen[w] += tl.type == 'fast' ? ugeFast : x * tl.beloeb; });
+    if (!tl && sum > 0) uden++;
+    const i = !tl ? null : tl.type == 'fast' ? ugeFast * NW : sum * tl.beloeb;
+    const sats = !tl ? '–' : tl.type == 'fast' ? kr(tl.beloeb) + '/md.' : kr(tl.beloeb) + '/t';
+    return !visLoen ? '' : `<td class="loen-start">${tal(sum)}</td><td class="${!tl ? 'stille' : ''}">${sats}</td><td class="${!tl ? 'stille' : ''}">${!tl ? '–' : kr(i)}</td>`;
   };
   const rk = ps.map(p => {
     const h = WK.map(w => M.hrs(p, w)), a = h.reduce((x, y) => x + y) / NW, m = M.minSnit(p), u = M.ugeTimer(p), bad = (m && a < m) || (u != null && h.some(x => x != u));
-    return `<tr><td><button type="button" class="navn-knap" data-person="${esc(p)}" title="Ret ${esc(P[p][0])}">${esc(P[p][0])}</button> <small>${esc(R[P[p][1]])}</small></td>${h.map(x => `<td>${x}</td>`).join('')}<td class="${bad ? 'w' : ''}">${a.toFixed(1)}${m ? ' (min ' + m + ')' : ''}</td>${loenCeller(h, tlP[p] != null ? tlP[p] : null)}</tr>`;
+    return `<tr><td><button type="button" class="navn-knap" data-person="${esc(p)}" title="Ret ${esc(P[p][0])}">${esc(P[p][0])}</button> <small>${esc(R[P[p][1]])}</small></td>${h.map(x => `<td>${x}</td>`).join('')}<td class="${bad ? 'w' : ''}">${a.toFixed(1)}${m ? ' (min ' + m + ')' : ''}</td>${loenCeller(h, tlP[p] || null)}</tr>`;
   }).join('') + Array.from({ length: Math.max(nx, M.EKSTRA) }, (_, k) => {
     const hh = WK.map(w => M.S.reduce((a, x, i) => a + (EX[i] == k + 1 && x.w == w ? (x.e - x.s) / 60 : 0), 0));
     return `<tr><td>Ekstra person ${k + 1} <small>skal findes</small></td>${hh.map(x => `<td>${x}</td>`).join('')}<td>${(hh.reduce((a, b) => a + b) / NW).toFixed(1)}</td>${loenCeller(hh, tlE)}</tr>`;
@@ -860,8 +914,8 @@ function render() {
   const iAlt = ugeLoen.reduce((x, y) => x + y, 0);
   const fod = !visLoen ? '' : `<tr class="i-alt"><td>I alt</td>${WK.map(w => `<td title="${tal(ugeTimer[w])} timer">${kr(ugeLoen[w])}</td>`).join('')}<td>${kr(iAlt / NW)}</td><td class="loen-start">${tal(ugeTimer.reduce((x, y) => x + y, 0))}</td><td></td><td>${kr(iAlt)}</td></tr>`;
   $('#hrs').innerHTML = '<table><tr><th></th>' + WK.map(w => `<th title="${ugeDatoer(w)}">Uge ${ugeNr(w)}</th>`).join('') + '<th>Snit</th>'
-    + (visLoen ? '<th class="loen-start">Timer i alt</th><th>Timeløn</th><th>Løn i alt</th>' : '') + '</tr>' + rk + fod + '</table>'
-    + (visLoen ? `<p class="loen-note">Lønudgift for perioden: <b>${kr(iAlt)}</b> (timeløn × timer, uden tillæg, pension og feriepenge). "I alt"-rækken viser lønudgiften pr. uge.${uden ? ` ${uden} med timer har ingen timeløn og er ikke regnet med.` : ''}</p>` : '');
+    + (visLoen ? '<th class="loen-start">Timer i alt</th><th>Løn</th><th>Løn i alt</th>' : '') + '</tr>' + rk + fod + '</table>'
+    + (visLoen ? `<p class="loen-note">Lønudgift for perioden: <b>${kr(iAlt)}</b> (timeløn × timer${harFast ? ', fast månedsløn × 12 / 52 pr. uge' : ''} – uden tillæg, pension og feriepenge). "I alt"-rækken viser lønudgiften pr. uge.${uden ? ` ${uden} med timer har ingen løn angivet og er ikke regnet med.` : ''}</p>` : '');
 }
 document.addEventListener('click', e => {
   const t = e.target.closest('button'); if (!t || !M) return;
@@ -881,7 +935,7 @@ function openE(i, d) {
 }
 $('#dsave').onclick = () => {
   const s = pm($('#ds').value || '0:0'), e = pm($('#de').value || '0:0');
-  if (e - s < 180) { $('#dm').textContent = 'En vagt skal være mindst 3 timer.'; return; }
+  if (e - s < M.MIN_VAGT) { $('#dm').textContent = 'En vagt skal være mindst ' + String(M.MIN_VAGT / 60).replace('.', ',') + ' timer.'; return; }
   const x = { w: W, d: E.d, p: $('#dp').value, s, e }; if (E.i != null) M.S[E.i] = x; else M.S.push(x); $('#dlg').close(); render(); aendret();
 };
 $('#ddel').onclick = () => { M.S.splice(E.i, 1); $('#dlg').close(); render(); aendret(); };
@@ -923,7 +977,7 @@ $('#start').onchange = e => {
   visTitel(); render(); aendret();
   if (flyttet) gemStatus('En vagtplan starter altid en mandag – den starter nu mandag ' + datoKort(tilDato(ny)), 'ok');
 };
-$('#rules').onclick = () => $('#rd').showModal();
+$('#rules').onclick = () => aabnRegler();
 $('#exp').onclick = () => { $('#xa').value = txt(W); $('#xd').showModal(); };
 $('#xt').onclick = () => $('#xa').value = txt(W); $('#xc').onclick = () => $('#xa').value = csv();
 $('#xcopy').onclick = () => { const a = $('#xa'); a.select(); try { navigator.clipboard.writeText(a.value); } catch (e) { document.execCommand('copy'); } $('#xcopy').textContent = 'Kopieret ✓'; setTimeout(() => $('#xcopy').textContent = 'Kopiér', 1500); };
@@ -936,5 +990,6 @@ if (window.top !== window) {
   start().catch(() => vis('loginVis'));
 }
 </script>
-<script src="medarbejdere.js?v=2026-09-24-15"></script>
+<script src="medarbejdere.js?v=2026-09-24-16"></script>
+<script src="regler.js?v=2026-09-24-16"></script>
 </body></html>

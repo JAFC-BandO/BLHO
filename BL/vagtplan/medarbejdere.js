@@ -9,7 +9,10 @@
   const job = t => (raekke.opsaetning.jobtyper || {})[t] || t;
   const kl = m => String(m / 60 | 0).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
   const tid = v => { const [a, b] = String(v || '').split(':').map(Number); return isNaN(a) ? NaN : a * 60 + (b || 0); };
-  const luk = d => d > 4 ? O.LUK_WEEKEND : O.LUK_HVERDAG;
+  // Butikkens aabningstid en dag (fra reglerne) -- null = lukket
+  const aabent = d => M.lukket(d) ? null : M.O(d);
+  const minVagt = () => M.MIN_VAGT, timerTxt = m => String(m / 60).replace('.', ',');
+  const loenTxt = l => !l || l.type == 'ingen' || l.beloeb == null ? '' : l.type == 'fast' ? Math.round(l.beloeb).toLocaleString('da-DK') + ' kr./md.' : String(l.beloeb).replace('.', ',') + ' kr./t';
   let model = [], aaben = null; // aaben: den medarbejder formularen redigerer (kopi) -- null = listen
 
   // ---------- Liste ----------
@@ -20,7 +23,7 @@
     $('#mdTitel').textContent = 'Medarbejdere';
     $('#mdListeVis').hidden = false; $('#mdFormVis').hidden = true;
     $('#mdListe').innerHTML = model.length ? model.map(m => `<li>
-      <div class="md-navn"><b>${esc(m.navn)}</b> <span class="md-job">${esc(job(m.type))}</span>${m.email ? `<span class="md-email">${esc(m.email)}</span>` : ''}${m.timeloen != null ? `<span class="md-email">${esc(String(m.timeloen).replace('.', ','))} kr./t</span>` : ''}</div>
+      <div class="md-navn"><b>${esc(m.navn)}</b> <span class="md-job">${esc(job(m.type))}</span>${m.email ? `<span class="md-email">${esc(m.email)}</span>` : ''}${loenTxt(m.loen) ? `<span class="md-email">${esc(loenTxt(m.loen))}</span>` : ''}</div>
       <div class="md-resume">${esc(O.beskriv(m))}</div>
       <div class="md-knapper"><button type="button" data-md-ret="${esc(m.id)}">Ret</button><button type="button" class="md-fjern" data-md-fjern="${esc(m.id)}">Fjern</button></div>
     </li>`).join('') : '<li class="s">Ingen medarbejdere endnu.</li>';
@@ -36,7 +39,7 @@
     const m = id ? model.find(x => x.id == id) : null;
     aaben = m ? JSON.parse(JSON.stringify(m)) : {
       id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), navn: '', email: '', type: 'S',
-      dage: [0, 1, 2, 3, 4].map(() => [O.AABEN, O.LUK_HVERDAG]).concat([null, null]), timer: { art: 'ingen' },
+      dage: [0, 1, 2, 3, 4, 5, 6].map(d => d < 5 && aabent(d) ? aabent(d).slice() : null), timer: { art: 'ingen' }, loen: { type: 'ingen', beloeb: null },
       kunFaste: false, fordeles: true, vagter: [], ny: true,
     };
     $('#mdTitel').textContent = m ? 'Ret ' + m.navn : 'Ny medarbejder';
@@ -44,7 +47,10 @@
     const a = aaben;
     $('#mdNavn').value = a.navn;
     $('#mdEmail').value = a.email || '';
-    $('#mdTimeloen').value = a.timeloen != null ? a.timeloen : '';
+    const l = a.loen || { type: 'ingen', beloeb: null };
+    $('#mdLoenType').value = l.type; $('#mdLoenBeloeb').value = l.beloeb != null ? l.beloeb : '';
+    // Butikkens aabningstider (fra reglerne), saa man kan se hvad personens tider skal holde sig indenfor
+    $('#mdAabentHjaelp').textContent = 'Butikken har åbent: ' + O.beskrivRegler(raekke.opsaetning)[0].tekst;
     // Fast raekkefoelge (databasen gemmer jobtyperne alfabetisk efter noegle)
     const orden = k => { const i = ['L', 'S', 'F', 'U'].indexOf(k); return i < 0 ? 99 : i; };
     $('#mdType').innerHTML = Object.keys(raekke.opsaetning.jobtyper || {}).sort((x, y) => orden(x) - orden(y)).map(k => `<option value="${esc(k)}">${esc(job(k))}</option>`).join('');
@@ -57,7 +63,7 @@
     $('#mdFordeles').checked = a.fordeles;
     $('#mdFejl').textContent = '';
     // Weekend-holdenes rigtige uger i den aabne plan
-    $('#mdHoldHjaelp').textContent = 'Weekend-vagter ligger i et hold, fordi alle højst arbejder hver 3. weekend. I denne plan: ' + [0, 1, 2].map(h => 'hold ' + (h + 1) + ' = ' + holdUger(h)).join('; ') + '.';
+    $('#mdHoldHjaelp').textContent = 'Weekend-vagter ligger i et hold, fordi alle højst arbejder hver ' + M.REGLER.weekendHver + '. weekend. I denne plan: ' + [...Array(M.NR).keys()].map(h => 'hold ' + (h + 1) + ' = ' + holdUger(h)).join('; ') + '.';
     tegnVagter(); opdaterFelter();
     $('#mdNavn').focus();
   }
@@ -65,9 +71,9 @@
   // et nyt kryds giver de samme tider tilbage).
   function tegnDage(dage) {
     $('#mdDage').innerHTML = DAGE.map((n, d) => {
-      const v = dage[d] || [O.AABEN, luk(d)];
-      return `<div class="md-dag ${dage[d] ? '' : 'fri'}" data-dag="${d}">
-        <label><input type="checkbox" data-dag-ja="${d}" ${dage[d] ? 'checked' : ''}> ${n}</label>
+      const v = dage[d] || aabent(d) || [525, 1035], lukket = !aabent(d);
+      return `<div class="md-dag ${dage[d] ? '' : 'fri'}" data-dag="${d}" ${lukket ? 'title="Butikken har lukket"' : ''}>
+        <label class="${lukket ? 'slukket' : ''}"><input type="checkbox" data-dag-ja="${d}" ${dage[d] ? 'checked' : ''} ${lukket ? 'disabled' : ''}> ${n}${lukket ? ' (lukket)' : ''}</label>
         <span class="md-tider">fra <input type="time" step="900" data-dag-fra="${d}" value="${kl(v[0])}" aria-label="${n} fra"> til <input type="time" step="900" data-dag-til="${d}" value="${kl(v[1])}" aria-label="${n} til"></span>
       </div>`;
     }).join('');
@@ -81,21 +87,24 @@
     const b = e.target.closest('[data-vaelg]'); if (!b) return;
     const v = b.dataset.vaelg;
     if (v == 'samme') {
-      const foerste = [0, 1, 2, 3, 4, 5, 6].find(d => dagJa(d).checked);
+      const foerste = [0, 1, 2, 3, 4, 5, 6].find(d => dagJa(d).checked && aabent(d));
       if (foerste == null) return;
       const fra = document.querySelector(`[data-dag-fra="${foerste}"]`).value, til = tid(document.querySelector(`[data-dag-til="${foerste}"]`).value);
-      [0, 1, 2, 3, 4, 5, 6].filter(d => dagJa(d).checked).forEach(d => {
+      [0, 1, 2, 3, 4, 5, 6].filter(d => dagJa(d).checked && aabent(d)).forEach(d => {
         document.querySelector(`[data-dag-fra="${d}"]`).value = fra;
-        document.querySelector(`[data-dag-til="${d}"]`).value = kl(Math.min(til, luk(d))); // weekend lukker 17:15
+        document.querySelector(`[data-dag-til="${d}"]`).value = kl(Math.min(til, aabent(d)[1])); // fx lukker weekenden tidligere
       });
       return;
     }
     const valgt = { hverdage: [0, 1, 2, 3, 4], weekend: [5, 6], alle: [0, 1, 2, 3, 4, 5, 6], ingen: [] }[v];
-    [0, 1, 2, 3, 4, 5, 6].forEach(d => saetDag(d, v == 'hverdage' || v == 'weekend' ? (valgt.includes(d) || dagJa(d).checked) : valgt.includes(d)));
+    [0, 1, 2, 3, 4, 5, 6].forEach(d => saetDag(d, !!aabent(d) && (v == 'hverdage' || v == 'weekend' ? (valgt.includes(d) || dagJa(d).checked) : valgt.includes(d))));
   });
   // Viser/skjuler de felter der kun giver mening i en bestemt situation
   function opdaterFelter() {
-    const art = $('#mdTimerArt').value;
+    const art = $('#mdTimerArt').value, lt = $('#mdLoenType').value;
+    $('#mdLoenFelt').hidden = lt == 'ingen';
+    $('#mdLoenEnhed').textContent = lt == 'fast' ? 'kr. pr. måned' : 'kr. pr. time';
+    $('#mdLoenBeloeb').placeholder = lt == 'fast' ? 'fx 32000' : 'fx 145';
     $('#mdTimerTal').hidden = art == 'ingen';
     $('#mdFridagFelt').hidden = art != 'praecis';
     $('#mdFordeles').disabled = $('#mdKunFaste').checked;
@@ -108,7 +117,7 @@
       <input type="time" step="900" data-v="${i}" data-f="s" value="${kl(x.s)}" aria-label="Fra"><span>–</span>
       <input type="time" step="900" data-v="${i}" data-f="e" value="${kl(x.e)}" aria-label="Til">
       <select data-v="${i}" data-f="hold" aria-label="Hvornår">${x.d > 4
-        ? [0, 1, 2].map(h => `<option value="${h}" ${x.hold === h ? 'selected' : ''}>Weekend-hold ${h + 1} (${esc(holdUger(h))})</option>`).join('')
+        ? [...Array(M.NR).keys()].map(h => `<option value="${h}" ${x.hold === h ? 'selected' : ''}>Weekend-hold ${h + 1} (${esc(holdUger(h))})</option>`).join('')
         : '<option value="">Hver uge</option>'}</select>
       <button type="button" class="md-slet-vagt" data-slet-vagt="${i}" title="Fjern den faste vagt" aria-label="Fjern den faste vagt">✕</button>
     </div>`).join('') : '<p class="s md-ingen">Ingen faste vagter.</p>';
@@ -125,27 +134,28 @@
     aaben.vagter.splice(+b.dataset.sletVagt, 1); tegnVagter();
   });
   $('#mdNyVagt').onclick = () => { aaben.vagter.push({ d: 0, s: 600, e: 780, hold: null }); tegnVagter(); };
-  ['#mdTimerArt', '#mdKunFaste'].forEach(s => $(s).addEventListener('change', opdaterFelter));
+  ['#mdTimerArt', '#mdKunFaste', '#mdLoenType'].forEach(s => $(s).addEventListener('change', opdaterFelter));
 
   // ---------- Gem ----------
   function laesForm() {
     const a = aaben, fejl = [];
     a.navn = $('#mdNavn').value.trim();
     a.email = $('#mdEmail').value.trim();
-    const tl = String($('#mdTimeloen').value).trim().replace(',', '.');
-    a.timeloen = tl === '' ? null : Number(tl);
-    if (a.timeloen != null && !(a.timeloen > 0 && a.timeloen < 2000)) fejl.push('Timelønnen skal være et tal mellem 0 og 2000 kr. – eller lad feltet være tomt.');
+    const lt = $('#mdLoenType').value, lb = String($('#mdLoenBeloeb').value).trim().replace(',', '.');
+    a.loen = { type: lt, beloeb: lt == 'ingen' || lb === '' ? null : Number(lb) };
+    if (lt == 'time' && !(a.loen.beloeb > 0 && a.loen.beloeb < 2000)) fejl.push('Skriv timelønnen (mellem 0 og 2.000 kr. pr. time) – eller vælg "Ikke angivet".');
+    if (lt == 'fast' && !(a.loen.beloeb > 0 && a.loen.beloeb < 300000)) fejl.push('Skriv månedslønnen (mellem 0 og 300.000 kr.) – eller vælg "Ikke angivet".');
     if (a.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a.email)) fejl.push('E-mailen ser ikke rigtig ud – tjek den, eller lad feltet være tomt.');
     else if (a.email && model.some(m => m.id != a.id && (m.email || '').toLowerCase() == a.email.toLowerCase())) fejl.push('En anden medarbejder har allerede den e-mail.');
     a.type = $('#mdType').value;
     if (!a.navn) fejl.push('Skriv et navn.');
     else if (model.some(m => m.id != a.id && m.navn.toLowerCase() == a.navn.toLowerCase())) fejl.push('Der findes allerede en medarbejder med det navn.');
     a.dage = DAGE.map((n, d) => {
-      if (!dagJa(d).checked) return null;
+      if (!dagJa(d).checked || !aabent(d)) return null;
       const s = tid(document.querySelector(`[data-dag-fra="${d}"]`).value), e = tid(document.querySelector(`[data-dag-til="${d}"]`).value);
       if (isNaN(s) || isNaN(e) || s >= e) { fejl.push(`${n}: "fra" skal være før "til".`); return null; }
-      if (s < O.AABEN || e > luk(d)) fejl.push(`${n}: butikken har åbent ${kl(O.AABEN)}–${kl(luk(d))}.`);
-      if (e - s < 180) fejl.push(`${n}: der skal være mindst 3 timer (en vagt er mindst 3 timer).`);
+      if (s < aabent(d)[0] || e > aabent(d)[1]) fejl.push(`${n}: butikken har åbent ${kl(aabent(d)[0])}–${kl(aabent(d)[1])}.`);
+      if (e - s < minVagt()) fejl.push(`${n}: der skal være mindst ${timerTxt(minVagt())} timer (en vagt er mindst ${timerTxt(minVagt())} timer).`);
       return [s, e];
     });
     const art = $('#mdTimerArt').value, t = parseFloat(String($('#mdTimerT').value).replace(',', '.'));
@@ -157,8 +167,9 @@
       const n = DAGE[x.d].toLowerCase();
       if (isNaN(x.s) || isNaN(x.e) || x.s >= x.e) fejl.push(`Fast vagt ${n}: "fra" skal være før "til".`);
       else {
-        if (x.s < O.AABEN || x.e > luk(x.d)) fejl.push(`Fast vagt ${n}: butikken har åbent ${kl(O.AABEN)}–${kl(luk(x.d))}.`);
-        if (x.e - x.s < 180) fejl.push(`Fast vagt ${n}: en vagt skal være mindst 3 timer.`);
+        if (!aabent(x.d)) fejl.push(`Fast vagt ${n}: butikken har lukket om ${n}en.`);
+        else if (x.s < aabent(x.d)[0] || x.e > aabent(x.d)[1]) fejl.push(`Fast vagt ${n}: butikken har åbent ${kl(aabent(x.d)[0])}–${kl(aabent(x.d)[1])}.`);
+        if (x.e - x.s < minVagt()) fejl.push(`Fast vagt ${n}: en vagt skal være mindst ${timerTxt(minVagt())} timer.`);
       }
     });
     if (a.kunFaste && !a.vagter.length) fejl.push('"Kun de faste vagter" kræver mindst én fast vagt.');
