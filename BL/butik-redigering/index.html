@@ -974,6 +974,13 @@
   let storeBackgroundBackup = null;
 
   const loginWrap = document.getElementById('loginWrap');
+  // Er der en gemt session (fx naar man kommer tilbage fra vagtplanen), skjules login-kortet
+  // fra start -- ellers blinker det frem, mens sessionen tjekkes over netvaerket, og det ser
+  // ud som om man er blevet logget ud. visLogin() viser det igen, hvis sessionen ikke holder.
+  function visLogin() { loginWrap.style.display = 'flex'; }
+  try {
+    if (localStorage.getItem('sb-butik-redigering-auth') && !/[#&]type=recovery/.test(location.hash)) loginWrap.style.display = 'none';
+  } catch (e) { /* localStorage blokeret -- saa vises login bare som hidtil */ }
   const app = document.getElementById('app');
   const loginMsg = document.getElementById('loginMsg');
   const saveMsg = document.getElementById('saveMsg');
@@ -1234,7 +1241,7 @@
 
   async function loadEverything() {
     const { data: { user } } = await client.auth.getUser();
-    if (!user) return;
+    if (!user) { visLogin(); return; }
 
     const { data: brugerRow, error: brugerErr } = await client
       .from('brugere')
@@ -1243,6 +1250,7 @@
       .single();
 
     if (brugerErr || !brugerRow) {
+      visLogin();
       showMsg(loginMsg, 'Din bruger er ikke koblet til en butik endnu. Kontakt admin.', false);
       return;
     }
@@ -2982,13 +2990,14 @@
   });
 
   client.auth.getSession().then(({ data: { session } }) => {
-    if (erPasswordNulstilling) { visSaetPasswordKort('nulstil'); return; }
+    if (erPasswordNulstilling) { visLogin(); visSaetPasswordKort('nulstil'); return; }
     if (session) checkPasswordThenProceed();
-  });
+    else visLogin();
+  }).catch(visLogin);
 
   async function checkPasswordThenProceed() {
     const { data: { user } } = await client.auth.getUser();
-    if (!user) return;
+    if (!user) { visLogin(); return; }
 
     // Logges HER (ikke kun i loginBtn's klik-haandtering) -- ellers blev et login KUN logget
     // hvis man rent faktisk skrev email+password ind. Men Supabase gemmer sessionen i
@@ -3006,6 +3015,7 @@
       .single();
 
     if (bruger && bruger.skal_saette_password) {
+      visLogin();
       visSaetPasswordKort('foerste');
     } else {
       await loadEverything();

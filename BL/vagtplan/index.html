@@ -3,61 +3,94 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>Vagtplan</title>
-<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg?v=4">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="motor.js?v=2026-09-24-1"></script>
 <style>
-:root{--bg:#f7f5f2;--fg:#231f2b;--mut:#6c6577;--card:#fff;--bd:#ddd6e4;--L:#7355c7;--S:#1f8f83;--U:#d9822b;--bad:#c93a3a;--ok:#2b8a4f;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17141c;--fg:#efeaf5;--mut:#a59db3;--card:#221e2b;--bd:#3a3347;--L:#a68cf0;--S:#4fc4b6;--U:#f0a14f;--bad:#ff7a7a;--ok:#6fd49a}}
-:root[data-theme="dark"]{--bg:#17141c;--fg:#efeaf5;--mut:#a59db3;--card:#221e2b;--bd:#3a3347;--L:#a68cf0;--S:#4fc4b6;--U:#f0a14f;--bad:#ff7a7a;--ok:#6fd49a}
-html{scroll-padding-top:env(safe-area-inset-top,0px)}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 "Trebuchet MS",Verdana,sans-serif;padding:14px}
-h1{font:700 22px/1.2 Georgia,"Times New Roman",serif;margin:0 0 2px}p.s{margin:0 0 12px;color:var(--mut)}
+/* Topbar, login og grundstil er de samme som i butik-redigering, saa de to sider ser ens ud. */
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f4f4f2;margin:0;padding:0;color:#1a1a1a;font-size:15px;line-height:1.4}
+.login-wrap{max-width:420px;margin:0 auto;padding:32px 20px;min-height:100vh;display:flex;flex-direction:column;justify-content:center}
+.login-logo-panel{background:#040DB1;border-radius:12px;padding:28px 20px;display:flex;justify-content:center;margin-bottom:16px;box-shadow:0 2px 12px rgba(4,13,177,.25)}
+.login-logo-panel img{width:100%;max-width:220px;height:auto;display:block}
+.card{background:#fff;border-radius:12px;padding:32px 24px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+.card h1{font-size:20px;margin:0 0 4px;color:#040DB1}.subtitle{color:#666;font-size:14px;margin-bottom:24px}
+.card label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;margin-top:16px;color:#333}
+.card input{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;font-family:inherit}
+.primary-btn{width:100%;padding:12px;font-size:15px;margin-top:20px;border:none;border-radius:8px;background:#040DB1;color:#fff;font-weight:600;cursor:pointer}
+.primary-btn:hover{background:#0311d4}
+.msg{margin-top:14px;font-size:14px;padding:10px 12px;border-radius:8px;display:none}.msg.err{background:#fdecea;color:#b92a15;display:block}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:#fff;border-bottom:1px solid #e2e2e2}
+.topbar-left{display:flex;align-items:center;gap:8px}
+.butik-badge{display:inline-block;background:#eef0fd;color:#040DB1;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;border:none;font-family:inherit}
+.pill{display:inline-block;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;text-decoration:none}
+.pill.link{background:#eef0fd;color:#040DB1}.pill.aktiv{background:#040DB1;color:#fff}
+.topbar-actions{display:flex;align-items:center;gap:10px}
+.logout{font-size:13px;color:#888;cursor:pointer;text-decoration:underline}
+#gemStatus{font-size:13px;color:#888}#gemStatus.ok{color:#1e7e34}#gemStatus.bad{color:#b92a15;font-weight:700}
+@media (max-width:760px){.topbar{flex-wrap:wrap;gap:8px;padding:10px 12px}.topbar-actions{flex-wrap:wrap;gap:8px}}
+.indhold{padding:16px 20px}
+.laeser{text-align:center;color:#888;padding:20vh 0}
+
+/* Selve vagtplanen -- som den oprindelige, bare i sidens farver. */
+:root{--bg:#f4f4f2;--fg:#1a1a1a;--mut:#6c6577;--card:#fff;--bd:#e2e2e2;--L:#7355c7;--S:#1f8f83;--U:#d9822b;--bad:#c93a3a;--ok:#2b8a4f;--brand:#040DB1}
+.indhold h1{font-size:20px;margin:0 0 2px;color:var(--brand)}p.s{margin:0 0 12px;color:var(--mut)}
 .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
-button{font:inherit;cursor:pointer;border:1px solid var(--bd);background:var(--card);color:var(--fg);border-radius:8px;padding:6px 12px}
-button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--L);outline-offset:1px}
-.tab.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}.pri{background:var(--L);color:#fff;border-color:var(--L)}
+.indhold button,dialog button{font:inherit;font-size:14px;cursor:pointer;border:1px solid var(--bd);background:var(--card);color:var(--fg);border-radius:8px;padding:6px 12px}
+button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+.indhold .tab.on{background:var(--brand);color:#fff;border-color:var(--brand)}.indhold .pri,dialog .pri{background:var(--brand);color:#fff;border-color:var(--brand)}
 .bad{color:var(--bad)}.ok{color:var(--ok)}#stat{margin-left:auto}
 .wrap{overflow-x:auto;padding-bottom:6px}.grid{display:grid;grid-template-columns:repeat(7,minmax(158px,1fr));gap:8px;min-width:1150px}
 .day{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:8px}.day.err{border-color:var(--bad)}
 .day h3{margin:0 0 6px;font-size:15px}.blk{border-top:1px solid var(--bd);padding:4px 0}.bh{font-size:12px;color:var(--mut);margin-bottom:3px}
-.chip{display:block;width:100%;text-align:left;margin:2px 0;padding:4px 8px;border:0;border-left:5px solid;font-size:13px;background:var(--bg)}
-.chip.rL{border-color:var(--L)}.chip.rS{border-color:var(--S)}.chip.rU{border-color:var(--U)}.chip.uk{border-style:dashed;border-width:1px 1px 1px 5px;border-color:var(--mut);color:var(--mut)}
-.add{width:100%;margin-top:6px;border-style:dashed;color:var(--mut);font-size:13px}.di{font-size:12px;color:var(--bad);margin-top:5px}
-h2{font:700 16px Georgia,serif;margin:18px 0 6px}ul.is{list-style:none;padding:0;margin:0}ul.is li{padding:4px 0;border-bottom:1px solid var(--bd)}ul.is button{border:0;background:none;padding:0;text-align:left;color:var(--bad)}
+.indhold .chip{display:block;width:100%;text-align:left;margin:2px 0;padding:4px 8px;border:0;border-left:5px solid;border-radius:6px;font-size:13px;background:var(--bg)}
+.indhold .chip.rL{border-color:var(--L)}.indhold .chip.rS{border-color:var(--S)}.indhold .chip.rU{border-color:var(--U)}.indhold .chip.uk{border-style:dashed;border-width:1px 1px 1px 5px;border-color:var(--mut);color:var(--mut)}
+.indhold .add{width:100%;margin-top:6px;border-style:dashed;color:var(--mut);font-size:13px}.di{font-size:12px;color:var(--bad);margin-top:5px}
+.indhold h2{font-size:16px;margin:18px 0 6px}ul.is{list-style:none;padding:0;margin:0}ul.is li{padding:4px 0;border-bottom:1px solid var(--bd)}.indhold ul.is button{border:0;background:none;padding:0;text-align:left;color:var(--bad)}
 table{border-collapse:collapse;background:var(--card)}td,th{border:1px solid var(--bd);padding:4px 10px;text-align:right}th:first-child,td:first-child{text-align:left}td.w{color:var(--bad);font-weight:700}
-dialog{border:1px solid var(--bd);border-radius:12px;background:var(--card);color:var(--fg);max-width:min(440px,92vw);width:100%}
+dialog{border:1px solid var(--bd);border-radius:12px;background:var(--card);color:var(--fg);max-width:min(440px,92vw);width:100%;font-family:inherit}
 dialog label{display:block;margin:8px 0}dialog select,dialog input,textarea{width:100%;font:inherit;padding:6px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--fg)}
 textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-/* Login, adgang og gem-status -- ikke en del af den oprindelige vagtplan */
-.top{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:13px;color:var(--mut)}
-.top a{color:var(--L)}.top .hojre{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.boks{max-width:360px;margin:12vh auto 0;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:22px}
-.boks label{display:block;margin:10px 0 4px;font-size:13px;color:var(--mut)}.boks input{width:100%;font:inherit;padding:8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--fg)}
-.boks .pri{width:100%;margin-top:16px;padding:9px}.fejl{color:var(--bad);font-size:13px;margin-top:10px;min-height:1em}
-#gemStatus.bad{font-weight:700}
-.konflikt{display:none;background:var(--card);border:1px solid var(--bad);border-radius:10px;padding:10px 12px;margin:8px 0;color:var(--bad)}
+.konflikt{display:none;background:#fdecea;border-radius:8px;padding:10px 12px;margin:8px 0;color:#b92a15}
 </style></head><body>
 
-<div id="loginVis" class="boks" hidden>
-  <h1>Vagtplan</h1>
-  <p class="s">Log ind med din Børneloppen-konto.</p>
-  <form id="loginForm">
-    <label for="email">Email</label><input id="email" type="email" autocomplete="username" required>
-    <label for="password">Adgangskode</label><input id="password" type="password" autocomplete="current-password" required>
-    <button class="pri" type="submit">Log ind</button>
-    <div class="fejl" id="loginFejl"></div>
-  </form>
+<div class="laeser" id="laeserVis">Indlæser…</div>
+
+<div class="login-wrap" id="loginVis" hidden>
+  <div class="login-logo-panel"><img src="../logo-boerneloppen.svg" alt="Børneloppen"></div>
+  <div class="card">
+    <h1>Log ind</h1>
+    <div class="subtitle">Vagtplan</div>
+    <form id="loginForm" style="margin:0">
+      <label for="email">Email</label><input id="email" type="email" autocomplete="username" required>
+      <label for="password">Adgangskode</label><input id="password" type="password" autocomplete="current-password" required>
+      <button class="primary-btn" type="submit">Log ind</button>
+    </form>
+    <div class="msg" id="loginFejl"></div>
+  </div>
 </div>
 
-<div id="ingenAdgangVis" class="boks" hidden>
-  <h1>Ingen adgang</h1>
-  <p class="s">Din konto har ikke adgang til vagtplanen.</p>
-  <div class="row"><a href="../butik-redigering/">Til butik-redigering</a><button id="logudIngenAdgang">Log ud</button></div>
+<div class="login-wrap" id="ingenAdgangVis" hidden>
+  <div class="login-logo-panel"><img src="../logo-boerneloppen.svg" alt="Børneloppen"></div>
+  <div class="card">
+    <h1>Ingen adgang</h1>
+    <div class="subtitle" id="ingenAdgangTekst">Din konto har ikke adgang til vagtplanen.</div>
+    <a class="pill link" href="../butik-redigering/">← Butik-redigering</a>
+    <span class="logout" id="logudIngenAdgang" style="margin-left:10px">Log ud</span>
+  </div>
 </div>
 
 <div id="app" hidden>
-<div class="top"><a href="../butik-redigering/">← Butik-redigering</a><span class="hojre"><select id="planValg" hidden aria-label="Vælg butik"></select><span id="gemStatus"></span><button id="logud">Log ud</button></span></div>
+<div class="topbar">
+  <div class="topbar-left">
+    <span class="butik-badge" id="butikNavn"></span>
+    <select class="butik-badge" id="planValg" hidden aria-label="Vælg butik" style="cursor:pointer"></select>
+    <a class="pill link" href="../butik-redigering/">Butik-redigering</a>
+    <span class="pill aktiv">Vagtplan</span>
+  </div>
+  <div class="topbar-actions"><span id="gemStatus"></span><span class="logout" id="logud">Log ud</span></div>
+</div>
+<div class="indhold">
 <h1 id="titel">Vagtplan</h1>
 <p class="s">Rullende 4-ugers plan. Klik på en vagt for at rette den, eller på "+ vagt" for at tilføje. Reglerne tjekkes automatisk.</p>
 <div class="konflikt" id="konflikt">Planen er blevet ændret af en anden, siden du åbnede den. Din seneste ændring er <b>ikke</b> gemt. <button id="genindlaes">Hent den nyeste plan</button></div>
@@ -66,6 +99,7 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
 <h2>Problemer</h2><ul class="is" id="iss"></ul>
 <h2>Ønsker der ikke er opfyldt</h2><ul class="is" id="soft"></ul>
 <h2>Timer pr. uge</h2><div class="wrap" id="hrs"></div>
+</div>
 </div>
 
 <dialog id="dlg"><h3 id="dt">Vagt</h3>
@@ -92,6 +126,7 @@ const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { stora
 const $ = s => document.querySelector(s);
 const esc = v => String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pm = t => { const [a, b] = t.split(':'); return a * 60 + +b; };
+const butikNavn = r => (r.butikker && r.butikker.navn) || '';
 
 let planer = [];        // de vagtplan-raekker brugeren kan se (i praksis kun Horsens)
 let raekke = null;      // den valgte raekke: { id, opdateret_at, ... }
@@ -99,7 +134,12 @@ let M = null;           // motoren for den valgte raekkes opsaetning
 let W = 0, armed = false, E = null;
 let gemKaede = Promise.resolve(), konflikt = false;
 
-function vis(id) { ['loginVis', 'ingenAdgangVis', 'app'].forEach(x => { $('#' + x).hidden = x != id; }); }
+function vis(id) { ['laeserVis', 'loginVis', 'ingenAdgangVis', 'app'].forEach(x => { $('#' + x).hidden = x != id; }); }
+
+// `plan` i databasen: { t2, vagter: [{w,d,p,s,e}, ...] }. t2 er "2 pers. fra"-knappen, som
+// skal gemmes sammen med planen -- en plan lavet til 15:15 giver ellers "problemer", naar
+// siden aabnes igen og knappen er tilbage paa 15:00. (Aeldre format: bare listen af vagter.)
+const lesPlan = p => Array.isArray(p) ? { t2: 900, vagter: p } : p && Array.isArray(p.vagter) ? { t2: p.t2 == 915 ? 915 : 900, vagter: p.vagter } : { t2: 900, vagter: [] };
 
 // ---------- Login / adgang ----------
 async function start() {
@@ -110,34 +150,37 @@ async function start() {
   const { data: adg } = await client.from('vagtplan_adgang').select('bruger_id').eq('bruger_id', user.id).maybeSingle();
   if (!adg) { vis('ingenAdgangVis'); return; }
   const { data, error } = await client.from('vagtplan').select('id, butik_id, opsaetning, plan, opdateret_at, butikker(navn)');
-  if (error || !data || !data.length) { vis('ingenAdgangVis'); $('#ingenAdgangVis .s').textContent = error ? 'Kunne ikke hente vagtplanen. Prøv igen om lidt.' : 'Der er ikke oprettet nogen vagtplan endnu.'; return; }
-  planer = data.sort((a, b) => ((a.butikker && a.butikker.navn) || '').localeCompare((b.butikker && b.butikker.navn) || '', 'da'));
-  $('#planValg').innerHTML = planer.map(p => `<option value="${esc(p.id)}">${esc(p.butikker ? p.butikker.navn : p.id)}</option>`).join('');
+  if (error || !data || !data.length) { vis('ingenAdgangVis'); $('#ingenAdgangTekst').textContent = error ? 'Kunne ikke hente vagtplanen. Prøv igen om lidt.' : 'Der er ikke oprettet nogen vagtplan endnu.'; return; }
+  planer = data.sort((a, b) => butikNavn(a).localeCompare(butikNavn(b), 'da'));
+  $('#planValg').innerHTML = planer.map(p => `<option value="${esc(p.id)}">${esc(butikNavn(p) || p.id)}</option>`).join('');
   $('#planValg').hidden = planer.length < 2;
+  $('#butikNavn').hidden = planer.length >= 2;
   vis('app');
   vaelgPlan(planer[0]);
 }
 function vaelgPlan(r) {
   raekke = r; konflikt = false; $('#konflikt').style.display = 'none';
-  const t2 = M ? M.T2 : 900;
-  M = lavVagtplanMotor(r.opsaetning); M.T2 = t2;
-  M.S = Array.isArray(r.plan) ? r.plan : [];
+  const pl = lesPlan(r.plan);
+  M = lavVagtplanMotor(r.opsaetning); M.T2 = pl.t2; M.S = pl.vagter;
+  $('#t2').textContent = '2 pers. fra ' + M.f(M.T2);
+  $('#butikNavn').textContent = butikNavn(r);
   $('#titel').textContent = r.opsaetning.titel || 'Vagtplan';
   document.title = r.opsaetning.titel || 'Vagtplan';
   $('#rt').innerHTML = (r.opsaetning.regler || []).map(x => `<p><b>${esc(x.titel)}:</b> ${esc(x.tekst)}</p>`).join('');
-  $('#gemStatus').textContent = ''; $('#gemStatus').className = '';
+  gemStatus('');
   if (!M.S.length) { M.gen(); save(); }
   render();
 }
 $('#loginForm').addEventListener('submit', async e => {
   e.preventDefault();
-  $('#loginFejl').textContent = '';
+  $('#loginFejl').className = 'msg';
   const { error } = await client.auth.signInWithPassword({ email: $('#email').value.trim(), password: $('#password').value });
-  if (error) { $('#loginFejl').textContent = 'Forkert email eller adgangskode.'; return; }
+  if (error) { $('#loginFejl').textContent = 'Forkert email eller adgangskode.'; $('#loginFejl').className = 'msg err'; return; }
   $('#password').value = '';
+  vis('laeserVis');
   start();
 });
-async function logud() { await client.auth.signOut(); location.reload(); }
+async function logud() { await client.auth.signOut(); location.href = '../butik-redigering/'; }
 $('#logud').onclick = logud; $('#logudIngenAdgang').onclick = logud;
 $('#planValg').onchange = e => vaelgPlan(planer.find(p => p.id == e.target.value));
 
@@ -148,7 +191,7 @@ $('#planValg').onchange = e => vaelgPlan(planer.find(p => p.id == e.target.value
 function gemStatus(t, cls) { $('#gemStatus').textContent = t; $('#gemStatus').className = cls || ''; }
 function save() {
   if (konflikt) return;
-  const r = raekke, plan = JSON.parse(JSON.stringify(M.S));
+  const r = raekke, plan = { t2: M.T2, vagter: JSON.parse(JSON.stringify(M.S)) };
   gemStatus('Gemmer…');
   gemKaede = gemKaede.then(async () => {
     if (konflikt || r != raekke) return;
@@ -226,12 +269,12 @@ $('#gen').onclick = e => {
 };
 const txt = w => M.D.map((n, d) => n + '\n' + (grp(w, d).map(a => M.f(a[0].s) + ' - ' + M.f(a[0].e) + ': ' + a.map(x => M.nmi(x.i) + ' (' + M.R[M.P[x.p][1]] + ')').join(', ')).join('\n') || '–')).join('\n\n');
 const csv = () => 'Uge;Dag;Start;Slut;Medarbejder;Jobtype\n' + M.S.map((x, i) => ({ ...x, i })).sort((a, b) => a.w - b.w || a.d - b.d || a.s - b.s).map(x => [x.w + 1, M.D[x.d], M.f(x.s), M.f(x.e), M.nmi(x.i), M.R[M.P[x.p][1]]].join(';')).join('\n');
-$('#t2').onclick = () => { M.T2 = M.T2 == 900 ? 915 : 900; $('#t2').textContent = '2 pers. fra ' + M.f(M.T2); render(); };
+$('#t2').onclick = () => { M.T2 = M.T2 == 900 ? 915 : 900; $('#t2').textContent = '2 pers. fra ' + M.f(M.T2); save(); render(); };
 $('#rules').onclick = () => $('#rd').showModal(); $('#rx').onclick = () => $('#rd').close();
 $('#exp').onclick = () => { $('#xa').value = txt(W); $('#xd').showModal(); };
 $('#xt').onclick = () => $('#xa').value = txt(W); $('#xc').onclick = () => $('#xa').value = csv();
 $('#xx').onclick = () => $('#xd').close();
 $('#xcopy').onclick = () => { const a = $('#xa'); a.select(); try { navigator.clipboard.writeText(a.value); } catch (e) { document.execCommand('copy'); } $('#xcopy').textContent = 'Kopieret ✓'; setTimeout(() => $('#xcopy').textContent = 'Kopiér', 1500); };
 
-start();
+start().catch(() => vis('loginVis'));
 </script></body></html>
