@@ -73,6 +73,9 @@
       // (1 = hver weekend), begge = maa tage baade loerdag og soendag samme weekend.
       // Standard = samme regel som personalet (hver 3. weekend, én dag).
       EKSTRA_REGEL: { afstand: 3, begge: false },
+      // Aftaler paa bestemte datoer: 'p|w|d' -> null (fri hele dagen) eller [fra, til] (kan kun
+      // i det tidsrum). Siden laegger dem ind ud fra planens datoer (plan.undtagelser).
+      UNDTAG: new Map(),
     };
     // Krav pr. 15 minutter for en dag: mn = mindst, mx = hoejst paa arbejde. Afhaenger af T2
     // (hvornaar den fleksible linje starter), saa cachen nulstilles naar T2 aendres.
@@ -237,9 +240,18 @@
     // Hvornaar en medarbejder kan arbejde en given dag. tid.hverdag/tid.weekend: udeladt =
     // hele aabningstiden, null = aldrig, [start, slut] hvor null i et felt = aabning/lukning.
     // tid.dage: { dag: [start, slut] } for enkelte dage med andre tider end resten.
-    function av(p, d) {
+    // w (valgfri) = planens uge: saa gaelder en aftale paa datoen (M.UNDTAG) i stedet for det
+    // normale -- ogsaa naar den giver flere timer end normalt ("kan godt lørdag d. 10.").
+    const undtagelse = (p, w, d) => M.UNDTAG.size ? M.UNDTAG.get(p + '|' + w + '|' + d) : undefined;
+    function av(p, d, w) {
       const [a, b] = O(d), t = TID[p] || {};
       if (lukket(d)) return null;
+      const u = w != null ? undtagelse(p, w, d) : undefined;
+      if (u !== undefined) {
+        if (!u) return null;
+        const s = Math.max(a, u[0]), e = Math.min(b, u[1]);
+        return s < e ? [s, e] : null;
+      }
       if (t.ikkeDage && t.ikkeDage.includes(d)) return null;
       const v = t.dage && t.dage[d] !== undefined ? t.dage[d] : d > 4 ? t.weekend : t.hverdag;
       if (v === null) return null;
@@ -263,7 +275,7 @@
       return v;
     }
     function best(p, w, d, lens, nz) {
-      const v = av(p, d); if (!v) return null; const cv = cov(w, d); let r = null;
+      const v = av(p, d, w); if (!v) return null; const cv = cov(w, d); let r = null;
       for (const L of lens) for (let s = v[0]; s + L <= v[1]; s += 15) {
         const q = sc(p, cv, s, s + L), x = q + (nz ? Math.random() * nz : 0);
         if (!r || x > r.v) r = { s, e: s + L, v: x, q };
@@ -275,27 +287,39 @@
         fn = i => k ? need(a + i * 15, d) - cv.c[i] > 0 && (k != 2 || a + i * 15 < SKIFT) : RG.ansvarlig && cv.m[i] == 0;
       for (let i = 0; i < n; i++) if (fn(i)) { let j = i; while (j < n && fn(j)) j++; return [a + i * 15, a + j * 15]; }
     }
-    function genWeek(w, n) {
+    // Daekker huller i dagens bemanding med ekstra personer (k: se run()).
+    function daekHuller(w, d, k) {
+      let g;
+      while (g = run(w, d, k)) {
+        const [a, b] = O(d), cv = cov(w, d); let bw = null;
+        for (let s = a; s <= g[0]; s += 15) for (const e of [Math.max(g[1], s + MIN_VAGT), b]) {
+          if (e > b || e < g[1] || e - s < MIN_VAGT) continue; let pen = 0;
+          for (let t = s; t < e; t += 15) { const c = cv.c[(t - a) / 15]; pen += c >= maks(t, d) ? 1000 : (need(t, d) - c <= 0 ? 1 : 0); }
+          if (!bw || pen <= bw.pen) bw = { s, e, pen };
+        }
+        if (!bw) bw = { s: g[0], e: g[1], pen: 0 };
+        M.S.push({ w, d, p: 'uk', s: bw.s, e: bw.e });
+      }
+    }
+    // Kan p tage vagten s-e dag d i uge w (ogsaa efter aftaler paa datoen)?
+    const kanTage = (p, w, d, s, e) => { const v = av(p, d, w); return !!v && s >= v[0] && e <= v[1]; };
+    // laast: vagter der er laast fast paa en bestemt dato ({ w, d, p, s, e, laast: true }) --
+    // de laegges foerst og flyttes aldrig.
+    function genWeek(w, n, laast) {
       M.S = M.S.filter(x => x.w != w);
       const S = M.S;
       const add = (d, p, s, e) => S.push({ w, d, p, s, e });
       const has = (d, p) => S.some(x => x.w == w && x.d == d && x.p == p);
       const put = (p, d, l, min) => { if (d > 4) return; const r = best(p, w, d, l, n); if (r && r.q >= min) add(d, p, r.s, r.e); };
-      const uk = (d, k) => {
-        let g;
-        while (g = run(w, d, k)) {
-          const [a, b] = O(d), cv = cov(w, d); let bw = null;
-          for (let s = a; s <= g[0]; s += 15) for (const e of [Math.max(g[1], s + MIN_VAGT), b]) {
-            if (e > b || e < g[1] || e - s < MIN_VAGT) continue; let pen = 0;
-            for (let t = s; t < e; t += 15) { const c = cv.c[(t - a) / 15]; pen += c >= maks(t, d) ? 1000 : (need(t, d) - c <= 0 ? 1 : 0); }
-            if (!bw || pen <= bw.pen) bw = { s, e, pen };
-          }
-          if (!bw) bw = { s: g[0], e: g[1], pen: 0 }; add(d, 'uk', bw.s, bw.e);
-        }
-      };
+      const uk = (d, k) => daekHuller(w, d, k);
+      (laast || []).forEach(x => { if (x.w == w) S.push(Object.assign({}, x)); });
+      const harLaast = (d, p) => S.some(x => x.laast && x.w == w && x.d == d && x.p == p);
       // Faste vagter. `rotation` = kun de uger hvor uge % (antal weekend-hold) er lig vaerdien.
-      (C.faste || []).forEach(x => { if (x.rotation == null || holdAf(w) == x.rotation) add(x.d, x.p, x.s, x.e); });
-      (ROT[holdAf(w)] || []).forEach(x => add(x.d, afloest(w, x) ? 'uk' : x.p, x.s, x.e));
+      // Har personen fri den dag (aftale paa datoen), tager en ekstra person vagten -- har hun/han
+      // en laast vagt samme dag, er det den der gaelder.
+      const fastVagt = (x, p) => { if (!harLaast(x.d, x.p)) add(x.d, p == 'uk' || kanTage(p, w, x.d, x.s, x.e) ? p : 'uk', x.s, x.e); };
+      (C.faste || []).forEach(x => { if (x.rotation == null || holdAf(w) == x.rotation) fastVagt(x, x.p); });
+      (ROT[holdAf(w)] || []).forEach(x => fastVagt(x, afloest(w, x) ? 'uk' : x.p));
       for (let d = 0; d < 5; d++) uk(d, 2);
       for (let d = 0; d < 7; d++) { (C.hulFyldere || []).forEach(p => { if (run(w, d, 0) && !has(d, p)) put(p, d, LEN, 1); }); uk(d, 0); }
       (C.ekstraDage || []).forEach(x => {
@@ -306,11 +330,11 @@
     }
     const hrs = (p, w) => M.S.filter(x => x.p == p && x.w == w).reduce((a, x) => a + (x.e - x.s) / 60, 0);
     function gen() {
-      const all = [];
+      const all = [], laast = M.S.filter(x => x.laast).map(x => Object.assign({}, x));
       for (let w = 0; w < NW; w++) {
         let bs = null, bv = 1e9;
         for (let t = 0; t < 70 && (bv >= 1e6 || t < 25) && bv > 0; t++) {
-          M.S = all.slice(); genWeek(w, t ? 12 : 0);
+          M.S = all.slice(); genWeek(w, t ? 12 : 0, laast);
           const u = M.S.filter(x => x.w == w && x.p == 'uk'); let ov = 0;
           for (let d = 0; d < 7; d++) { const k = krav(d); cov(w, d).c.forEach((c, i) => { if (c > k.mx[i]) ov++; }); }
           const v = ov * 1e7 + u.reduce((a, x) => a + x.e - x.s, 0) * 10 + u.length + (C.maalTimer || []).reduce((a, x) => a + Math.max(0, x.timer * 60 - hrs(x.p, w) * 60) / 10, 0);
@@ -349,9 +373,13 @@
           const sh = dag[w * 7 + d];
           sh.forEach(x => { if (x.e - x.s < MIN_VAGT) emit(w, d, 0, () => `${nmi(x.i)} ${f(x.s)}–${f(x.e)}: vagten er under ${timer(MIN_VAGT)} timer`); });
           sh.forEach(x => {
-            if (x.p == 'uk') return; const v = av(x.p, d);
-            if (!v || x.s < v[0] || x.e > v[1]) emit(w, d, 0, () => `${P[x.p][0]} kan ikke arbejde ${f(x.s)}–${f(x.e)}`);
-            if (KUN_FASTE.has(x.p) && !FASTE_VAGTER.has([w, d, x.p, x.s, x.e].join())) emit(w, d, 0, () => `${P[x.p][0]} har kun sine faste vagter (se Regler)`);
+            if (x.p == 'uk') return; const v = av(x.p, d, w);
+            if (!v || x.s < v[0] || x.e > v[1]) {
+              const u = undtagelse(x.p, w, d);
+              emit(w, d, 0, () => u === null ? `${P[x.p][0]} har fri denne dag`
+                : u ? `${P[x.p][0]} kan kun ${f(u[0])}–${f(u[1])} denne dag` : `${P[x.p][0]} kan ikke arbejde ${f(x.s)}–${f(x.e)}`);
+            }
+            if (KUN_FASTE.has(x.p) && !x.laast && !FASTE_VAGTER.has([w, d, x.p, x.s, x.e].join())) emit(w, d, 0, () => `${P[x.p][0]} har kun sine faste vagter (se Regler)`);
             if (sh.some(y => y.i != x.i && y.p == x.p && y.s < x.e && x.s < y.e)) emit(w, d, 0, () => `${P[x.p][0]} har overlappende vagter`);
           });
           const [a, b] = O(d), n = (b - a) / 15, c = Array(n).fill(0), m = Array(n).fill(0);
@@ -396,6 +424,12 @@
       gennemgaa((w, d, soft, t) => I.push(soft ? { w, d, soft: 1, t: t() } : { w, d, t: t() }));
       return I;
     }
+    // Kun hvor regelbruddene er (uden at bygge beskederne)
+    function gennemgaaHard() {
+      const I = [];
+      gennemgaa((w, d, soft) => { if (!soft) I.push({ w, d }); });
+      return I;
+    }
     // ---------- Den kloge planlaegger (foreslaa) ----------
     // gen() ovenfor er den oprindelige vagtplans generator og giver et godt udgangspunkt, men
     // den laegger vagterne ud i én fast raekkefoelge. foreslaa() koerer den for baade
@@ -412,6 +446,10 @@
       spredning: 1,   // pr. (time)^2 en fleksibel medarbejders snit afviger fra jobtypens snit
       maal: 1,        // pr. time under maalTimer i en uge
       fra1515: 8,     // det alternative starttidspunkt ("eller fra", fx 15:15) bruges kun, hvis det normale koster mere
+      flyt: 12,       // reparer(): pr. vagt der flyttes fra én medarbejder til en anden -- saa en lille
+                      // rettelse ikke bytter rundt paa resten af ugen for at jaevne timerne en smule
+      flytAndenUge: 100, // reparer(): pr. aendret vagt i en uge der ikke var beroert -- i praksis kun
+                      // for at rette et regelbrud der gaelder hele planen (fx et minimum-snit)
     };
     // Fleksible = dem planlaeggeren selv fordeler (ikke faste vagter/weekend-rotation).
     const FLEX = [...new Set([...(C.hulFyldere || []), ...(C.fyldere || []), ...(C.ekstraDage || []).map(x => x.p)])].filter(p => P[p]);
@@ -459,23 +497,31 @@
       WK.forEach(w => {
         const hold = ROT[holdAf(w)] || [];
         hold.filter(x => (x.d == 5 || x.d == 6) && hold.some(y => y != x && y.p == x.p && (y.d == 5 || y.d == 6) && y.d != x.d)).forEach(x => {
-          const v = M.S.find(y => y.w == w && y.d == x.d && y.s == x.s && y.e == x.e && (y.p == x.p || y.p == 'uk') && !ud.some(u => u.x == y));
+          const v = M.S.find(y => !y.laast && y.w == w && y.d == x.d && y.s == x.s && y.e == x.e && (y.p == x.p || y.p == 'uk') && !ud.some(u => u.x == y));
           if (v) ud.push({ x: v, p: x.p });
         });
       });
       return ud;
     }
-    const kan = (p, x) => { const v = av(p, x.d); return v && x.s >= v[0] && x.e <= v[1] && !M.S.some(y => y != x && y.w == x.w && y.d == x.d && y.p == p); };
-    function forbedr(runder) {
-      const faste = fasteNoegler();
-      const fri = M.S.filter(x => !faste.has([x.w, x.d, x.p, x.s, x.e].join()));
-      const dob = M.EKSTRA > 0 ? dobbeltVagter() : [];
+    const kan = (p, x) => kanTage(p, x.w, x.d, x.s, x.e) && !M.S.some(y => y != x && y.w == x.w && y.d == x.d && y.p == p);
+    // opt.uger (Set): kun vagter i de uger maa roeres. opt.straf(): ekstra strafpoint oven i
+    // vurder() (reparer() bruger det til at holde fast i hvem der havde vagterne).
+    // opt.ikkeTil (Set): personer der ikke maa faa flere vagter (fx én der lige har faaet fri --
+    // ellers kunne hun faa en anden vagt samme weekend i stedet). opt.fraDag: dage foer den
+    // (w * 7 + d) roeres ikke -- de er gaaet.
+    function forbedr(runder, opt) {
+      opt = opt || {};
+      const faste = fasteNoegler(), ikkeTil = opt.ikkeTil || new Set();
+      const iUger = x => (!opt.uger || opt.uger.has(x.w)) && (opt.fraDag == null || x.w * 7 + x.d >= opt.fraDag);
+      const fri = M.S.filter(x => !x.laast && iUger(x) && !faste.has([x.w, x.d, x.p, x.s, x.e].join()));
+      const dob = M.EKSTRA > 0 ? dobbeltVagter().filter(v => iUger(v.x) && !(v.x.p == 'uk' && ikkeTil.has(v.p))) : [];
       const alle = fri.concat(dob.map(v => v.x));
       // KUN de fleksible: de andres regler (fx en daglig leder med faste ugedage) ligger i
       // deres faste vagter og ikke i regeltjekket, saa de maa aldrig faa ekstra vagter herfra.
-      const kandidater = FLEX;
+      const kandidater = FLEX.filter(p => !ikkeTil.has(p));
       if (!alle.length) return;
-      let nu = vurder().point, bedst = nu, bedstP = alle.map(x => x.p);
+      const point = () => vurder().point + (opt.straf ? opt.straf() : 0);
+      let nu = point(), bedst = nu, bedstP = alle.map(x => x.p);
       for (let i = 0, T = 30; i < runder; i++, T *= 0.998) {
         let fortryd;
         if (dob.length && (!fri.length || Math.random() < 0.25)) {
@@ -497,7 +543,7 @@
           if (!kan(py, x) || !kan(px, y)) { x.p = px; y.p = py; continue; }
           fortryd = () => { x.p = px; y.p = py; };
         }
-        const ny = vurder().point;
+        const ny = point();
         if (ny <= nu || Math.random() < Math.exp((nu - ny) / T)) {
           nu = ny;
           if (ny < bedst) { bedst = ny; bedstP = alle.map(z => z.p); }
@@ -508,11 +554,11 @@
     // Samler ekstra-vagter paa samme dag til én (fx 10-13 + 14:15-17:15 -> 10-17:15), naar det
     // goer planen bedre -- to korte ekstra-vagter samme dag kraever ellers to ekstra personer.
     // Opstaar isaer naar en medarbejder er fjernet, og der er et hul hvor hun/han stod.
-    function saml() {
+    function saml(uger, fraDag) {
       for (let bedre = true; bedre;) {
         bedre = false;
         const nu = vurder().point, grupper = {};
-        M.S.forEach(x => { if (x.p == 'uk') (grupper[x.w * 7 + x.d] = grupper[x.w * 7 + x.d] || []).push(x); });
+        M.S.forEach(x => { if (x.p == 'uk' && (!uger || uger.has(x.w)) && !(x.w * 7 + x.d < fraDag)) (grupper[x.w * 7 + x.d] = grupper[x.w * 7 + x.d] || []).push(x); });
         for (const g of Object.values(grupper)) {
           g.sort((a, b) => a.s - b.s);
           for (let i = 0; i + 1 < g.length && !bedre; i++) {
@@ -537,11 +583,105 @@
       return vinder.v;
     }
 
+    // ---------- Lokal reparation ----------
+    // Naar planen er rettet et enkelt sted (en medarbejder har faaet fri, en vagt er laast fast),
+    // rettes kun ugerne i `uger`, og saa lidt som muligt -- resten er som foer, saa man ikke skal
+    // melde en helt ny plan ud. foreslaa() laver derimod det hele om.
+    //   1. Vagter personen ikke kan tage (fri / kun et tidsrum) afkortes, eller gives til en
+    //      ekstra person.
+    //   2. For mange paa arbejde: ikke-faste vagter fjernes eller afkortes (og de huller det giver,
+    //      daekkes), saa laenge planen bliver bedre.
+    //   3. Resterende huller daekkes af ekstra personer.
+    //   4. forbedr() giver ekstra-vagterne til personalet, hvor det kan lade sig goere -- med
+    //      strafpoint (STRAF.flyt) for at flytte andres vagter, saa den ikke bytter rundt uden grund.
+    // opt.runder: forbedr()'s runder. opt.ikkeTil: personer der ikke maa faa nye vagter (se
+    // forbedr). opt.fraDag (w * 7 + d): dage der er gaaet -- dér rettes kun vagter personen ikke
+    // kan tage (fx en sygedag der skrives ind bagefter), der flyttes ikke rundt.
+    function reparer(uger, opt) {
+      opt = opt || {};
+      const U = new Set(uger.filter(w => w >= 0 && w < NW)), fraDag = opt.fraDag == null ? -1 : opt.fraDag;
+      if (!U.size) return;
+      const faste = fasteNoegler(), fast = x => x.laast || faste.has([x.w, x.d, x.p, x.s, x.e].join());
+      M.S.forEach(x => {
+        if (!U.has(x.w) || x.p == 'uk' || x.laast) return;
+        // En dag der er gaaet, rettes kun hvis der er en aftale paa datoen (fx en sygedag)
+        if (x.w * 7 + x.d < fraDag && undtagelse(x.p, x.w, x.d) === undefined) return;
+        const v = av(x.p, x.d, x.w);
+        if (v && x.s >= v[0] && x.e <= v[1]) return;
+        const s = v ? Math.max(x.s, v[0]) : 0, e = v ? Math.min(x.e, v[1]) : 0;
+        if (v && e - s >= MIN_VAGT) { x.s = s; x.e = e; } else x.p = 'uk';
+      });
+      const dage = [];
+      U.forEach(w => { for (let d = 0; d < 7; d++) if (!lukket(d) && w * 7 + d >= fraDag) dage.push([w, d]); });
+      const forMange = (w, d) => { const k = krav(d); return cov(w, d).c.some((n, i) => n > k.mx[i]); };
+      // Huller foerst: en ekstra person der skal til (fx fordi der ellers ingen ansvarlig er),
+      // kan give for mange paa arbejde -- og det rettes nedenfor.
+      const fyld = () => dage.forEach(([w, d]) => { daekHuller(w, d, 1); daekHuller(w, d, 0); });
+      fyld();
+      let nu = vurder().point;
+      for (let runde = 0; runde < 40; runde++) {
+        let bedst = null;
+        dage.filter(([w, d]) => forMange(w, d)).forEach(([w, d]) => {
+          const [a, b] = O(d), S0 = M.S;
+          S0.forEach((x, i) => {
+            if (x.w != w || x.d != d || fast(x)) return;
+            // Tider vagten kan afkortes til: aabning/lukning, dagens andre vagter og bemandingens skift
+            const tider = new Set([a, b]);
+            S0.forEach(y => { if (y != x && y.w == w && y.d == d) { tider.add(y.s); tider.add(y.e); } });
+            tidslinje(d).forEach(bl => { tider.add(bl.fra); if (bl.ellerFra != null) tider.add(bl.ellerFra); });
+            const varianter = [null]; // null = fjern vagten
+            tider.forEach(t => {
+              if (t > x.s && x.e - t >= MIN_VAGT) varianter.push([t, x.e]);
+              if (t < x.e && t - x.s >= MIN_VAGT) varianter.push([x.s, t]);
+            });
+            varianter.forEach(v => {
+              M.S = S0.map(y => Object.assign({}, y));
+              if (v) { M.S[i].s = v[0]; M.S[i].e = v[1]; } else M.S.splice(i, 1);
+              daekHuller(w, d, 1); daekHuller(w, d, 0);
+              const p = vurder().point;
+              if (p < nu - 1e-6 && (!bedst || p < bedst.p)) bedst = { p, S: M.S };
+              M.S = S0;
+            });
+          });
+        });
+        if (!bedst) break;
+        M.S = bedst.S; nu = bedst.p;
+      }
+      fyld();
+      // Strafpoint for at flytte vagter: i de beroerte uger kun personalets (en ekstra-vagt maa
+      // gerne gives til personalet), i andre uger enhver aendring -- og meget mere.
+      const foer = new Map(M.S.map(x => [x, x.p]));
+      const straf = () => {
+        let n = 0;
+        foer.forEach((p, x) => { if (x.p != p) n += U.has(x.w) ? (p != 'uk' ? STRAF.flyt : 0) : STRAF.flytAndenUge; });
+        return n;
+      };
+      const runder = opt.runder == null ? 1500 : opt.runder, fOpt = { uger: U, straf, ikkeTil: new Set(opt.ikkeTil || []), fraDag };
+      forbedr(runder, fOpt);
+      // Brud der gaelder hele planen (fx et minimum-snit over 4 uger) kan kraeve, at en anden uge
+      // ogsaa rettes -- saa maa forbedr() ogsaa roere de andre kommende uger.
+      if (runder && gennemgaaHard().some(i => i.w < 0)) forbedr(runder, Object.assign({}, fOpt, { uger: null }));
+      saml(U, fraDag);
+    }
+
+    // Aftaler paa bestemte datoer (plan.undtagelser: [{ p, dato: 'YYYY-MM-DD', tid: null | [fra, til] }])
+    // -> M.UNDTAG, ud fra planens startdato (en mandag). Datoer uden for planen ignoreres.
+    const dagNr = s => { const [y, m, d] = String(s).split('-').map(Number); return Date.UTC(y, m - 1, d) / 864e5; };
+    function saetUndtagelser(liste, start) {
+      M.UNDTAG = new Map();
+      const s0 = dagNr(start);
+      (liste || []).forEach(u => {
+        const n = dagNr(u.dato) - s0;
+        if (!(n >= 0 && n < NW * 7) || !P[u.p]) return;
+        M.UNDTAG.set(u.p + '|' + Math.floor(n / 7) + '|' + n % 7, u.tid ? [u.tid[0], u.tid[1]] : null);
+      });
+    }
+
     // Timekrav pr. person til timetabellen: minimum-snit og/eller fast ugentligt antal.
     const minSnit = p => { const x = (C.minSnit || []).find(y => y.p == p); return x ? x.timer : null; };
     const ugeTimer = p => { const x = (C.ugeTimer || []).find(y => y.p == p); return x ? x.timer : null; };
 
-    Object.assign(M, { need, ext, nmi, av, cov, best, gen, genWeek, hrs, check, minSnit, ugeTimer, vurder, foreslaa });
+    Object.assign(M, { need, ext, nmi, av, cov, best, gen, genWeek, hrs, check, minSnit, ugeTimer, vurder, foreslaa, reparer, kan, kanTage, fasteNoegler, saetUndtagelser, undtagelse, LEN, FLEX });
     return M;
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = { lavMotor, STANDARD_REGLER };
