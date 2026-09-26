@@ -24,11 +24,15 @@
     if (samtalePlan != raekke.id) nySamtale();
     panel.hidden = false;
     requestAnimationFrame(() => { document.body.classList.add('ai-aaben'); });
+    meldSiden(true);
     $('#assistentKnap').setAttribute('aria-expanded', 'true');
     setTimeout(() => tekst.focus(), 50);
   }
+  // Siden udenom (butik-redigering) skjuler sin feedback-knap, mens panelet er aabent
+  function meldSiden(aaben) { try { if (window.parent !== window && window.parent.vagtplanAssistent) window.parent.vagtplanAssistent(aaben); } catch (e) {} }
   function luk() {
     document.body.classList.remove('ai-aaben');
+    meldSiden(false);
     $('#assistentKnap').setAttribute('aria-expanded', 'false');
     setTimeout(() => { if (!document.body.classList.contains('ai-aaben')) panel.hidden = true; }, 220);
   }
