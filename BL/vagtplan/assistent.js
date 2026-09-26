@@ -79,6 +79,11 @@
     const ud = [];
     const idagD = (new Date(i0 * 864e5).getUTCDay() + 6) % 7;
     ud.push(`I dag er det ${DAG[idagD]} ${fraDagNr(i0)} (uge ${isoUge(i0)}).`);
+    // Kalender for de kommende to uger, saa "paa torsdag" og "i morgen" rammer den rigtige dato
+    ud.push('Kalender: ' + Array.from({ length: 15 }, (_, k) => {
+      const n = i0 + k, dg = (idagD + k) % 7;
+      return `${k == 0 ? 'i dag ' : k == 1 ? 'i morgen ' : ''}${DAG[dg]} ${fraDagNr(n)} (uge ${isoUge(n)})`;
+    }).join(', ') + '.');
     ud.push(`Vagtplan: "${info.planNavn || 'Vagtplan'}"${info.butik ? ' for ' + info.butik : ''}, ${M.NW} ${M.NW == 1 ? 'uge' : 'uger'}: uge ${isoUge(s0)}–${isoUge(s0 + 7 * (M.NW - 1))}, fra mandag ${dato(0, 0)} til søndag ${dato(M.NW - 1, 6)}.`);
     ud.push('', 'Butikkens regler:');
     O.beskrivRegler(C).forEach(r => ud.push(`- ${r.titel}: ${r.tekst}`));
@@ -124,7 +129,8 @@
     // Dage der er gaaet -- og i dag, hvor vagterne allerede er meldt ud -- flytter planlaeggeren
     // ikke rundt paa. Handler beskeden om i dag (fx en sygemelding), maa i dag godt rettes.
     const idagNr = valg.idag ? dagNr(lokalDato(valg.idag)) : null;
-    const omIdag = idagNr != null && (Array.isArray(handlinger) ? handlinger : []).some(h => h && Array.isArray(h.datoer) && h.datoer.some(x => dagNr(x) == idagNr));
+    const omIdag = idagNr != null && (Array.isArray(handlinger) ? handlinger : []).some(h => h && ((Array.isArray(h.datoer) && h.datoer.some(x => dagNr(x) == idagNr))
+      || (dagNr(h.periode_fra) <= idagNr && idagNr <= dagNr(h.periode_til || h.periode_fra))));
     const fraDag = idagNr == null ? null : idagNr - s0 + (omIdag ? 0 : 1);
     const log = [], uger = new Set();
     // Dem lederen har bestemt noget for (fri, tider, vagter), faar ikke nye vagter af planlaeggeren
@@ -149,14 +155,27 @@
       if (!p) { fejl(`Jeg kan ikke finde en medarbejder, der hedder "${h[felt || 'navn'] || ''}".`); return null; }
       return p;
     }
+    // Datoerne kan komme som en liste og/eller en periode (periode_fra–periode_til, begge med).
+    // AI'en skriver af og til perioden i fra/til i stedet -- det er let at se (en dato i stedet
+    // for et klokkeslaet), saa det rettes her. Mangler starten paa en periode, er det fra i dag.
     function datoer(h) {
-      const ud = [], uden = [];
-      [...new Set(Array.isArray(h.datoer) ? h.datoer : [])].sort().forEach(s => {
+      const ud = [], uden = [], gaaet = [], alle = (Array.isArray(h.datoer) ? h.datoer : []).slice();
+      const erDato = v => !isNaN(dagNr(v));
+      let pf = erDato(h.periode_fra) ? h.periode_fra : erDato(h.fra) ? h.fra : null;
+      let pt = erDato(h.periode_til) ? h.periode_til : erDato(h.til) ? h.til : null;
+      if (erDato(h.fra)) delete h.fra;
+      if (erDato(h.til)) delete h.til;
+      if (!pf && pt && !alle.length) pf = idagNr != null ? fraDagNr(Math.max(idagNr, s0)) : fraDagNr(s0);
+      const a = dagNr(pf), b = dagNr(pt || pf);
+      if (!isNaN(a) && !isNaN(b) && b >= a && b - a < 200) for (let n = a; n <= b; n++) alle.push(fraDagNr(n));
+      [...new Set(alle.filter(x => !isNaN(dagNr(x))).map(x => fraDagNr(dagNr(x))))].sort().forEach(s => {
         const n = dagNr(s) - s0;
-        if (n >= 0 && n < M.NW * 7) ud.push({ dato: fraDagNr(dagNr(s)), w: Math.floor(n / 7), d: n % 7 });
+        if (n >= 0 && n < M.NW * 7) { ud.push({ dato: fraDagNr(dagNr(s)), w: Math.floor(n / 7), d: n % 7 }); if (idagNr != null && dagNr(s) < idagNr) gaaet.push(s); }
         else if (!isNaN(n)) uden.push(s);
       });
       if (uden.length) fejl(`${uden.map(datoTekst).join(', ')} ligger uden for vagtplanen og er sprunget over.`);
+      // Ikke en fejl (en sygedag kan godt skrives ind bagefter) -- men lederen skal kunne se det
+      if (gaaet.length && h.type != 'fri_antal') fejl(`Bemærk: ${gaaet.map(datoTekst).join(', ')} er allerede gået.`);
       return ud;
     }
     const liste = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' og ' + a[a.length - 1];
@@ -195,6 +214,12 @@
           ok(`${navn(p)}: ${art == 'ingen' ? 'intet timekrav' : art == 'min' ? `mindst ${timer(t)} timer om ugen i snit` : art == 'praecis' ? `præcis ${timer(t)} timer hver uge` : `gerne mindst ${timer(t)} timer om ugen`} (gælder fremover).`);
         }
         C = O.fraModel(model, C); genbyg();
+        // Gaelder fremover: vagter der allerede er gaaet, passer maaske ikke til de nye tider --
+        // de faar en aftale paa datoen, saa de ikke pludselig staar som regelbrud.
+        if (fraDag != null) M.S.forEach(x => {
+          if (x.p != p || x.w * 7 + x.d >= fraDag || M.kanTage(p, x.w, x.d, x.s, x.e)) return;
+          saetUnd(p, fraDagNr(s0 + x.w * 7 + x.d), [x.s, x.e]);
+        });
         // Gaelder fremover: uger der er gaaet, roeres ikke
         M.WK.forEach(w => { if (fraDag == null || w >= Math.floor(fraDag / 7)) uger.add(w); });
         continue;
@@ -202,7 +227,7 @@
 
       if (['fri', 'fri_antal', 'kun_tid', 'vagt'].includes(h.type)) ikkeTil.add(p);
       const ds = datoer(h);
-      if (!ds.length) { if (!(h.datoer || []).length) fejl(`Jeg ved ikke, hvilke datoer det gælder for ${navn(p)}.`); continue; }
+      if (!ds.length) { if (!(h.datoer || []).length && !h.periode_fra) fejl(`Jeg ved ikke, hvilke datoer det gælder for ${navn(p)}.`); continue; }
 
       if (h.type == 'fri') {
         ds.forEach(({ dato, w, d }) => { saetUnd(p, dato, null); const x = egen(p, w, d); if (x) delete x.laast; uger.add(w); });
@@ -274,7 +299,9 @@
         }
         valgt.sort((a, b) => a.w - b.w || a.d - b.d);
         if (valgt.length) ok(`${navn(p)} får fri ${liste(valgt.map(c => datoTekst(c.dato)))} – de dage var nemmest at dække.`);
-        if (valgt.length < antal) fejl(`${navn(p)} har kun ${valgt.length} ${valgt.length == 1 ? 'vagt' : 'vagter'} i perioden, der kan blive til fridage (ikke ${antal}).`);
+        if (valgt.length < antal) fejl(valgt.length
+          ? `${navn(p)} havde kun ${valgt.length} ${valgt.length == 1 ? 'vagt' : 'vagter'} i perioden, der kunne blive til fridage (ikke ${antal}) – resten af dagene har hun/han allerede fri.`
+          : `${navn(p)} har ingen andre vagter i perioden, der kan blive til fridage – de øvrige dage har hun/han allerede fri.`);
       }
     }
 

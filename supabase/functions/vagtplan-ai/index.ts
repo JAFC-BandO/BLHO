@@ -23,18 +23,19 @@ const CORS = {
 const svar = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
-const MODELLER = (Deno.env.get('GEMINI_MODELLER') ?? 'gemini-flash-latest,gemini-flash-lite-latest')
+const MODELLER = (Deno.env.get('GEMINI_MODELLER') ?? 'gemini-flash-latest,gemini-flash-lite-latest,gemini-2.5-flash')
   .split(',').map((s) => s.trim()).filter(Boolean);
 
 const SYSTEM = `Du er vagtplan-assistent i Børneloppens vagtplan-værktøj. Lederen skriver på dansk, hvad der skal ske med vagtplanen, og du oversætter det til handlinger. Programmet udfører handlingerne med sin egen planlægger, som overholder butikkens regler, dækker huller og finder afløsere. Du skal altså IKKE selv regne bemanding ud eller vælge afløsere.
 
 Svar ALTID med JSON: {"svar": "...", "handlinger": [...]}
-- "svar": kort, venlig dansk tekst (1–3 sætninger): hvad du gør, svaret på et spørgsmål, eller et opklarende spørgsmål. Skriv ikke vagterne op – programmet viser selv ændringerne. Ingen markdown.
+- "svar": kort, venlig dansk tekst (1–3 sætninger): hvad du gør, svaret på et spørgsmål, eller et opklarende spørgsmål. Skriv ikke vagterne op – programmet viser selv ændringerne. Skriv datoer som "lørdag 3/10" (aldrig ÅÅÅÅ-MM-DD i svaret). Ingen markdown.
 - "handlinger": ændringerne (tom liste, hvis du kun svarer eller spørger).
 
 Handlinger. "navn" og "til_navn" skal være præcis et navn fra medarbejderlisten. Datoer skrives ÅÅÅÅ-MM-DD. Klokkeslæt skrives TT:MM i hele kvarter.
+Datoerne angives enten som "datoer" (en liste af enkelte datoer) eller som en sammenhængende periode med "periode_fra" og "periode_til" (begge dage med) – brug perioden ved fx ferie eller "de næste 2 uger". Udelad felter, der ikke hører til handlingen.
 - {"type":"fri","navn":…,"datoer":[…]} – personen har fri hele dagen (ferie, sygdom, fridag). Personens vagter de dage fjernes, og planlæggeren finder afløsere.
-- {"type":"fri_antal","navn":…,"antal":N,"datoer":[…]} – personen skal have N fridage i en periode, men lederen har ikke sagt hvilke. "datoer" = alle datoer i perioden. Planlæggeren vælger de dage, der er nemmest at dække.
+- {"type":"fri_antal","navn":…,"antal":N,"periode_fra":…,"periode_til":…} – personen skal have N fridage i perioden, men lederen har ikke sagt hvilke. Planlæggeren vælger de dage, der er nemmest at dække. Perioden SKAL med.
 - {"type":"kun_tid","navn":…,"datoer":[…],"fra":…,"til":…} – personen kan kun arbejde fra–til de dage (fx "kan først kl. 12", "skal gå kl. 14" – så udelades det felt, der ikke er sagt noget om).
 - {"type":"vagt","navn":…,"datoer":[…],"fra":…,"til":…} – personen SKAL arbejde de dage. Udelad "fra" og "til", hvis lederen ikke har nævnt et tidspunkt – så vælger planlæggeren tiden. Vagten låses fast.
 - {"type":"overdrag","navn":…,"til_navn":…,"datoer":[…]} – navns vagt de dage gives til til_navn. At bytte vagter er to overdrag.
@@ -44,7 +45,7 @@ Handlinger. "navn" og "til_navn" skal være præcis et navn fra medarbejderliste
 - {"type":"ny_plan"} – lav hele planen forfra. Kun når lederen udtrykkeligt beder om en helt ny plan.
 
 Sådan gør du:
-- Regn datoer ud fra "I dag" i konteksten. Uger starter mandag. "I morgen" = dagen efter i dag. "På torsdag" (uden dato) = den første torsdag fra og med i dag. "Næste uge" = mandag–søndag i ugen efter denne uge. "De næste 2 uger" = i dag og de følgende 13 dage.
+- Find datoerne i "Kalender" i konteksten – regn ikke selv ugedage ud. Uger starter mandag. "I morgen" = dagen efter i dag. "På torsdag" (uden dato) = den første torsdag fra og med i dag. "Næste uge" = mandag–søndag i ugen efter denne uge. "De næste 2 uger" = i dag og de følgende 13 dage.
 - Tjek ugedagen for hver dato i vagtlisten i konteksten, så du ikke tager fejl af datoerne.
 - Kun datoer i planen kan ændres. Ligger noget uden for planen, så sig det i "svar".
 - Er det uklart, hvem eller hvilke dage det gælder, så spørg i "svar" og lav ingen handlinger. Gæt aldrig et navn, der ikke står på listen – men skriver lederen et navn lidt anderledes (fx Freja/Freya), så brug navnet fra listen.
@@ -55,7 +56,7 @@ Sådan gør du:
 
 Eksempel (opdigtede navne; i dag er fredag 2026-03-06):
 Lederen: "Anna skal have fri 2 dage og skal arbejde tirsdag og torsdag de næste 2 uger, og Bo er syg i morgen"
-{"svar":"Anna låses på tirsdage og torsdage de næste to uger og får 2 fridage, som planlæggeren vælger. Bo har fri i morgen, og hans vagt dækkes.","handlinger":[{"type":"vagt","navn":"Anna","datoer":["2026-03-10","2026-03-12","2026-03-17","2026-03-19"]},{"type":"fri_antal","navn":"Anna","antal":2,"datoer":["2026-03-06","2026-03-07","2026-03-08","2026-03-09","2026-03-10","2026-03-11","2026-03-12","2026-03-13","2026-03-14","2026-03-15","2026-03-16","2026-03-17","2026-03-18","2026-03-19"]},{"type":"fri","navn":"Bo","datoer":["2026-03-07"]}]}`;
+{"svar":"Anna låses på tirsdage og torsdage de næste to uger og får 2 fridage, som planlæggeren vælger. Bo har fri i morgen, og hans vagt dækkes.","handlinger":[{"type":"vagt","navn":"Anna","datoer":["2026-03-10","2026-03-12","2026-03-17","2026-03-19"]},{"type":"fri_antal","navn":"Anna","antal":2,"periode_fra":"2026-03-06","periode_til":"2026-03-19"},{"type":"fri","navn":"Bo","datoer":["2026-03-07"]}]}`;
 
 const STR = { type: 'string' };
 const SKEMA = {
@@ -71,6 +72,8 @@ const SKEMA = {
           navn: STR,
           til_navn: STR,
           datoer: { type: 'array', items: STR },
+          periode_fra: STR,
+          periode_til: STR,
           antal: { type: 'integer' },
           fra: STR,
           til: STR,
@@ -122,18 +125,27 @@ Deno.serve(async (req) => {
   });
 
   // ---------- Gemini ----------
-  // Er kvoten paa én model brugt op (429), eller findes den ikke laengere (404), proeves den naeste.
-  let sidst = 0, besked = '';
-  for (const model of MODELLER) {
+  // Er kvoten paa én model brugt op (429), er den overbelastet (503), eller findes den ikke
+  // laengere (404), proeves den naeste. Er alle overbelastede, proeves der én gang til lidt efter.
+  let sidst = 0, besked = '', kvote = false, travlt = false;
+  const forsoeg = MODELLER.concat(MODELLER.slice(0, 1));
+  for (let i = 0; i < forsoeg.length; i++) {
+    const model = forsoeg[i];
+    if (i == MODELLER.length) {
+      if (!travlt) break;
+      await new Promise((r) => setTimeout(r, 2000));
+    }
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': noegle },
       body: kald,
     }).catch(() => null);
-    if (!res) { sidst = 503; continue; }
+    if (!res) { sidst = 503; travlt = true; continue; }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       sidst = res.status; besked = data?.error?.message ?? '';
+      if (res.status === 429) kvote = true;
+      if (res.status >= 500) travlt = true;
       if (res.status === 429 || res.status === 404 || res.status >= 500) continue;
       console.error('Gemini-fejl', model, res.status, besked);
       return svar({ fejl: 'AI-tjenesten afviste beskeden (' + res.status + ').', detalje: besked.slice(0, 300) });
@@ -153,7 +165,7 @@ Deno.serve(async (req) => {
     });
   }
   console.error('Ingen model svarede', sidst, besked);
-  return svar(sidst === 429
+  return svar(kvote
     ? { fejl: 'Den gratis AI-kvote er brugt op lige nu. Prøv igen om et minut.', kode: 'kvote' }
     : { fejl: 'AI-tjenesten svarer ikke lige nu. Prøv igen om lidt.', kode: 'nede' });
 });
