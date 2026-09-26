@@ -5,8 +5,10 @@
 // Adgang: kun brugere i vagtplan_adgang (tjekkes med brugerens eget login via RPC'en
 // har_vagtplan_adgang, saa RLS afgoer det -- ikke denne fil).
 //
-// AI: Google Gemini, gratis kvote. Noeglen ligger som secret i Supabase:
-//   Dashboard -> Edge Functions -> Secrets -> GEMINI_API_KEY  (hentes paa aistudio.google.com)
+// AI: Google Gemini, gratis kvote (noeglen hentes paa aistudio.google.com). Noeglen ligger
+// krypteret i Supabase Vault som 'gemini_api_key' og hentes med RPC'en vagtplan_ai_noegle, som
+// kun service_role maa kalde. Alternativt: Dashboard -> Edge Functions -> Secrets -> GEMINI_API_KEY
+// (bruges hvis den er sat).
 // Valgfrit: GEMINI_MODELLER = kommasepareret liste der proeves i raekkefoelge (naar kvoten paa
 // den foerste er brugt op, proeves den naeste).
 //
@@ -89,6 +91,25 @@ const SKEMA = {
   required: ['svar', 'handlinger'],
 };
 
+// Noeglen: secret'en GEMINI_API_KEY, ellers Vault. Gemmes mens funktionen er varm.
+let noegleCache: string | null = null;
+async function hentNoegle(): Promise<string | null> {
+  if (noegleCache) return noegleCache;
+  const env = Deno.env.get('GEMINI_API_KEY');
+  if (env) return (noegleCache = env);
+  const sr = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!sr) return null;
+  const r = await fetch(Deno.env.get('SUPABASE_URL') + '/rest/v1/rpc/vagtplan_ai_noegle', {
+    method: 'POST',
+    headers: { apikey: sr, Authorization: 'Bearer ' + sr, 'Content-Type': 'application/json' },
+    body: '{}',
+  }).catch(() => null);
+  const v = r && r.ok ? await r.json().catch(() => null) : null;
+  if (typeof v === 'string' && v) noegleCache = v;
+  else console.error('Kunne ikke hente noeglen fra Vault', r && r.status);
+  return noegleCache;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return svar({ fejl: 'Kun POST.' }, 405);
@@ -105,8 +126,8 @@ Deno.serve(async (req) => {
     return svar({ fejl: 'Du har ikke adgang til vagtplanen.' }, 403);
   }
 
-  const noegle = Deno.env.get('GEMINI_API_KEY');
-  if (!noegle) return svar({ fejl: 'AI-assistenten er ikke sat op endnu (GEMINI_API_KEY mangler i Supabase).', kode: 'ingen_noegle' });
+  const noegle = await hentNoegle();
+  if (!noegle) return svar({ fejl: 'AI-assistenten er ikke sat op endnu (Gemini-noeglen mangler i Supabase).', kode: 'ingen_noegle' });
 
   // ---------- Besked ----------
   let body: { beskeder?: { rolle?: string; tekst?: string }[]; kontekst?: string };
