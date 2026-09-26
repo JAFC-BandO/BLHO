@@ -157,6 +157,9 @@
   #vpGem:disabled { background: transparent; color: var(--ui-tekst-888); border: 1px solid var(--ui-kant); cursor: default; }
   @media (max-width: 760px) { .gem-plads { width: auto; } }
   body.fane-vagtplan #vagtplanVisning { display: block; flex: 1; min-height: 0; }
+  /* Vagtplan-assistentens panel (i iframen) fylder hoejre side -- saa ville feedback-knappen
+     ligge oven paa dens tekstfelt. Den skjules, mens panelet er aabent (kun paa vagtplan-fanen). */
+  body.fane-vagtplan.vp-assistent-aaben #feedbackFloatBtn { display: none !important; }
   #vagtplanVisning iframe { width: 100%; height: 100%; border: 0; display: block; }
 
   .main {
@@ -1553,7 +1556,7 @@
         ramme.title = 'Vagtplan';
         // ?v= skal bumpes naar vagtplan/index.html aendres -- ellers kan browseren/GitHub
         // Pages' cache (op til 10 min) give den gamle side inde i fanen.
-        ramme.src = '../vagtplan/?indlejret=1&v=2026-09-26-1';
+        ramme.src = '../vagtplan/?indlejret=1&v=2026-09-26-2';
         ramme.addEventListener('load', anvendTema);
         vis.appendChild(ramme);
       }
@@ -1571,6 +1574,7 @@
   let vagtplanUgemt = false, vagtplanKan = { fortryd: false, gentag: false };
   // Vagtplanen er pr. butik og foelger butikken i topbaren
   window.vagtplanButik = () => ({ id: currentButikId, navn: document.getElementById('butikNavn').textContent });
+  window.vagtplanAssistent = (aaben) => document.body.classList.toggle('vp-assistent-aaben', !!aaben);
   function vagtplanFoelgButik() {
     const a = vagtplanApi();
     if (a && a.skiftButik && currentButikId) a.skiftButik(currentButikId, document.getElementById('butikNavn').textContent);

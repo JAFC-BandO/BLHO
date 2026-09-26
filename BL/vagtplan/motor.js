@@ -356,6 +356,14 @@
       (C.faste || []).forEach(x => { if (KUN_FASTE.has(x.p) && (x.rotation == null || holdAf(w) == x.rotation)) FASTE_VAGTER.add([w, x.d, x.p, x.s, x.e].join()); });
       (ROT[holdAf(w)] || []).forEach(x => { if (KUN_FASTE.has(x.p)) FASTE_VAGTER.add([w, x.d, x.p, x.s, x.e].join()); });
     });
+    // Hvor stor en del af ugen personen kan arbejde, naar fridagene (aftaler paa datoer) er
+    // trukket fra -- saa timekravene ikke giver regelbrud, bare fordi nogen holder ferie eller er syg.
+    function andel(p, w) {
+      if (!M.UNDTAG.size) return 1;
+      let kan = 0, fri = 0;
+      for (let d = 0; d < 7; d++) if (av(p, d)) { kan++; if (undtagelse(p, w, d) === null) fri++; }
+      return kan ? (kan - fri) / kan : 1;
+    }
     function gennemgaa(emit) {
       const S = M.S;
       ext();
@@ -394,18 +402,23 @@
         }
         (C.ugeTimer || []).forEach(x => {
           const p = x.p, hh = h(p, w), ds = [...new Set(S.filter(y => y.w == w && y.p == p).map(y => y.d))].sort().join();
+          // En uge med fridage: kun ikke flere timer end normalt, og dagene er frie
+          if (andel(p, w) < 1) { if (hh > x.timer) emit(w, -1, 0, () => `${P[p][0]}: ${hh} t (højst ${x.timer} i en uge med fridage)`); return; }
           if (hh != x.timer) emit(w, -1, 0, () => `${P[p][0]}: ${hh} t (skal være ${x.timer})`);
           if (x.dagMoenstre && !x.dagMoenstre.includes(ds)) emit(w, -1, 0, () => `${P[p][0]}: ${x.dagMoenstreTekst || 'arbejder på de forkerte dage'}`);
         });
       }
       (C.minSnit || []).forEach(({ p, timer: m }) => {
-        let mn = 1e9;
         // Snit over hver 4-ugers periode (rundt om, hvis rullende; en periode paa under 4 uger
-        // bruger snittet over hele perioden).
+        // bruger snittet over hele perioden). Kravet nedsaettes for fridage (se andel).
         const vinduer = RULLENDE ? WK.map(s => [0, 1, 2, 3].map(k => (s + k) % NW))
           : NW >= 4 ? WK.slice(0, NW - 3).map(s => [0, 1, 2, 3].map(k => s + k)) : [WK];
-        vinduer.forEach(v => { mn = Math.min(mn, v.reduce((a, w) => a + h(p, w), 0) / v.length); });
-        if (mn < m) emit(-1, -1, 0, () => `${P[p][0]}: snit ${mn.toFixed(1)} t/uge over 4 uger (min ${m})`);
+        let brud = null;
+        vinduer.forEach(v => {
+          const snit = v.reduce((a, w) => a + h(p, w), 0) / v.length, krav = m * v.reduce((a, w) => a + andel(p, w), 0) / v.length;
+          if (snit < krav - 1e-9 && (!brud || snit - krav < brud.snit - brud.krav)) brud = { snit, krav };
+        });
+        if (brud) emit(-1, -1, 0, () => `${P[p][0]}: snit ${brud.snit.toFixed(1)} t/uge over 4 uger (min ${m}${brud.krav < m - 1e-9 ? ', ' + brud.krav.toFixed(1) + ' med fridagene' : ''})`);
       });
       const wd = (w, d, p) => dag[w * 7 + d].some(x => x.p == p);
       Object.keys(P).filter(p => p != 'uk').forEach(p => {
@@ -471,7 +484,7 @@
         const ga = g.reduce((x, p) => x + snit[p], 0) / g.length;
         g.forEach(p => { spredning += (snit[p] - ga) ** 2; });
       });
-      (C.maalTimer || []).forEach(x => { if (tim[x.p]) tim[x.p].forEach(h => { maal += Math.max(0, x.timer - h); }); });
+      (C.maalTimer || []).forEach(x => { if (tim[x.p]) tim[x.p].forEach((h, w) => { maal += Math.max(0, x.timer * andel(x.p, w) - h); }); });
       // "For mange ekstra personer" er ét regelbrud i listen, men planlaeggeren skal kunne se
       // forskel paa 1 og 3 for mange -- ellers kan den frit bruge endnu flere, naar graensen
       // foerst er overskredet.
@@ -506,6 +519,9 @@
     const kan = (p, x) => kanTage(p, x.w, x.d, x.s, x.e) && !M.S.some(y => y != x && y.w == x.w && y.d == x.d && y.p == p);
     // opt.uger (Set): kun vagter i de uger maa roeres. opt.straf(): ekstra strafpoint oven i
     // vurder() (reparer() bruger det til at holde fast i hvem der havde vagterne).
+    // En vagt med x.kun (liste af personer) maa kun gives til dem -- fx naar lederen har sagt, at en
+    // ungarbejders vagter kun maa tages af andre ungarbejdere. Kan ingen af dem, forbliver den hos
+    // en ekstra person.
     // opt.ikkeTil (Set): personer der ikke maa faa flere vagter (fx én der lige har faaet fri --
     // ellers kunne hun faa en anden vagt samme weekend i stedet). opt.fraDag: dage foer den
     // (w * 7 + d) roeres ikke -- de er gaaet.
@@ -532,7 +548,7 @@
         else if (Math.random() < 0.6) {
           const x = fri[Math.random() * fri.length | 0];
           // Giv vagten til en anden, der kan tage den (ogsaa: erstat en ekstra person)
-          const q = kandidater.filter(p => p != x.p && kan(p, x));
+          const q = kandidater.filter(p => p != x.p && kan(p, x) && (!x.kun || x.kun.includes(p)));
           if (!q.length) continue;
           const gl = x.p; x.p = q[Math.random() * q.length | 0]; fortryd = () => { x.p = gl; };
         } else {
@@ -540,7 +556,7 @@
           const x = fri[Math.random() * fri.length | 0], y = fri[Math.random() * fri.length | 0];
           if (y == x || y.w != x.w || y.d == x.d || y.p == x.p || x.p == 'uk' || y.p == 'uk') continue;
           const px = x.p, py = y.p; x.p = py; y.p = px;
-          if (!kan(py, x) || !kan(px, y)) { x.p = px; y.p = py; continue; }
+          if (!kan(py, x) || !kan(px, y) || (x.kun && !x.kun.includes(py)) || (y.kun && !y.kun.includes(px))) { x.p = px; y.p = py; continue; }
           fortryd = () => { x.p = px; y.p = py; };
         }
         const ny = point();

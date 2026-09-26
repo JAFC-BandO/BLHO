@@ -85,11 +85,12 @@
       return `${k == 0 ? 'i dag ' : k == 1 ? 'i morgen ' : ''}${DAG[dg]} ${fraDagNr(n)} (uge ${isoUge(n)})`;
     }).join(', ') + '.');
     ud.push(`Vagtplan: "${info.planNavn || 'Vagtplan'}"${info.butik ? ' for ' + info.butik : ''}, ${M.NW} ${M.NW == 1 ? 'uge' : 'uger'}: uge ${isoUge(s0)}–${isoUge(s0 + 7 * (M.NW - 1))}, fra mandag ${dato(0, 0)} til søndag ${dato(M.NW - 1, 6)}.`);
+    const job = C.jobtyper || {};
     ud.push('', 'Butikkens regler:');
     O.beskrivRegler(C).forEach(r => ud.push(`- ${r.titel}: ${r.tekst}`));
     if (C.noter) ud.push(`- Andre aftaler: ${C.noter}`);
-    const job = C.jobtyper || {};
-    ud.push('', 'Medarbejdere (brug præcis disse navne):');
+    ud.push('', 'Jobtyper: ' + Object.values(job).join(', ') + '.');
+    ud.push('Medarbejdere (brug præcis disse navne):');
     O.tilModel(C).forEach(m => ud.push(`- ${m.navn} (${job[m.type] || m.type}): ${O.beskriv(m)}.`));
     ud.push('"Ekstra person" er en pladsholder for en ekstra medarbejder/vikar, der skal findes.');
     const und = (o.plan.undtagelser || []).filter(u => M.P[u.p]).sort((a, b) => dagNr(a.dato) - dagNr(b.dato));
@@ -179,6 +180,24 @@
       return ud;
     }
     const liste = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' og ' + a[a.length - 1];
+    // Hvem der maa tage vagterne ("afloesere": navne og/eller jobtyper, fx ["Ungarbejder"]).
+    // null = alle der kan.
+    function afloesere(h, p) {
+      const l = (Array.isArray(h.afloesere) ? h.afloesere : h.afloesere ? [h.afloesere] : []).map(v => String(v).trim()).filter(Boolean);
+      // Reserve: har modellen skrevet afloeseren i fra/til (hverken klokkeslaet eller dato), bruges den
+      ['fra', 'til'].forEach(f => { const v = h[f]; if (typeof v == 'string' && v.trim() && tilMin(v) == null && isNaN(dagNr(v))) { l.push(v.trim()); delete h[f]; } });
+      if (!l.length) return null;
+      const job = C.jobtyper || {}, ids = new Set(), ukendt = [];
+      l.forEach(v => {
+        const t = v.toLowerCase();
+        const typ = Object.keys(job).find(k => { const n = String(job[k]).toLowerCase(); return t == k.toLowerCase() || [n, n + 'e', n + 'r', n + 'er'].includes(t); });
+        if (typ) C.personer.forEach(x => { if (x.type == typ && x.id != p) ids.add(x.id); });
+        else { const q = findPerson(C, v); if (q && q != p) ids.add(q); else if (!q) ukendt.push(v); }
+      });
+      if (ukendt.length) fejl(`Jeg kender ikke afløseren ${ukendt.map(v => '"' + v + '"').join(', ')}.`);
+      return ids.size ? [...ids] : null;
+    }
+    const kunTekst = kun => liste(kun.map(navn));
 
     const hs = (Array.isArray(handlinger) ? handlinger : []).filter(h => h && RAEKKEFOELGE[h.type] != null)
       .map((h, i) => ({ h, i })).sort((a, b) => RAEKKEFOELGE[a.h.type] - RAEKKEFOELGE[b.h.type] || a.i - b.i).map(x => x.h);
@@ -230,8 +249,9 @@
       if (!ds.length) { if (!(h.datoer || []).length && !h.periode_fra) fejl(`Jeg ved ikke, hvilke datoer det gælder for ${navn(p)}.`); continue; }
 
       if (h.type == 'fri') {
-        ds.forEach(({ dato, w, d }) => { saetUnd(p, dato, null); const x = egen(p, w, d); if (x) delete x.laast; uger.add(w); });
-        ok(`${navn(p)} har fri ${liste(ds.map(x => datoTekst(x.dato)))}.`);
+        const kun = afloesere(h, p);
+        ds.forEach(({ dato, w, d }) => { saetUnd(p, dato, null); const x = egen(p, w, d); if (x) { delete x.laast; if (kun) x.kun = kun; } uger.add(w); });
+        ok(`${navn(p)} har fri ${liste(ds.map(x => datoTekst(x.dato)))}.` + (kun ? ` Kun ${kunTekst(kun)} må tage vagterne.` : ''));
       } else if (h.type == 'kun_tid') {
         const fra = tilMin(h.fra), til = tilMin(h.til);
         if (fra == null && til == null) { fejl(`Jeg forstod ikke, hvornår ${navn(p)} kan arbejde.`); continue; }
@@ -277,7 +297,7 @@
         });
         if (givet.length) ok(`${navn(q)} overtager ${navn(p)}s vagt ${liste(givet)}.`);
       } else if (h.type == 'fri_antal') {
-        const antal = Math.max(0, Math.round(Number(h.antal) || 0));
+        const antal = Math.max(0, Math.round(Number(h.antal) || 0)), kun = afloesere(h, p);
         const kand = ds.filter(({ w, d }) => { const x = egen(p, w, d); return x && !x.laast && !(w * 7 + d < fraDag); });
         const valgt = [];
         // Proev hver mulig dag: giv fri, reparer ugen, og se hvor godt planen saa gaar op.
@@ -288,6 +308,7 @@
             const S0 = M.S;
             M.S = S0.map(x => Object.assign({}, x));
             saetUnd(p, c.dato, null);
+            const x = egen(p, c.w, c.d); if (x && kun) x.kun = kun;
             M.reparer([c.w], { runder: valg.proeveRunder != null ? valg.proeveRunder : 200, ikkeTil, fraDag });
             const pt = M.vurder().point;
             if (!bedst || pt < bedst.pt) bedst = { pt, j, S: M.S };
@@ -298,7 +319,7 @@
           valgt.push(c); uger.add(c.w);
         }
         valgt.sort((a, b) => a.w - b.w || a.d - b.d);
-        if (valgt.length) ok(`${navn(p)} får fri ${liste(valgt.map(c => datoTekst(c.dato)))} – de dage var nemmest at dække.`);
+        if (valgt.length) ok(`${navn(p)} får fri ${liste(valgt.map(c => datoTekst(c.dato)))} – de dage var nemmest at dække.` + (kun ? ` Kun ${kunTekst(kun)} må tage vagterne.` : ''));
         if (valgt.length < antal) fejl(valgt.length
           ? `${navn(p)} havde kun ${valgt.length} ${valgt.length == 1 ? 'vagt' : 'vagter'} i perioden, der kunne blive til fridage (ikke ${antal}) – resten af dagene har hun/han allerede fri.`
           : `${navn(p)} har ingen andre vagter i perioden, der kan blive til fridage – de øvrige dage har hun/han allerede fri.`);
@@ -371,6 +392,9 @@
 
     if (nyPlan) { M.foreslaa(valg.runder); ok('Hele planen er lavet forfra efter reglerne og aftalerne.'); }
     else if (uger.size) { M.reparer([...uger], { runder: valg.runder, ikkeTil, fraDag }); tilbage(); }
+    // Vagter med bestemte afloesere, som ingen af dem kunne tage
+    const udaekket = M.S.filter(x => x.kun && x.p == 'uk');
+    if (udaekket.length) fejl(`Ingen af de valgte afløsere kunne tage ${liste(udaekket.sort((a, b) => a.w - b.w || a.d - b.d).map(x => datoTekst(fraDagNr(s0 + 7 * x.w + x.d)) + ' ' + kl(x.s) + '–' + kl(x.e)))} – ${udaekket.length == 1 ? 'den står' : 'de står'} som ekstra person.`);
 
     // Oprydning: planlaeggeren kan have flyttet vagter, som lige saa godt kunne blive hos den der
     // havde dem (fx en byttet weekend, der hverken er bedre eller daarligere). De gives tilbage --

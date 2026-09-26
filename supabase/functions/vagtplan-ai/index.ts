@@ -25,7 +25,7 @@ const CORS = {
 const svar = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
-const MODELLER = (Deno.env.get('GEMINI_MODELLER') ?? 'gemini-flash-latest,gemini-flash-lite-latest,gemini-2.5-flash')
+const MODELLER = (Deno.env.get('GEMINI_MODELLER') ?? 'gemini-flash-latest,gemini-2.5-flash,gemini-flash-lite-latest')
   .split(',').map((s) => s.trim()).filter(Boolean);
 
 const SYSTEM = `Du er vagtplan-assistent i Børneloppens vagtplan-værktøj. Lederen skriver på dansk, hvad der skal ske med vagtplanen, og du oversætter det til handlinger. Programmet udfører handlingerne med sin egen planlægger, som overholder butikkens regler, dækker huller og finder afløsere. Du skal altså IKKE selv regne bemanding ud eller vælge afløsere.
@@ -36,8 +36,9 @@ Svar ALTID med JSON: {"svar": "...", "handlinger": [...]}
 
 Handlinger. "navn" og "til_navn" skal være præcis et navn fra medarbejderlisten. Datoer skrives ÅÅÅÅ-MM-DD. Klokkeslæt skrives TT:MM i hele kvarter.
 Datoerne angives enten som "datoer" (en liste af enkelte datoer) eller som en sammenhængende periode med "periode_fra" og "periode_til" (begge dage med) – brug perioden ved fx ferie eller "de næste 2 uger". Udelad felter, der ikke hører til handlingen.
-- {"type":"fri","navn":…,"datoer":[…]} – personen har fri hele dagen (ferie, sygdom, fridag). Personens vagter de dage fjernes, og planlæggeren finder afløsere.
-- {"type":"fri_antal","navn":…,"antal":N,"periode_fra":…,"periode_til":…} – personen skal have N fridage i perioden, men lederen har ikke sagt hvilke. Planlæggeren vælger de dage, der er nemmest at dække. Perioden SKAL med.
+- {"type":"fri","navn":…,"datoer":[…],"afloesere":[…]} – personen har fri hele dagen (ferie, sygdom, fridag). Personens vagter de dage fjernes, og planlæggeren finder afløsere. Ferie og sygdom tæller ikke imod personens timekrav.
+- {"type":"fri_antal","navn":…,"antal":N,"periode_fra":…,"periode_til":…,"afloesere":[…]} – personen skal have N fridage i perioden, men lederen har ikke sagt hvilke. Planlæggeren vælger de dage, der er nemmest at dække. Perioden SKAL med.
+  "afloesere" (skal altid med ved fri og fri_antal): hvem der må tage personens vagter – navne og/eller jobtyper fra listen, fx ["Ungarbejder"] eller ["Kacper","Freya"]. Tom liste [], når lederen ikke har sagt noget om det – så må alle, der kan.
 - {"type":"kun_tid","navn":…,"datoer":[…],"fra":…,"til":…} – personen kan kun arbejde fra–til de dage (fx "kan først kl. 12", "skal gå kl. 14" – så udelades det felt, der ikke er sagt noget om).
 - {"type":"vagt","navn":…,"datoer":[…],"fra":…,"til":…} – personen SKAL arbejde de dage. Udelad "fra" og "til", hvis lederen ikke har nævnt et tidspunkt – så vælger planlæggeren tiden. Vagten låses fast.
 - {"type":"overdrag","navn":…,"til_navn":…,"datoer":[…]} – navns vagt de dage gives til til_navn. At bytte vagter er to overdrag.
@@ -55,12 +56,24 @@ Sådan gør du:
 - Spørgsmål om planen (hvem arbejder hvornår, timer, problemer) besvares ud fra konteksten uden handlinger. Brug tallene under "Timer pr. uge" i stedet for at regne selv.
 - "Ekstra person" er en pladsholder for en ekstra medarbejder eller vikar, der skal findes.
 - Beder lederen om noget, du ikke kan (fx at ændre butikkens åbningstider eller regler), så forklar kort i "svar", at det gøres under "Regler".
+- Lov ALDRIG noget i "svar", som handlingerne ikke gør. Kan en del af lederens ønske ikke udtrykkes med handlingerne og felterne ovenfor, så gør det, der kan, og sig ærligt, hvad der ikke kan lade sig gøre.
+- Du kender medarbejdernes jobtyper (fx ungarbejder, salgsassistent) fra listen. Planlæggeren overholder selv reglerne om dem (fx at ungarbejdere ikke må stå alene).
 
 Eksempel (opdigtede navne; i dag er fredag 2026-03-06):
 Lederen: "Anna skal have fri 2 dage og skal arbejde tirsdag og torsdag de næste 2 uger, og Bo er syg i morgen"
-{"svar":"Anna låses på tirsdage og torsdage de næste to uger og får 2 fridage, som planlæggeren vælger. Bo har fri i morgen, og hans vagt dækkes.","handlinger":[{"type":"vagt","navn":"Anna","datoer":["2026-03-10","2026-03-12","2026-03-17","2026-03-19"]},{"type":"fri_antal","navn":"Anna","antal":2,"periode_fra":"2026-03-06","periode_til":"2026-03-19"},{"type":"fri","navn":"Bo","datoer":["2026-03-07"]}]}`;
+{"svar":"Anna låses på tirsdage og torsdage de næste to uger og får 2 fridage, som planlæggeren vælger. Bo har fri i morgen, og hans vagt dækkes.","handlinger":[{"type":"vagt","navn":"Anna","datoer":["2026-03-10","2026-03-12","2026-03-17","2026-03-19"]},{"type":"fri_antal","navn":"Anna","antal":2,"periode_fra":"2026-03-06","periode_til":"2026-03-19","afloesere":[]},{"type":"fri","navn":"Bo","datoer":["2026-03-07"],"afloesere":[]}]}`;
 
-const STR = { type: 'string' };
+// Svarskemaet: hver handlingstype har kun sine egne felter (anyOf), saa modellen ikke kan skrive
+// et felt det forkerte sted (fx en jobtype i "til"). "afloesere" er obligatorisk ved fri/fri_antal
+// (tom liste = alle maa), saa modellen altid tager stilling til det.
+const STR = { type: 'string' }, LISTE = { type: 'array', items: STR };
+const PERIODE = { datoer: LISTE, periode_fra: STR, periode_til: STR };
+const handling = (type: string, felter: Record<string, unknown>, kraevet: string[] = []) => ({
+  type: 'object',
+  properties: { type: { type: 'string', enum: [type] }, ...felter },
+  required: ['type', ...kraevet],
+  additionalProperties: false,
+});
 const SKEMA = {
   type: 'object',
   properties: {
@@ -68,23 +81,17 @@ const SKEMA = {
     handlinger: {
       type: 'array',
       items: {
-        type: 'object',
-        properties: {
-          type: { type: 'string', enum: ['fri', 'fri_antal', 'kun_tid', 'vagt', 'overdrag', 'fjern_aftale', 'tilgaengelighed', 'timer', 'ny_plan'] },
-          navn: STR,
-          til_navn: STR,
-          datoer: { type: 'array', items: STR },
-          periode_fra: STR,
-          periode_til: STR,
-          antal: { type: 'integer' },
-          fra: STR,
-          til: STR,
-          ugedage: { type: 'array', items: { type: 'integer' } },
-          kan: { type: 'boolean' },
-          timeart: { type: 'string', enum: ['ingen', 'min', 'praecis', 'oenske'] },
-          timer: { type: 'number' },
-        },
-        required: ['type'],
+        anyOf: [
+          handling('fri', { navn: STR, ...PERIODE, afloesere: LISTE }, ['navn', 'afloesere']),
+          handling('fri_antal', { navn: STR, antal: { type: 'integer' }, periode_fra: STR, periode_til: STR, afloesere: LISTE }, ['navn', 'antal', 'periode_fra', 'periode_til', 'afloesere']),
+          handling('kun_tid', { navn: STR, ...PERIODE, fra: STR, til: STR }, ['navn']),
+          handling('vagt', { navn: STR, ...PERIODE, fra: STR, til: STR }, ['navn']),
+          handling('overdrag', { navn: STR, til_navn: STR, ...PERIODE }, ['navn', 'til_navn']),
+          handling('fjern_aftale', { navn: STR, ...PERIODE }, ['navn']),
+          handling('tilgaengelighed', { navn: STR, ugedage: { type: 'array', items: { type: 'integer' } }, kan: { type: 'boolean' }, fra: STR, til: STR }, ['navn', 'ugedage', 'kan']),
+          handling('timer', { navn: STR, timeart: { type: 'string', enum: ['ingen', 'min', 'praecis', 'oenske'] }, timer: { type: 'number' } }, ['navn', 'timeart', 'timer']),
+          handling('ny_plan', {}),
+        ],
       },
     },
   },
