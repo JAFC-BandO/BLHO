@@ -96,6 +96,8 @@
     const tænk = tilfoej(`<span class="ai-avatar">${IKON.gnist}</span><div class="ai-boble ai-taenker"><span class="prik"></span><span class="prik"></span><span class="prik"></span><span class="ai-taenker-tekst">Tænker…</span></div>`, 'ai-besked ai');
     const idag = new Date();
     const base = JSON.parse(snap());
+    // Den gratis AI kan vaere langsom, naar der er travlt hos Google -- saa siges det
+    const langsom = setTimeout(() => { const e = tænk.querySelector('.ai-taenker-tekst'); if (e) e.textContent = 'Der er travlt hos Google – et øjeblik…'; }, 9000);
     let svar;
     try {
       const kontekst = A.kontekst(base, idag, { planNavn: raekke.navn, butik: butikNavn(raekke) || (aktuelButik && aktuelButik.navn) });
@@ -103,6 +105,7 @@
     } catch (e) {
       svar = { fejl: 'Kunne ikke nå AI-assistenten. Tjek forbindelsen og prøv igen.' };
     }
+    clearTimeout(langsom);
     if (svar.fejl) {
       tænk.remove();
       tilfoej(`<span class="ai-avatar fejl">!</span><div class="ai-boble">${esc(svar.fejl)}</div>`, 'ai-besked ai fejl');
