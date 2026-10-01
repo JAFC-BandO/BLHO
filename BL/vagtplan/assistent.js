@@ -388,6 +388,19 @@
         if (!(n >= 0 && n <= 7)) { fejl('Jeg forstod ikke, hvor mange vagter fra åbning til luk der må være om ugen.'); return; }
         r.antal = n;
         if (ds.length && ds.length < 7) r.ugedage = ds;
+      } else if (type == 'min_gruppe') {
+        if (alle || (!ids.length && !typer.length)) { fejl('Jeg ved ikke, hvilken jobtype (eller hvem) der skal være på arbejde.'); return; }
+        const n = h.antal == null ? 1 : antal, fra = tilMin(h.fra), til = tilMin(h.til);
+        if (!(n >= 1 && n <= 5)) { fejl('Jeg forstod ikke, hvor mange der mindst skal være på arbejde.'); return; }
+        if (fra != null && til != null && til <= fra) { fejl(`${kl(fra)}–${kl(til)} er ikke et tidsrum.`); return; }
+        r.antal = n;
+        if (fra != null) r.fra = fra;
+        if (til != null) r.til = til;
+        if (ds.length && ds.length < 7) r.ugedage = ds;
+      } else if (type == 'weekend_fridage') {
+        const n = h.antal == null ? 2 : antal;
+        if (!(n >= 1 && n <= 5)) { fejl('Jeg forstod ikke, hvor mange hverdage der skal være fri.'); return; }
+        r.antal = n;
       } else if (type == 'maks_personer_dag') {
         if (!(antal >= 1 && antal <= 20)) { fejl('Jeg forstod ikke, hvor mange der højst må være på arbejde i løbet af dagen.'); return; }
         r.antal = antal;
@@ -397,7 +410,7 @@
         if (antalP < 2) { fejl('"Må ikke arbejde sammen" kræver mindst to medarbejdere.'); return; }
       }
       if (valg.idag) r.fraDato = lokalDato(valg.idag);
-      const gl = C.ekstraRegler || [], ens = x => x.type == type && JSON.stringify(x.hvem) == JSON.stringify(hv) && JSON.stringify(x.ugedage || null) == JSON.stringify(r.ugedage || null);
+      const gl = C.ekstraRegler || [], ens = x => x.type == type && JSON.stringify(x.hvem) == JSON.stringify(hv) && JSON.stringify(x.ugedage || null) == JSON.stringify(r.ugedage || null) && (type != 'min_gruppe' || (x.fra == r.fra && x.til == r.til));
       const i = gl.findIndex(ens), uden = x => JSON.stringify(Object.assign({}, x, { id: 0, fraDato: 0 }));
       if (i >= 0 && uden(gl[i]) == uden(r)) { ok(`Reglen findes allerede: ${O.beskrivRegel(gl[i], C)}`); return; }
       r.id = i >= 0 ? gl[i].id : 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);

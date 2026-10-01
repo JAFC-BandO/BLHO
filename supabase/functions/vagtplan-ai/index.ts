@@ -56,6 +56,8 @@ Datoerne angives enten som "datoer" (en liste af enkelte datoer) eller som en sa
   · "weekend_hver" med "antal": højst hver N. weekend.
   · "aaben_til_luk" med "antal" (og evt. "ugedage"): højst N dage om ugen, hvor personen både åbner butikken og arbejder helt til lukketid. antal 0 = aldrig ("den der åbner, må ikke også lukke").
   · "maks_personer_dag" med "antal" og evt. "ugedage" (navne er ["alle"]): højst N forskellige medarbejdere på arbejde i løbet af en dag – fx "kun 2 på arbejde lørdag og søndag" = antal 2, ugedage [5,6].
+  · "min_gruppe" med "navne" (en jobtype eller navne), "antal", "fra", "til" og evt. "ugedage": i hele tidsrummet skal der være mindst N fra gruppen på arbejde. Fx "fra 15:15 til 18:15 på hverdage skal der være en over 18 og en under 18 på arbejde" = navne ["Ungarbejder"], antal 1, fra "15:15", til "18:15", ugedage [0,1,2,3,4] (den voksne er allerede sikret af reglen om en ansvarlig).
+  · "weekend_fridage" med "antal": arbejder personen både lørdag og søndag, skal hun/han have N hverdage fri i samme uge.
   "undtagen" (valgfri, sammen med ["alle"] eller en jobtype): navne, som reglen IKKE gælder for. Fx "kun Anna må have vagter fra åbning til luk, og Bo højst én om ugen" = to regler: {"regel":"aaben_til_luk","navne":["alle"],"undtagen":["Anna","Bo"],"antal":0} og {"regel":"aaben_til_luk","navne":["Bo"],"antal":1}.
   Én regel-handling pr. regel. Du kan kun TILFØJE regler – du kan ikke fjerne regler eller ændre butikkens åbningstider og bemanding; det gør lederen under "Regler".
 - {"type":"ny_plan"} – lav hele planen forfra. Kun når lederen udtrykkeligt beder om en helt ny plan.
@@ -106,7 +108,7 @@ const SKEMA = {
           handling('tilgaengelighed', { navn: STR, ugedage: { type: 'array', items: { type: 'integer' } }, kan: { type: 'boolean' }, fra: STR, til: STR }, ['navn', 'ugedage', 'kan']),
           handling('timer', { navn: STR, timeart: { type: 'string', enum: ['ingen', 'min', 'praecis', 'oenske'] }, timer: { type: 'number' } }, ['navn', 'timeart', 'timer']),
           handling('regel', {
-            regel: { type: 'string', enum: ['maks_dage_i_traek', 'maks_timer_uge', 'maks_dage_uge', 'maks_vagt', 'tidsrum', 'ikke_dage', 'ikke_sammen', 'weekend_hver', 'aaben_til_luk', 'maks_personer_dag'] },
+            regel: { type: 'string', enum: ['maks_dage_i_traek', 'maks_timer_uge', 'maks_dage_uge', 'maks_vagt', 'tidsrum', 'ikke_dage', 'ikke_sammen', 'weekend_hver', 'aaben_til_luk', 'maks_personer_dag', 'min_gruppe', 'weekend_fridage'] },
             navne: LISTE, undtagen: LISTE, antal: { type: 'integer' }, timer: { type: 'number' }, ugedage: { type: 'array', items: { type: 'integer' } }, fra: STR, til: STR,
           }, ['regel', 'navne']),
           handling('ny_plan', {}),
