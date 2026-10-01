@@ -1,4 +1,6 @@
-# BLHO check-in. Koeres hvert minut af den planlagte opgave BLHO-Checkin, som SYSTEM.
+# BLHO check-in. Koeres hvert 2. minut af den planlagte opgave BLHO-Checkin, som SYSTEM.
+# (Hvert 2. minut og genbrugt login: Supabase logger hvert kald, og hvert minut med nyt login
+# fyldte gratisplanens log-kvote.)
 # Genereret af win-setup.ps1 - ret hellere der, og koer scriptet igen.
 $ErrorActionPreference = 'Stop'
 
@@ -41,12 +43,25 @@ if ($nuUtc.Hour -eq 4 -and $oppetimer -gt 6 -and (Get-Content $rebootFil -ErrorA
   exit
 }
 
+# Login genbruges (gemt i state-mappen; et token gaelder 1 time) i stedet for et nyt login
+# hvert minut: Supabase logger hvert login, og det fyldte gratisplanens log-kvote.
+$tokenFil = Join-Path $STATEDIR 'token.json'
+$TOKEN = $null
 try {
-  $svar = Invoke-RestMethod -Method Post -Uri "$SUPABASE_URL/auth/v1/token?grant_type=password" -Headers @{ apikey = $SUPABASE_KEY } -ContentType 'application/json' -Body (@{ email = $EMAIL; password = $PASSWORD } | ConvertTo-Json)
-  $TOKEN = $svar.access_token
-} catch {
-  Log "Login fejlede: $($_.Exception.Message)"
-  exit 1
+  $gemt = Get-Content $tokenFil -Raw -ErrorAction Stop | ConvertFrom-Json
+  if ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() -lt [long]$gemt.udloeb) { $TOKEN = $gemt.token }
+} catch { }
+if (-not $TOKEN) {
+  try {
+    $svar = Invoke-RestMethod -Method Post -Uri "$SUPABASE_URL/auth/v1/token?grant_type=password" -Headers @{ apikey = $SUPABASE_KEY } -ContentType 'application/json' -Body (@{ email = $EMAIL; password = $PASSWORD } | ConvertTo-Json)
+    $TOKEN = $svar.access_token
+    $udloeb = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() + [int]$svar.expires_in - 300
+    @{ token = $TOKEN; udloeb = $udloeb } | ConvertTo-Json | Set-Content -Path $tokenFil -Encoding ascii
+    & icacls.exe $tokenFil /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' | Out-Null
+  } catch {
+    Log "Login fejlede: $($_.Exception.Message)"
+    exit 1
+  }
 }
 if (-not $TOKEN) { Log 'Intet access_token i svaret'; exit 1 }
 $headers = @{ apikey = $SUPABASE_KEY; Authorization = "Bearer $TOKEN" }
@@ -96,6 +111,7 @@ try {
   $res = Invoke-RestMethod -Method Post -Uri "$SUPABASE_URL/rest/v1/rpc/enhed_checkin" -Headers $headers -ContentType 'application/json' -Body $payload
 } catch {
   Log "Check-in fejlede: $($_.Exception.Message)"
+  Remove-Item $tokenFil -ErrorAction SilentlyContinue  # afvist/udloebet login -> nyt login naeste gang
   exit 1
 }
 
