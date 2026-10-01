@@ -1420,7 +1420,10 @@
 
     await loadLiveView();
     if (liveViewPollHandle) clearInterval(liveViewPollHandle);
-    liveViewPollHandle = setInterval(loadLiveView, 10000);
+    // Hvert minut og kun mens fanen er synlig (var hvert 10. sekund): Live View genindlaeses i
+    // forvejen straks efter ens eget Gem, saa pollen fanger kun andres aendringer -- og
+    // Supabase logger hvert kald (gratisplanens log-kvote). Se ogsaa visibilitychange nedenfor.
+    liveViewPollHandle = setInterval(() => { if (!document.hidden && aktivFane === 'butik') loadLiveView(); }, 60000);
     redNulstil(); // ny butik: frisk fortryd-historik
     vagtplanFoelgButik(); // vagtplanen er pr. butik
   }
@@ -2409,7 +2412,9 @@
     // Auto-opdatér mens panelet er åbent, så et fejlfindings-svar dukker op af sig selv
     // uden man skal lukke/genåbne panelet manuelt hvert minut for at tjekke.
     if (enhederPollHandle) clearInterval(enhederPollHandle);
-    enhederPollHandle = setInterval(loadEnheder, 15000);
+    // Hvert 30. sekund og kun mens fanen er synlig -- boksene checker alligevel kun ind hvert
+    // 2. minut (log-kvoten), saa hyppigere ville bare hente det samme igen.
+    enhederPollHandle = setInterval(() => { if (!document.hidden) loadEnheder(); }, 30000);
   });
   document.getElementById('enhederCloseBtn').addEventListener('click', async () => {
     document.getElementById('enhederOverlay').style.display = 'none';
@@ -3973,6 +3978,12 @@
   // Bruger buildElNode fra render-shared.js -- den SAMME funktion skaerm.html rent faktisk
   // kalder for at tegne den rigtige skaerm. Ingen separat/parallel implementering at holde i
   // sync -- ser Live View rigtigt ud, goer skaerm.html det ogsaa, og omvendt.
+
+  // Kommer man tilbage til fanen (eller skifter fra vagtplanen), opdateres Live View med det
+  // samme i stedet for at vente op til et minut paa naeste poll.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && aktivFane === 'butik' && currentButikId) loadLiveView();
+  });
 
   async function loadLiveView() {
     const box = document.getElementById('liveViewBox');
