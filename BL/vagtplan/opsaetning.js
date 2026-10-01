@@ -95,7 +95,9 @@
     // (samme raekkefoelge som den oprindelige opsaetning -- den bruges af weekend-aflastningen).
     weekendRotation.forEach((_, h) => [5, 6].forEach(d => model.forEach(m => m.vagter.filter(v => v.hold != null && v.hold % nHold === h && v.d == d)
       .forEach(v => weekendRotation[h].push({ p: m.id, d: v.d, s: v.s, e: v.e })))));
-    const fordeles = model.filter(m => m.fordeles && !m.kunFaste);
+    // Uden faste vagter fordeler planlaeggeren altid personens vagter -- ellers fik hun/han
+    // aldrig nogen (og ville bryde sine timekrav).
+    const fordeles = model.filter(m => !m.kunFaste && (m.fordeles || !m.vagter.length));
     const hverdagsDage = m => [0, 1, 2, 3, 4].filter(d => m.dage[d]);
     // Planlaeggeren fordeler vagter i den raekkefoelge -- de eksisterende beholder deres
     // plads (ellers aendrer alle forslag sig, bare fordi én medarbejder er rettet), nye kommer sidst.

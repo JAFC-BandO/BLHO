@@ -107,8 +107,12 @@
     $('#mdLoenBeloeb').placeholder = lt == 'fast' ? 'fx 32000' : 'fx 145';
     $('#mdTimerTal').hidden = art == 'ingen';
     $('#mdFridagFelt').hidden = art != 'praecis';
-    $('#mdFordeles').disabled = $('#mdKunFaste').checked;
+    // Uden faste vagter fordeler planlaeggeren altid personens vagter (opsaetning.js: fraModel)
+    const ingenFaste = !aaben.vagter.length && !$('#mdKunFaste').checked;
+    if (ingenFaste) $('#mdFordeles').checked = true;
+    $('#mdFordeles').disabled = $('#mdKunFaste').checked || ingenFaste;
     $('#mdFordelesFelt').classList.toggle('slukket', $('#mdKunFaste').checked);
+    $('#mdFordelesFelt').title = ingenFaste ? 'Uden faste vagter fordeler planlæggeren altid personens vagter ud fra hvornår hun/han kan, timerne og reglerne' : '';
   }
   function tegnVagter() {
     const v = aaben.vagter;
@@ -131,9 +135,9 @@
   });
   $('#mdVagter').addEventListener('click', e => {
     const b = e.target.closest('[data-slet-vagt]'); if (!b) return;
-    aaben.vagter.splice(+b.dataset.sletVagt, 1); tegnVagter();
+    aaben.vagter.splice(+b.dataset.sletVagt, 1); tegnVagter(); opdaterFelter();
   });
-  $('#mdNyVagt').onclick = () => { aaben.vagter.push({ d: 0, s: 600, e: 780, hold: null }); tegnVagter(); };
+  $('#mdNyVagt').onclick = () => { aaben.vagter.push({ d: 0, s: 600, e: 780, hold: null }); tegnVagter(); opdaterFelter(); };
   ['#mdTimerArt', '#mdKunFaste', '#mdLoenType'].forEach(s => $(s).addEventListener('change', opdaterFelter));
 
   // ---------- Gem ----------
