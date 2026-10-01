@@ -627,7 +627,10 @@
       for (let d = 0; d < 7; d++) if (av(p, d)) { kan++; if (undtagelse(p, w, d) === null) fri++; }
       return kan ? (kan - fri) / kan : 1;
     }
+    // Timer med flere paa arbejde end bemandingen kraever (saettes af gennemgaa, bruges af vurder)
+    let overskudT = 0;
     function gennemgaa(emit) {
+      overskudT = 0;
       const S = M.S;
       ext();
       const nx = Math.max(0, ...M.EX.filter(Boolean));
@@ -659,6 +662,7 @@
           });
           const [a, b] = O(d), n = (b - a) / 15, c = Array(n).fill(0), m = Array(n).fill(0);
           sh.forEach(x => { for (let t = Math.max(x.s, a); t < Math.min(x.e, b); t += 15) { const i = (t - a) / 15; c[i]++; if (P[x.p][1] != 'U') m[i]++; } });
+          for (let i = 0; i < n; i++) { const ov = c[i] - need(a + i * 15, d); if (ov > 0) overskudT += ov / 4; }
           // Et brud pr. sammenhaengende tidsrum; stoerrelsen er personer x timer (gr: pr. kvarter)
           const rn = (fn, ms, gr) => { for (let i = 0; i < n;) { if (fn(i)) { let j = i, mx = 0, sum = 0; while (j < n && fn(j)) { mx = Math.max(mx, need(a + j * 15, d) - c[j]); sum += gr(j); j++; } const i0 = i, j0 = j, mx0 = mx; emit(w, d, 0, () => ms(f(a + i0 * 15), f(a + j0 * 15), mx0), sum / 4); i = j; } else i++; } };
           const kv = krav(d);
@@ -786,6 +790,8 @@
       sving: 0.5,     // pr. time en fleksibel medarbejders uge afviger fra hendes/hans eget snit
       spredning: 1,   // pr. (time)^2 en fleksibel medarbejders snit afviger fra jobtypens snit
       maal: 1,        // pr. time under maalTimer i en uge
+      overskud: 4,    // pr. time der er flere paa arbejde end bemandingen kraever (fx at moede 14:30, naar
+                      // der foerst skal vaere 2 fra 15:15) -- bruges kun, naar nogens timekrav kraever det
       fra1515: 8,     // det alternative starttidspunkt ("eller fra", fx 15:15) bruges kun, hvis det normale koster mere
       flyt: 12,       // reparer(): pr. vagt der flyttes fra én medarbejder til en anden -- saa en lille
                       // rettelse ikke bytter rundt paa resten af ugen for at jaevne timerne en smule
@@ -821,8 +827,8 @@
       // foerst er overskredet.
       const forMange = M.EKSTRA != null ? Math.max(0, nx - M.EKSTRA - 1) : 0;
       const point = (hard + forMange) * 1e6 + grad * STRAF.brud + soft * STRAF.oenske + ukT * STRAF.ekstraTime + maerk * STRAF.maerkelig
-        + sving * STRAF.sving + spredning * STRAF.spredning + maal * STRAF.maal + (FLEKS && M.T2 == FLEKS.ellerFra ? STRAF.fra1515 : 0);
-      return { point, hard, soft, grad, ukT, nx, maerk, sving, spredning, maal };
+        + sving * STRAF.sving + spredning * STRAF.spredning + maal * STRAF.maal + overskudT * STRAF.overskud + (FLEKS && M.T2 == FLEKS.ellerFra ? STRAF.fra1515 : 0);
+      return { point, hard, soft, grad, ukT, nx, maerk, sving, spredning, maal, overskud: overskudT };
     }
     // Vagter der ligger fast i opsaetningen (faste vagter + weekend-rotationen) byttes ikke
     // rundt mellem personalet. Rotationens "dobbelt-weekender" (samme person loerdag OG
