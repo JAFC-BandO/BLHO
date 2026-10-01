@@ -393,8 +393,19 @@
     if (nyPlan) { M.foreslaa(valg.runder); ok('Hele planen er lavet forfra efter reglerne og aftalerne.'); }
     else if (uger.size) { M.reparer([...uger], { runder: valg.runder, ikkeTil, fraDag }); tilbage(); }
     // Vagter med bestemte afloesere, som ingen af dem kunne tage
-    const udaekket = M.S.filter(x => x.kun && x.p == 'uk');
-    if (udaekket.length) fejl(`Ingen af de valgte afløsere kunne tage ${liste(udaekket.sort((a, b) => a.w - b.w || a.d - b.d).map(x => datoTekst(fraDagNr(s0 + 7 * x.w + x.d)) + ' ' + kl(x.s) + '–' + kl(x.e)))} – ${udaekket.length == 1 ? 'den står' : 'de står'} som ekstra person.`);
+    // (staar de over graensen for ekstra personer, er de fjernet igen -- M.FJERNET_EKSTRA)
+    const fjernetE = nyPlan ? [] : (M.FJERNET_EKSTRA || []);
+    const udaekket = M.S.filter(x => x.kun && x.p == 'uk'), udenE = fjernetE.filter(x => x.kun);
+    const vagtListe = l => liste(l.sort((a, b) => a.w - b.w || a.d - b.d).map(x => datoTekst(fraDagNr(s0 + 7 * x.w + x.d)) + ' ' + kl(x.s) + '–' + kl(x.e)));
+    if (udaekket.length) fejl(`Ingen af de valgte afløsere kunne tage ${vagtListe(udaekket)} – ${udaekket.length == 1 ? 'den står' : 'de står'} som ekstra person.`);
+    if (udenE.length) fejl(`Ingen af de valgte afløsere kunne tage ${vagtListe(udenE)} – ${udenE.length == 1 ? 'den er' : 'de er'} ikke dækket.`);
+    // Planen gaar ikke op med personalet alene: sig det, i stedet for at saette ekstra personer ind
+    const huller = l => l.filter(i => !i.soft && /^(Mangler|Ingen ansvarlig)/.test(i.t));
+    const hulNu = huller(M.check()), hulFoer = huller(motorFra(o0).check()).length;
+    if (hulNu.length > hulFoer) {
+      const hvor = [...new Set(hulNu.map(i => datoTekst(fraDagNr(s0 + 7 * i.w + i.d))))];
+      fejl(`Personalet kan ikke dække alle vagter efter reglerne (${liste(hvor.slice(0, 6))}${hvor.length > 6 ? ' m.fl.' : ''}) – se problemerne. Der er valgt ${M.EKSTRA} ekstra ${M.EKSTRA == 1 ? 'person' : 'personer'}; sæt "Ekstra personer" op, hvis en ekstra person må tage vagterne.`);
+    }
 
     // Oprydning: planlaeggeren kan have flyttet vagter, som lige saa godt kunne blive hos den der
     // havde dem (fx en byttet weekend, der hverken er bedre eller daarligere). De gives tilbage --

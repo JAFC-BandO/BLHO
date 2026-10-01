@@ -23,9 +23,9 @@ window.addEventListener('storage', e => { if (e.key === 'blho-tema') saetTema();
 if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('change', saetTema);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="motor.js?v=2026-10-01-2"></script>
+<script src="motor.js?v=2026-10-01-3"></script>
 <script src="opsaetning.js?v=2026-10-01-2"></script>
-<script src="assistent.js?v=2026-10-01-1"></script>
+<script src="assistent.js?v=2026-10-01-2"></script>
 <style>
 /* Farverne ligger som variabler, saa lys/moerk tilstand styres ét sted. Temaet vaelges med
    knappen i butik-redigerings topbar og deles via localStorage 'blho-tema' (se <head>). */
@@ -536,7 +536,7 @@ function vis(id) { ['laeserVis', 'loginVis', 'ingenAdgangVis', 'app'].forEach(x 
 // t2 er "2 pers. fra"-knappen, ekstra er "Ekstra personer" og ekstraRegel er "Ekstra maa arbejde" --
 // alle gemmes sammen med planen, ellers passer planen ikke til indstillingerne, naar siden
 // aabnes igen. (Aeldre format: bare vagt-listen.)
-const EKSTRA_STANDARD = 1; // I ansaetter 1 ekstra person nu
+const EKSTRA_STANDARD = 0; // planen laves med det personale der er, medmindre lederen vaelger ekstra personer
 // ---------- Datoer ----------
 // En vagtplan er en periode, der starter en mandag (plan.start, 'YYYY-MM-DD'). Planens uge w er
 // start + 7*w dage. plan.holdStart: hvilket weekend-hold planens foerste uge har (motor.js), saa
@@ -1003,7 +1003,7 @@ $('#medarbejdere').onclick = () => aabnMedarbejdere();
 // M.foreslaa() (motor.js) proever baade "2 pers. fra 15:00" og "fra 15:15" og tusindvis af
 // fordelinger, og vaelger den plan der overholder reglerne bedst. Det tager op mod et sekund,
 // saa knappen viser "Beregner…" -- setTimeout giver browseren tid til at tegne den foerst.
-const FORSLAG_FORKLARING = '<p><b>Sådan laves forslag:</b> "Foreslå ny plan" bygger planen op dag for dag ud fra, hvornår hver medarbejder kan arbejde, deres timer og butikkens regler – medarbejdere uden faste vagter fordeler planlæggeren selv. Derefter prøver den tusindvis af ændringer (flytte, dele, forlænge og bytte vagter) og vælger den plan, der overholder alle regler og derefter bedst: opfylder weekend-ønskerne, bruger færrest timer med ekstra personer, undgår mærkelige mødetider og fordeler timerne jævnt. Har en bemanding et "eller fra"-tidspunkt, prøves begge, og det senere vælges kun, når det normale ville kræve ekstra folk. Ekstra personer bruges kun til det, personalet ikke kan dække efter reglerne. Faste vagter og weekend-holdene flyttes aldrig.</p>';
+const FORSLAG_FORKLARING = '<p><b>Sådan laves forslag:</b> "Foreslå ny plan" bygger planen op dag for dag ud fra, hvornår hver medarbejder kan arbejde, deres timer og butikkens regler – medarbejdere uden faste vagter fordeler planlæggeren selv. Derefter prøver den tusindvis af ændringer (flytte, dele, forlænge og bytte vagter) og vælger den plan, der overholder alle regler og derefter bedst: opfylder weekend-ønskerne, bruger færrest timer med ekstra personer, undgår mærkelige mødetider og fordeler timerne jævnt. Har en bemanding et "eller fra"-tidspunkt, prøves begge, og det senere vælges kun, når det normale ville kræve ekstra folk. Der bruges aldrig flere ekstra personer, end der er valgt under "Ekstra personer" – kan personalet ikke dække en vagt efter reglerne, står den som "Mangler … pers." under Problemer. Faste vagter og weekend-holdene flyttes aldrig.</p>';
 function foreslaa() {
   const knap = $('#gen');
   knap.disabled = true; knap.textContent = 'Beregner…';

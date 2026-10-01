@@ -391,11 +391,13 @@
     const fasteK = () => fasteKCache || (fasteKCache = fasteNoegler());
     // ikkeTil: personer der ikke maa faa nye vagter -- undtagen paa de dage i igen ('p|d'), hvor
     // de havde en vagt foer dagen blev bygget om.
-    function bygDag(w, d, nz, ikkeTil, igen) {
+    // udenEkstra: resterende huller daekkes IKKE af ekstra personer.
+    function bygDag(w, d, nz, ikkeTil, igen, udenEkstra) {
       if (lukket(d)) return;
-      for (let n = 0; n < 16; n++) {
+      // fra: kan ingen tage et hul, gaas der videre til det naeste (et kvarter ad gangen)
+      for (let n = 0, fra = 0; n < 48; n++) {
         const cv = cov(w, d), N = cv.c.length;
-        let i = 0;
+        let i = fra;
         while (i < N && !(need(cv.a + i * 15, d) - cv.c[i] > 0 || (RG.ansvarlig && cv.m[i] == 0))) i++;
         if (i == N) return;
         const t = cv.a + i * 15, ansv = RG.ansvarlig && cv.m[i] == 0;
@@ -441,11 +443,11 @@
             }
           }
         });
-        if (!bedst) break;
+        if (!bedst) { fra = i + 1; continue; }
         if (bedst.forlaeng) bedst.forlaeng.e = bedst.e;
         else M.S.push({ w, d, p: bedst.p, s: bedst.s, e: bedst.e });
       }
-      daekHuller(w, d, 1); daekHuller(w, d, 0);
+      if (!udenEkstra) { daekHuller(w, d, 1); daekHuller(w, d, 0); }
     }
     // Maa p arbejde weekend i uge w (hoejst hver N. weekend)?
     function weekendLedig(p, w) {
@@ -858,6 +860,30 @@
         }
       });
     }
+    // Planlaeggeren maa aldrig bruge flere ekstra personer end der er valgt ("Ekstra personer").
+    // Undervejs bruges ekstra-vagter som pladsholdere, men til sidst fjernes dem der ligger over
+    // graensen (laaste vagter roeres ikke). Hullerne proeves daekket af personalet -- kan det ikke
+    // lade sig goere, staar de som "Mangler ... pers." i problemlisten, saa lederen kan se, at
+    // planen ikke gaar op med det personale der er. M.FJERNET_EKSTRA: de fjernede vagter.
+    function haandhaevEkstra(uger, fraDag, ikkeTil) {
+      M.FJERNET_EKSTRA = [];
+      if (M.EKSTRA == null) return;
+      ext();
+      const over = (x, i) => x.p == 'uk' && M.EX[i] > M.EKSTRA && !x.laast && (!uger || uger.has(x.w));
+      const fjern = M.S.filter(over);
+      if (!fjern.length) return;
+      M.FJERNET_EKSTRA = fjern;
+      M.S = M.S.filter(x => !fjern.includes(x));
+      [...new Set(fjern.map(x => x.w * 7 + x.d))].forEach(n => {
+        const w = Math.floor(n / 7), d = n % 7;
+        // Dage hvor lederen har bestemt afloeserne (x.kun), daekkes ikke af andre
+        // -- og dage der er gaaet, bygges ikke om
+        if (fjern.some(x => x.kun && x.w == w && x.d == d) || (fraDag != null && n < fraDag)) return;
+        const foer = vurder().point, S0 = M.S.map(x => Object.assign({}, x));
+        bygDag(w, d, 0, ikkeTil, null, true);
+        if (vurder().point >= foer) M.S = S0;
+      });
+    }
     // To udgangspunkter pr. starttidspunkt: den oprindelige generator (gen -- god, naar de fleste
     // vagter ligger fast) og dag for dag med hele personalet (genDage -- naar medarbejderne kun har
     // tider de kan og timekrav). Begge forbedres, ogsaa i vagternes form, og den bedste plan vinder.
@@ -867,7 +893,7 @@
       const proev = (t2, lav) => {
         M.T2 = t2; M.S = laast.map(x => ({ ...x }));
         lav(); saml();
-        forbedr(r * 2, { form: true }); fyldHuller(); saml(); forbedr(Math.round(r / 4));
+        forbedr(r * 2, { form: true }); fyldHuller(); saml(); forbedr(Math.round(r / 4)); haandhaevEkstra();
         const v = vurder();
         if (!vinder || v.point < vinder.v.point) vinder = { t2, S: M.S.map(x => ({ ...x })), v };
       };
@@ -982,6 +1008,7 @@
       // i de beroerte uger ogsaa deles, flyttes og forkortes.
       if (runder && gennemgaaHard().length) { forbedr(runder * 2, Object.assign({}, fOpt, { form: true, straf: strafForm })); fyldHuller(U, fraDag); }
       saml(U, fraDag);
+      haandhaevEkstra(U, fraDag, fOpt.ikkeTil);
     }
 
     // Aftaler paa bestemte datoer (plan.undtagelser: [{ p, dato: 'YYYY-MM-DD', tid: null | [fra, til] }])
