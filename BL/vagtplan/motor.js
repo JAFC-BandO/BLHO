@@ -40,6 +40,24 @@
     const P = {}, TID = {};
     C.personer.forEach(p => { P[p.id] = [p.navn, p.type]; TID[p.id] = p.tid || {}; });
     P.uk = ['Ekstra person', 'S']; TID.uk = {};
+    // Regler lavet af assistenten (C.ekstraRegler) -- oven i butikkens regler, og kan fjernes igen
+    // under "Regler". Hver regel: { id, type, hvem: { alle } | { typer: [jobtyper], personer: [id] },
+    // fraDato (gaelder fra den dato), og efter type:
+    //   maks_dage_i_traek { antal }   hoejst N arbejdsdage i traek
+    //   maks_timer_uge { timer }      hoejst N timer om ugen
+    //   maks_dage_uge { antal }       hoejst N arbejdsdage om ugen
+    //   maks_vagt { timer }           en vagt varer hoejst N timer
+    //   tidsrum { fra, til, ugedage } maa kun arbejde inden for tidsrummet (paa de ugedage)
+    //   ikke_dage { ugedage }         maa ikke arbejde de ugedage
+    //   ikke_sammen                   de naevnte maa ikke vaere paa arbejde samtidig
+    //   weekend_hver { antal }        hoejst hver N. weekend
+    // ps = dem reglen gaelder, n0 = foerste dag i planen den gaelder (saettes i saetUndtagelser).
+    const ER = (C.ekstraRegler || []).map(r => {
+      const h = r.hvem || {};
+      const ps = C.personer.map(p => p.id).filter(p => h.alle || (h.typer || []).includes(P[p][1]) || (h.personer || []).includes(p));
+      return { r, ps, n0: 0 };
+    }).filter(x => x.ps.length && (x.r.type != 'ikke_sammen' || x.ps.length > 1));
+    const REGEL_FRI = { fra: -Infinity, til: Infinity, maksL: Infinity, rest: Infinity, optaget: [] };
     const D = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
     // Aabningstid pr. dag; en lukket dag er et tomt tidsrum (ingen krav, ingen vagter).
     const O = d => RG.aabning[d] || [0, 0];
@@ -386,6 +404,33 @@
       if (maal != null) return (h <= maal + 1 ? 2 : -0.5) + begge;
       return -0.3 + begge;
     }
+    // Hvad assistentens regler (ER) tillader for p paa dag d i uge w, ud fra planen lige nu:
+    // null = maa slet ikke faa en vagt den dag, ellers { fra, til (tidsrum), maksL (laengste vagt,
+    // minutter), rest (timer tilbage i ugen), optaget (tidsrum hvor én hun/han ikke maa arbejde
+    // sammen med, er paa arbejde) }. Bruges naar dagen bygges op -- regeltjekket er gennemgaa().
+    function regelRamme(p, w, d) {
+      if (!ER.length) return REGEL_FRI;
+      let fra = -Infinity, til = Infinity, maksL = Infinity, rest = Infinity; const ikkeMed = [];
+      const arb = n => n >= 0 && n < NW * 7 && M.S.some(x => x.p == p && x.w * 7 + x.d == n);
+      const n = w * 7 + d, har = arb(n);
+      for (const { r, ps, n0 } of ER) {
+        if (n < n0 || !ps.includes(p)) continue;
+        const paa = !(r.ugedage && r.ugedage.length) || r.ugedage.includes(d);
+        if (r.type == 'maks_timer_uge') rest = Math.min(rest, r.timer - hrs(p, w));
+        else if (r.type == 'maks_dage_uge') { if (!har && new Set(M.S.filter(x => x.p == p && x.w == w).map(x => x.d)).size >= r.antal) return null; }
+        else if (r.type == 'maks_dage_i_traek') {
+          if (!har) { let k = 1; for (let m = n - 1; arb(m); m--) k++; for (let m = n + 1; arb(m); m++) k++; if (k > r.antal) return null; }
+        } else if (r.type == 'maks_vagt') maksL = Math.min(maksL, r.timer * 60);
+        else if (r.type == 'tidsrum') { if (paa) { if (r.fra != null) fra = Math.max(fra, r.fra); if (r.til != null) til = Math.min(til, r.til); } }
+        else if (r.type == 'ikke_dage') { if (paa) return null; }
+        else if (r.type == 'ikke_sammen') ps.forEach(q => { if (q != p) ikkeMed.push(q); });
+        else if (r.type == 'weekend_hver' && d > 4) {
+          for (let k = 1; k < r.antal; k++) for (const u of [w - k, w + k]) if (u >= 0 && u < NW && M.S.some(x => x.p == p && x.w == u && x.d > 4)) return null;
+        }
+      }
+      const optaget = ikkeMed.length ? M.S.filter(x => x.w == w && x.d == d && ikkeMed.includes(x.p)).map(x => [x.s, x.e]) : [];
+      return { fra, til, maksL, rest, optaget };
+    }
     // De faste vagters noegler -- opsaetningen aendres ikke, mens motoren lever
     let fasteKCache = null;
     const fasteK = () => fasteKCache || (fasteKCache = fasteNoegler());
@@ -422,6 +467,9 @@
           const ung = P[p][1] == 'U' ? 1 : 0;
           if ((ikkeTil && ikkeTil.has(p) && !(igen && igen.has(p + '|' + d))) || (ansv && ung)) return;
           const v = av(p, d, w); if (!v || v[0] > t || v[1] <= t) return;
+          // Assistentens regler: s-e er de nye timer, s0 er vagtens start (ved en forlaengelse)
+          const rr = regelRamme(p, w, d); if (!rr) return;
+          const regelOk = rr === REGEL_FRI ? () => true : (s, e, s0) => s >= rr.fra && e <= rr.til && e - s0 <= rr.maksL && (e - s) / 60 <= rr.rest + 1e-9 && !rr.optaget.some(o => o[0] < e && s < o[1]);
           const egen = M.S.find(x => x.w == w && x.d == d && x.p == p);
           if (egen) {
             // Personen er her allerede: forlaeng vagten, hvis den slutter lige dér hvor hullet starter
@@ -429,6 +477,7 @@
             for (let e = t + 15; e <= v[1]; e += 15) {
               const lyst = timeLyst(p, w, d, e - t); if (lyst == null) break;
               if (!fri(ung, t, e)) break;
+              if (!regelOk(t, e, egen.s)) continue;
               const x = vaerdi(ung, t, e, lyst, false);
               if (!bedst || x > bedst.x) bedst = { forlaeng: egen, e, x };
             }
@@ -437,7 +486,7 @@
           for (const L of LEN) {
             const lyst = timeLyst(p, w, d, L); if (lyst == null) continue;
             for (let s = Math.max(v[0], t - L + 15); s <= t && s + L <= v[1]; s += 15) {
-              if (!fri(ung, s, s + L)) continue;
+              if (!fri(ung, s, s + L) || !regelOk(s, s + L, s)) continue;
               const x = vaerdi(ung, s, s + L, lyst, true);
               if (!bedst || x > bedst.x) bedst = { p, s, e: s + L, x };
             }
@@ -597,6 +646,49 @@
           for (let k = 1; k < RG.weekendHver; k++) if (RULLENDE ? a[(w + k) % NW] : a[w + k]) taet = true;
           if (taet) emit(w, -1, 0, () => `${P[p][0]} arbejder weekender for tæt (max hver ${RG.weekendHver}. weekend)`, 1);
           if (wd(w, 5, p) && wd(w, 6, p)) emit(w, -1, 1, () => `${P[p][0]} arbejder både lørdag og søndag (helst kun én dag)`);
+        });
+      });
+      // Assistentens regler (se ER). En regel gaelder fra sin dato (n0); ugeregler gaelder de uger,
+      // der ikke var slut inden.
+      ER.forEach(({ r, ps, n0 }) => {
+        const nv = p => P[p][0], ugeMed = w => w * 7 + 6 >= n0;
+        const paa = d => !(r.ugedage && r.ugedage.length) || r.ugedage.includes(d);
+        const vagter = fn => dag.forEach(sh => sh.forEach(x => { if (x.p != 'uk' && ps.includes(x.p) && x.w * 7 + x.d >= n0) fn(x); }));
+        if (r.type == 'maks_timer_uge') ps.forEach(p => WK.forEach(w => { const hh = h(p, w); if (ugeMed(w) && hh > r.timer + 1e-9) emit(w, -1, 0, () => `${nv(p)}: ${hh} t (højst ${timer(r.timer * 60)} om ugen – regel)`, hh - r.timer); }));
+        else if (r.type == 'maks_dage_uge') ps.forEach(p => WK.forEach(w => {
+          if (!ugeMed(w)) return;
+          let n = 0; for (let d = 0; d < 7; d++) if (wd(w, d, p)) n++;
+          if (n > r.antal) emit(w, -1, 0, () => `${nv(p)}: ${n} arbejdsdage (højst ${r.antal} om ugen – regel)`, (n - r.antal) * 3);
+        }));
+        else if (r.type == 'maks_dage_i_traek') ps.forEach(p => {
+          for (let n = 0, loeb = 0; n < NW * 7; n++) {
+            const w = n / 7 | 0, d = n % 7;
+            if (!wd(w, d, p)) { loeb = 0; continue; }
+            loeb++;
+            const l = loeb;
+            if (l > r.antal && n >= n0) emit(w, d, 0, () => `${nv(p)} arbejder ${l} dage i træk (højst ${r.antal} – regel)`, 3);
+          }
+        });
+        else if (r.type == 'maks_vagt') vagter(x => { if (x.e - x.s > r.timer * 60) emit(x.w, x.d, 0, () => `${nv(x.p)} ${f(x.s)}–${f(x.e)}: vagten er over ${timer(r.timer * 60)} timer (regel)`, (x.e - x.s) / 60 - r.timer); });
+        else if (r.type == 'tidsrum') vagter(x => {
+          if (!paa(x.d)) return;
+          const ude = Math.max(0, (r.fra != null ? r.fra : x.s) - x.s) + Math.max(0, x.e - (r.til != null ? r.til : x.e));
+          if (ude > 0) emit(x.w, x.d, 0, () => `${nv(x.p)} må ${r.fra != null && r.til != null ? 'kun arbejde ' + f(r.fra) + '–' + f(r.til) : r.fra != null ? 'tidligst møde ' + f(r.fra) : 'senest arbejde til ' + f(r.til)} (regel)`, ude / 60);
+        });
+        else if (r.type == 'ikke_dage') vagter(x => { if (paa(x.d)) emit(x.w, x.d, 0, () => `${nv(x.p)} må ikke arbejde ${D[x.d].toLowerCase()} (regel)`, (x.e - x.s) / 60); });
+        else if (r.type == 'ikke_sammen') dag.forEach(sh => {
+          const m = sh.filter(x => ps.includes(x.p) && x.w * 7 + x.d >= n0);
+          for (let i = 0; i < m.length; i++) for (let j = i + 1; j < m.length; j++) {
+            const a = m[i], b = m[j], ov = Math.min(a.e, b.e) - Math.max(a.s, b.s);
+            if (a.p != b.p && ov > 0) emit(a.w, a.d, 0, () => `${nv(a.p)} og ${nv(b.p)} må ikke være på arbejde samtidig (regel)`, ov / 60);
+          }
+        });
+        else if (r.type == 'weekend_hver') ps.forEach(p => {
+          const a = WK.map(w => wd(w, 5, p) || wd(w, 6, p));
+          WK.forEach(w => {
+            if (!a[w] || !ugeMed(w)) return;
+            for (let k = 1; k < r.antal; k++) if (a[w - k]) { emit(w, -1, 0, () => `${nv(p)} arbejder weekender for tæt (højst hver ${r.antal}. weekend – regel)`, 1); break; }
+          });
         });
       });
     }
@@ -1017,6 +1109,8 @@
     function saetUndtagelser(liste, start) {
       M.UNDTAG = new Map();
       const s0 = dagNr(start);
+      // Assistentens regler gaelder fra deres dato
+      ER.forEach(x => { const n = x.r.fraDato ? dagNr(x.r.fraDato) - s0 : 0; x.n0 = n > 0 ? n : 0; });
       (liste || []).forEach(u => {
         const n = dagNr(u.dato) - s0;
         if (!(n >= 0 && n < NW * 7) || !P[u.p]) return;

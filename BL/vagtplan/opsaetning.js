@@ -173,7 +173,29 @@
     return ud;
   }
 
-  const API = { tilModel, fraModel, beskriv, beskrivRegler, regler, AABEN, LUK_HVERDAG, LUK_WEEKEND };
+  // Regler lavet af assistenten (C.ekstraRegler -- se motor.js) som tekst.
+  const REGELTYPER = ['maks_dage_i_traek', 'maks_timer_uge', 'maks_dage_uge', 'maks_vagt', 'tidsrum', 'ikke_dage', 'ikke_sammen', 'weekend_hver'];
+  function beskrivRegel(r, C) {
+    const h = r.hvem || {}, job = C.jobtyper || {}, tal = v => String(v).replace('.', ',');
+    const navne = (h.personer || []).map(id => ((C.personer || []).find(p => p.id == id) || {}).navn).filter(Boolean);
+    let hvem = h.alle ? 'alle' : liste((h.typer || []).map(t => 'alle med jobtypen ' + (job[t] || t)).concat(navne)) || '(medarbejderen findes ikke mere)';
+    hvem = hvem.charAt(0).toUpperCase() + hvem.slice(1);
+    const ds = r.ugedage && r.ugedage.length ? dagListe(r.ugedage.slice().sort()) : '';
+    const paa = !ds || ds == 'alle dage' ? '' : ds == 'weekend' ? ' i weekenden' : ds == 'hverdage' ? ' på hverdage' : ' ' + ds;
+    const t = {
+      maks_dage_i_traek: () => `højst ${r.antal} arbejdsdage i træk`,
+      maks_timer_uge: () => `højst ${tal(r.timer)} timer om ugen`,
+      maks_dage_uge: () => `højst ${r.antal} arbejdsdage om ugen`,
+      maks_vagt: () => `en vagt må højst vare ${tal(r.timer)} timer`,
+      tidsrum: () => (r.fra != null && r.til != null ? `må kun arbejde ${kl(r.fra)}–${kl(r.til)}` : r.fra != null ? `må tidligst møde ${kl(r.fra)}` : `må senest arbejde til ${kl(r.til)}`) + paa,
+      ikke_dage: () => `må ikke arbejde${paa || ' (ingen dage valgt)'}`,
+      ikke_sammen: () => 'må ikke være på arbejde samtidig',
+      weekend_hver: () => `højst hver ${r.antal}. weekend`,
+    }[r.type];
+    return hvem + ': ' + (t ? t() : 'ukendt regel') + '.';
+  }
+
+  const API = { tilModel, fraModel, beskriv, beskrivRegler, beskrivRegel, REGELTYPER, regler, AABEN, LUK_HVERDAG, LUK_WEEKEND };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   else root.VagtplanOpsaetning = API;
 })(this);

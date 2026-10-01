@@ -52,6 +52,7 @@
       `${b} skal have fri fredag i næste uge`,
       `${a} skal arbejde tirsdag og torsdag de næste 2 uger`,
       `Giv ${b} 2 fridage i næste uge`,
+      `Lav en regel: ${a} må højst arbejde 3 dage i træk`,
       'Hvem arbejder på lørdag?',
       `Hvor mange timer har ${a} i næste uge?`,
     ];
@@ -161,7 +162,7 @@
   const ugeTekst = w => 'uge ' + ugeNr(w);
   function tegnKort(el, k) {
     const { f, res, efter, nye } = k;
-    const antal = f.vagter.length + f.aftaler.length + f.medarbejdere.length;
+    const antal = f.vagter.length + f.aftaler.length + f.medarbejdere.length + f.regler.length;
     const dage = {};
     f.vagter.forEach(v => { (dage[v.dato] = dage[v.dato] || { w: v.w, d: v.d, v: [] }).v.push(v); });
     const tid = v => `${kl(v.s)}–${kl(v.e)}`;
@@ -179,6 +180,7 @@
     }).join('');
     const aftaler = f.aftaler.map(a => `<div class="ai-aftale ${a.type}"><span class="ai-tegn ${a.type == 'fjernet' ? 'fjernet' : a.tid ? 'tid' : 'fri'}">${a.type == 'fjernet' ? '↺' : a.tid ? IKON.tid : IKON.fri}</span><span><b>${esc(a.navn)}</b> ${a.type == 'fjernet' ? 'aftale fjernet' : a.tid ? 'kan kun ' + kl(a.tid[0]) + '–' + kl(a.tid[1]) : 'har fri'} ${esc(A.datoTekst(a.dato))}</span></div>`).join('');
     const medarb = f.medarbejdere.map(m => `<div class="ai-medarb"><b>${esc(m.navn)}</b> fremover: ${esc(m.efter)}.</div>`).join('');
+    const regler = f.regler.map(r => `<div class="ai-medarb"><b>Ny regel:</b> ${esc(r.tekst)}</div>`).join('');
     const fejl = res.log.filter(l => l.fejl).map(l => `<li>${esc(l.tekst)}</li>`).join('');
     const ok = res.log.filter(l => !l.fejl).map(l => `<li>${esc(l.tekst)}</li>`).join('');
     const status = !antal ? '' : efter.length
@@ -198,6 +200,7 @@
       ${fejl ? `<ul class="ai-log fejl">${fejl}</ul>` : ''}
       ${aftaler ? `<div class="ai-afsnit">${aftaler}</div>` : ''}
       ${medarb ? `<div class="ai-afsnit">${medarb}</div>` : ''}
+      ${regler ? `<div class="ai-afsnit">${regler}</div>` : ''}
       ${dagHtml ? `<div class="ai-dage">${dagHtml}</div>` : ''}
       ${!antal && !fejl ? '<p class="ai-intet">Planen var allerede sådan – der er ikke noget at ændre.</p>' : ''}
       ${problemer}

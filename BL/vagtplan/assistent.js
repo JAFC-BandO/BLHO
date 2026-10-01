@@ -89,6 +89,7 @@
     ud.push('', 'Butikkens regler:');
     O.beskrivRegler(C).forEach(r => ud.push(`- ${r.titel}: ${r.tekst}`));
     if (C.noter) ud.push(`- Andre aftaler: ${C.noter}`);
+    if ((C.ekstraRegler || []).length) { ud.push('Regler lavet af assistenten (lederen kan fjerne dem under "Regler"):'); C.ekstraRegler.forEach(r => ud.push('- ' + O.beskrivRegel(r, C))); }
     ud.push('', 'Jobtyper: ' + Object.values(job).join(', ') + '.');
     ud.push('Medarbejdere (brug præcis disse navne):');
     O.tilModel(C).forEach(m => ud.push(`- ${m.navn} (${job[m.type] || m.type}): ${O.beskriv(m)}.`));
@@ -120,7 +121,7 @@
   // Handlingerne udfoeres i en fast raekkefoelge -- faste aendringer og aftaler foerst, saa de
   // gaelder, naar vagterne laegges -- og til sidst repareres de beroerte uger (eller der laves en
   // helt ny plan). log: [{ tekst, fejl? }] -- det der skete, i lederens sprog.
-  const RAEKKEFOELGE = { tilgaengelighed: 0, timer: 0, fjern_aftale: 1, fri: 2, kun_tid: 2, vagt: 3, overdrag: 4, fri_antal: 5, ny_plan: 6 };
+  const RAEKKEFOELGE = { regel: 0, tilgaengelighed: 0, timer: 0, fjern_aftale: 1, fri: 2, kun_tid: 2, vagt: 3, overdrag: 4, fri_antal: 5, ny_plan: 6 };
   function udfoer(o0, handlinger, valg) {
     valg = valg || {};
     const o = JSON.parse(JSON.stringify(o0));
@@ -203,6 +204,7 @@
       .map((h, i) => ({ h, i })).sort((a, b) => RAEKKEFOELGE[a.h.type] - RAEKKEFOELGE[b.h.type] || a.i - b.i).map(x => x.h);
     for (const h of hs) {
       if (h.type == 'ny_plan') { nyPlan = true; continue; }
+      if (h.type == 'regel') { lavRegel(h); continue; }
       const p = hvem(h); if (!p) continue;
 
       if (h.type == 'tilgaengelighed' || h.type == 'timer') {
@@ -324,6 +326,65 @@
           ? `${navn(p)} havde kun ${valgt.length} ${valgt.length == 1 ? 'vagt' : 'vagter'} i perioden, der kunne blive til fridage (ikke ${antal}) – resten af dagene har hun/han allerede fri.`
           : `${navn(p)} har ingen andre vagter i perioden, der kan blive til fridage – de øvrige dage har hun/han allerede fri.`);
       }
+    }
+
+    // En ny regel (opsaetning.ekstraRegler -- se motor.js). Assistenten kan kun TILFOEJE regler
+    // (eller rette sin egen regel af samme slags for de samme personer); butikkens regler roeres
+    // ikke, og reglerne fjernes igen under "Regler".
+    function lavRegel(h) {
+      const type = h.regel, job = C.jobtyper || {};
+      if (!O.REGELTYPER.includes(type)) { fejl('Den slags regel kan jeg ikke lave endnu.'); return; }
+      const navne = (Array.isArray(h.navne) ? h.navne : h.navne ? [h.navne] : h.navn ? [h.navn] : []).map(v => String(v).trim()).filter(Boolean);
+      const ids = [], typer = [], ukendt = []; let alle = false;
+      navne.forEach(v => {
+        const t = v.toLowerCase();
+        if (['alle', 'alle medarbejdere', 'hele personalet', 'personalet'].includes(t)) { alle = true; return; }
+        const typ = Object.keys(job).find(k => { const n = String(job[k]).toLowerCase(); return t == k.toLowerCase() || [n, n + 'e', n + 'r', n + 'er', n + 'ne', n + 'erne'].includes(t); });
+        if (typ) { if (!typer.includes(typ)) typer.push(typ); return; }
+        const q = findPerson(C, v);
+        if (q) { if (!ids.includes(q)) ids.push(q); } else ukendt.push(v);
+      });
+      if (ukendt.length) { fejl(`Jeg kan ikke finde ${ukendt.map(v => '"' + v + '"').join(', ')} blandt medarbejderne, så reglen er ikke lavet.`); return; }
+      if (!alle && !ids.length && !typer.length) { fejl('Jeg ved ikke, hvem reglen skal gælde for.'); return; }
+      const hv = alle ? { alle: true } : Object.assign({}, typer.length ? { typer: typer.sort() } : {}, ids.length ? { personer: ids.sort() } : {});
+      const r = { type, hvem: hv };
+      const antal = Math.round(Number(h.antal)), t = Number(String(h.timer).replace(',', '.'));
+      const ds = [...new Set((Array.isArray(h.ugedage) ? h.ugedage : []).map(Number))].filter(d => d >= 0 && d <= 6).sort();
+      if (type == 'maks_dage_i_traek' || type == 'maks_dage_uge') {
+        if (!(antal >= 1 && antal <= 7)) { fejl('Jeg forstod ikke, hvor mange dage reglen skal være på.'); return; }
+        r.antal = antal;
+      } else if (type == 'weekend_hver') {
+        if (!(antal >= 2 && antal <= 8)) { fejl('Jeg forstod ikke, hvor tit de må arbejde weekend (fx hver 3. weekend).'); return; }
+        r.antal = antal;
+      } else if (type == 'maks_timer_uge') {
+        if (!(t > 0 && t <= 60)) { fejl('Jeg forstod ikke, hvor mange timer om ugen reglen skal være på.'); return; }
+        r.timer = t;
+      } else if (type == 'maks_vagt') {
+        if (!(t * 60 >= M.MIN_VAGT && t <= 12)) { fejl(`En vagt er mindst ${timer(M.MIN_VAGT / 60)} timer, så den længste vagt kan ikke være ${isNaN(t) ? 'det' : timer(t) + ' timer'}.`); return; }
+        r.timer = t;
+      } else if (type == 'tidsrum') {
+        const fra = tilMin(h.fra), til = tilMin(h.til);
+        if (fra == null && til == null) { fejl('Jeg forstod ikke, hvilket tidsrum reglen skal gælde.'); return; }
+        if (fra != null && til != null && til - fra < M.MIN_VAGT) { fejl(`${kl(fra)}–${kl(til)} er kortere end en vagt.`); return; }
+        if (fra != null) r.fra = fra;
+        if (til != null) r.til = til;
+        if (ds.length && ds.length < 7) r.ugedage = ds;
+      } else if (type == 'ikke_dage') {
+        if (!ds.length) { fejl('Jeg ved ikke, hvilke ugedage reglen skal gælde.'); return; }
+        r.ugedage = ds;
+      } else if (type == 'ikke_sammen') {
+        const antalP = C.personer.filter(p => alle || typer.includes(p.type) || ids.includes(p.id)).length;
+        if (antalP < 2) { fejl('"Må ikke arbejde sammen" kræver mindst to medarbejdere.'); return; }
+      }
+      if (valg.idag) r.fraDato = lokalDato(valg.idag);
+      const gl = C.ekstraRegler || [], ens = x => x.type == type && JSON.stringify(x.hvem) == JSON.stringify(hv) && JSON.stringify(x.ugedage || null) == JSON.stringify(r.ugedage || null);
+      const i = gl.findIndex(ens), uden = x => JSON.stringify(Object.assign({}, x, { id: 0, fraDato: 0 }));
+      if (i >= 0 && uden(gl[i]) == uden(r)) { ok(`Reglen findes allerede: ${O.beskrivRegel(gl[i], C)}`); return; }
+      r.id = i >= 0 ? gl[i].id : 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      const ny = gl.slice(); if (i >= 0) ny[i] = r; else ny.push(r);
+      C = Object.assign({}, C, { ekstraRegler: ny }); genbyg();
+      ok(`${i >= 0 ? 'Reglen er ændret' : 'Ny regel'}: ${O.beskrivRegel(r, C)} Den gælder fremover og kan fjernes igen under "Regler".`);
+      M.WK.forEach(w => { if (fraDag == null || w >= Math.floor(fraDag / 7)) uger.add(w); });
     }
 
     // Laeg (eller ret) p's vagt paa datoen og laas den. fra/til kan mangle -- saa vaelges tiden.
@@ -475,7 +536,10 @@
       .sort((x, y) => dagNr(x.dato) - dagNr(y.dato));
     const ma = O.tilModel(a.opsaetning), mb = O.tilModel(b.opsaetning);
     const medarbejdere = mb.map(m => { const f = ma.find(x => x.id == m.id); return f && O.beskriv(f) != O.beskriv(m) ? { p: m.id, navn: m.navn, foer: O.beskriv(f), efter: O.beskriv(m) } : null; }).filter(Boolean);
-    return { vagter, aftaler, medarbejdere };
+    // Nye (eller aendrede) regler lavet af assistenten
+    const ra = (a.opsaetning.ekstraRegler || []).map(r => JSON.stringify(r));
+    const regler = (b.opsaetning.ekstraRegler || []).filter(r => !ra.includes(JSON.stringify(r))).map(r => ({ id: r.id, tekst: O.beskrivRegel(r, b.opsaetning) }));
+    return { vagter, aftaler, medarbejdere, regler };
   }
 
   // Regelbrud (ikke oensker) i en udgave af planen
