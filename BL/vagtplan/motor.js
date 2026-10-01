@@ -485,7 +485,7 @@
         const b = cv.a + N * 15;
         const hale = e => e < b && b - e < MIN_VAGT && need(e, d) - cv.c[(e - cv.a) / 15] > 0 ? 60 : 0;
         const vaerdi = (ung, s, e, lyst, nyVagt) => sum[ung][(e - cv.a) / 15] - sum[ung][(s - cv.a) / 15] + lyst * (e - s) / 60
-          - (nyVagt && !paen(s) ? 1 : 0) - (paen(e) ? 0 : 1) - hale(e) + (nz ? Math.random() * nz : 0);
+          - (nyVagt && !paenStart(s) ? 1 : 0) - (paen(e) ? 0 : 1) - hale(e) + (nz ? Math.random() * nz : 0);
         const fri = (ung, s, e) => ud[ung][(e - cv.a) / 15] - ud[ung][(s - cv.a) / 15] == 0;
         let bedst = null;
         FLEX.forEach(p => {
@@ -797,12 +797,15 @@
     // Paene tider: hele/halve timer, aabnings-/lukketider og bemandingens skiftetider
     const PAENE = new Set([].concat(...RG.aabning.filter(Boolean)).concat(...RG.bemanding.hverdag.concat(RG.bemanding.weekend || []).map(b => [b.fra, b.ellerFra])));
     const paen = t => t % 30 == 0 || PAENE.has(t);
+    // Moedetider: bruger planen det alternative starttidspunkt (fx 2 personer fra 15:15), moeder man
+    // ikke kl. 15:00 -- det giver bare et kvarter, hvor der er flere paa arbejde end noedvendigt
+    const paenStart = t => paen(t) && !(FLEKS && M.T2 == FLEKS.ellerFra && t == FLEKS.fra);
     function vurder() {
       let hard = 0, soft = 0, grad = 0;
       gennemgaa((w, d, s, t, g) => { if (s) soft++; else { hard++; grad += g || 0; } });
       const S = M.S, nx = Math.max(0, ...M.EX.filter(Boolean));
       const ukT = S.reduce((a, x) => a + (x.p == 'uk' ? (x.e - x.s) / 60 : 0), 0);
-      let maerk = 0; S.forEach(x => { if (!paen(x.s)) maerk++; if (!paen(x.e)) maerk++; });
+      let maerk = 0; S.forEach(x => { if (!paenStart(x.s)) maerk++; if (!paen(x.e)) maerk++; });
       const tim = {}; FLEX.forEach(p => { tim[p] = Array(NW).fill(0); });
       S.forEach(x => { if (tim[x.p]) tim[x.p][x.w] += (x.e - x.s) / 60; });
       let sving = 0, spredning = 0, maal = 0; const snit = {};
