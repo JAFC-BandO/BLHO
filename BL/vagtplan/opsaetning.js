@@ -174,13 +174,18 @@
   }
 
   // Regler lavet af assistenten (C.ekstraRegler -- se motor.js) som tekst.
-  const REGELTYPER = ['maks_dage_i_traek', 'maks_timer_uge', 'maks_dage_uge', 'maks_vagt', 'tidsrum', 'ikke_dage', 'ikke_sammen', 'weekend_hver', 'aaben_til_luk', 'maks_personer_dag'];
+  const REGELTYPER = ['maks_dage_i_traek', 'maks_timer_uge', 'maks_dage_uge', 'maks_vagt', 'tidsrum', 'ikke_dage', 'ikke_sammen', 'weekend_hver', 'aaben_til_luk', 'maks_personer_dag', 'min_gruppe', 'weekend_fridage'];
   function beskrivRegel(r, C) {
     const h = r.hvem || {}, job = C.jobtyper || {}, tal = v => String(v).replace('.', ',');
     const navne = (h.personer || []).map(id => ((C.personer || []).find(p => p.id == id) || {}).navn).filter(Boolean);
     const navn = id => ((C.personer || []).find(p => p.id == id) || {}).navn;
     const undt = (h.undtagen || []).map(navn).filter(Boolean);
     if (r.type == 'maks_personer_dag') return `Butikken: højst ${r.antal} forskellige medarbejdere på arbejde i løbet af en dag${r.ugedage && r.ugedage.length ? ' (' + dagListe(r.ugedage.slice().sort()) + ')' : ''}.`;
+    if (r.type == 'min_gruppe') {
+      const gruppe = liste((h.typer || []).map(t => String(job[t] || t).toLowerCase()).concat((h.personer || []).map(navn).filter(Boolean)));
+      const ds = r.ugedage && r.ugedage.length ? dagListe(r.ugedage.slice().sort()) : '';
+      return `Butikken: mindst ${r.antal || 1} ${gruppe || '(ingen)'} på arbejde${r.fra != null || r.til != null ? ' ' + (r.fra != null ? kl(r.fra) : 'åbning') + '–' + (r.til != null ? kl(r.til) : 'luk') : ''}${!ds || ds == 'alle dage' ? '' : ds == 'weekend' ? ' i weekenden' : ds == 'hverdage' ? ' på hverdage' : ' ' + ds}.`;
+    }
     let hvem = h.alle ? 'alle' : liste((h.typer || []).map(t => 'alle med jobtypen ' + (job[t] || t)).concat(navne)) || '(medarbejderen findes ikke mere)';
     hvem = hvem.charAt(0).toUpperCase() + hvem.slice(1) + (undt.length ? ' undtagen ' + liste(undt) : '');
     const ds = r.ugedage && r.ugedage.length ? dagListe(r.ugedage.slice().sort()) : '';
@@ -194,6 +199,7 @@
       ikke_dage: () => `må ikke arbejde${paa || ' (ingen dage valgt)'}`,
       ikke_sammen: () => 'må ikke være på arbejde samtidig',
       weekend_hver: () => `højst hver ${r.antal}. weekend`,
+      weekend_fridage: () => `arbejder hun/han både lørdag og søndag, skal hun/han have ${r.antal} hverdage fri samme uge`,
       aaben_til_luk: () => (r.antal ? `højst ${r.antal} ${r.antal == 1 ? 'vagt' : 'vagter'} om ugen fra åbning til luk` : 'må ikke arbejde fra åbning til luk (den der åbner, lukker ikke)') + paa,
     }[r.type];
     return hvem + ': ' + (t ? t() : 'ukendt regel') + '.';
