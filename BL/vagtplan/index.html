@@ -23,9 +23,9 @@ window.addEventListener('storage', e => { if (e.key === 'blho-tema') saetTema();
 if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('change', saetTema);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="motor.js?v=2026-09-26-2"></script>
-<script src="opsaetning.js?v=2026-09-26-2"></script>
-<script src="assistent.js?v=2026-09-26-2"></script>
+<script src="motor.js?v=2026-10-01-1"></script>
+<script src="opsaetning.js?v=2026-10-01-1"></script>
+<script src="assistent.js?v=2026-10-01-1"></script>
 <style>
 /* Farverne ligger som variabler, saa lys/moerk tilstand styres ét sted. Temaet vaelges med
    knappen i butik-redigerings topbar og deles via localStorage 'blho-tema' (se <head>). */
@@ -356,6 +356,7 @@ body.ai-aaben .ai-panel{transform:none}
 <div class="ingen-plan" id="ingenPlan" hidden>
   <h2 id="ingenPlanTitel">Ingen vagtplan endnu</h2>
   <p class="s">Opret en vagtplan, tilføj medarbejderne under "Medarbejdere", og tryk "Foreslå ny plan".</p>
+  <p class="s" id="ingenPlanFolk" hidden></p>
   <button class="pri" id="opretPlan" type="button">Opret vagtplan</button>
   <p class="fejltekst" id="opretFejl" role="alert"></p>
 </div>
@@ -456,6 +457,7 @@ body.ai-aaben .ai-panel{transform:none}
   <div class="fra-valg" role="radiogroup" aria-label="Start fra">
     <label id="ndSammeL"><input type="radio" name="ndFra" value="samme" checked> <span>Samme medarbejdere som <b class="nd-nu"></b> – en ny plan laves automatisk</span></label>
     <label id="ndKopiL"><input type="radio" name="ndFra" value="kopi"> <span>Kopi af <b class="nd-nu"></b> (medarbejdere og vagter)</span></label>
+    <label id="ndButikL"><input type="radio" name="ndFra" value="butik"> <span>Butikkens medarbejdere <span class="nd-butik-info"></span> – en ny plan laves automatisk</span></label>
     <label id="ndSkabelonL"><input type="radio" name="ndFra" value="skabelon"> <span>Fra en skabelon</span></label>
     <div class="skabelon-linje" id="ndSkabelonLinje"><select id="ndSkabelon" aria-label="Skabelon"></select><button type="button" class="farlig" id="ndSletSkabelon">Slet skabelon</button></div>
     <label><input type="radio" name="ndFra" value="tom"> <span>Helt tom (uden medarbejdere)</span></label>
@@ -618,7 +620,18 @@ function visTom() {
   $('#ingenPlanTitel').textContent = navn + ' har ingen vagtplan endnu';
   $('#opretPlan').textContent = 'Opret vagtplan for ' + navn;
   $('#titel').textContent = 'Vagtplan – ' + navn;
+  $('#ingenPlanFolk').hidden = true;
   visPlanIndhold(false); meld();
+  // Medarbejderne er gemt paa butikken (vagtplan_butik), selvom alle planer er slettet
+  if (aktuelButik) {
+    const id = aktuelButik.id;
+    client.from('vagtplan_butik').select('opsaetning').eq('butik_id', id).maybeSingle().then(({ data }) => {
+      const antal = data && Array.isArray(data.opsaetning.personer) ? data.opsaetning.personer.length : 0;
+      if (!antal || raekke || !aktuelButik || aktuelButik.id != id) return;
+      $('#ingenPlanFolk').textContent = 'Butikkens ' + antal + ' medarbejdere er gemt og kommer med, når du opretter en ny vagtplan.';
+      $('#ingenPlanFolk').hidden = false;
+    });
+  }
 }
 async function visPlan(id) {
   if (raekke && raekke.id == id) return;
@@ -656,7 +669,16 @@ async function aabnNyPlan() {
   $('#ndSkabelonL').classList.toggle('slukket', !skabeloner.length);
   $('#ndSkabelonL').querySelector('input').disabled = !skabeloner.length;
   $('#ndSkabelonLinje').hidden = !skabeloner.length;
-  const fra = nu ? 'samme' : skabeloner.length ? 'skabelon' : 'tom';
+  // Butikkens egen medarbejderliste (vagtplan_butik) -- opdateres hver gang en plan med
+  // medarbejdere gemmes, og forsvinder IKKE naar en vagtplan slettes. Saa kan man altid starte en
+  // ny plan med medarbejderne, ogsaa naar der ikke er nogen plan tilbage.
+  const { data: liste } = await client.from('vagtplan_butik').select('opsaetning, opdateret_at').eq('butik_id', aktuelButik.id).maybeSingle();
+  const antalButik = liste && Array.isArray(liste.opsaetning.personer) ? liste.opsaetning.personer.length : 0;
+  $('#ndButikL').hidden = !antalButik;
+  $('#ndButikL').querySelector('input').disabled = !antalButik;
+  document.querySelector('#nd .nd-butik-info').textContent = antalButik ? '(' + antalButik + ', senest gemt ' + datoKort(new Date(liste.opdateret_at)) + ')' : '';
+  const nuHarFolk = !!(raekke && raekke.opsaetning.personer && raekke.opsaetning.personer.length);
+  const fra = nuHarFolk ? 'samme' : antalButik ? 'butik' : nu ? 'samme' : skabeloner.length ? 'skabelon' : 'tom';
   document.querySelector(`#nd input[name=ndFra][value=${fra}]`).checked = true;
   $('#nd').showModal(); $('#ndNavn').focus();
 }
@@ -676,6 +698,10 @@ $('#ndOpret').onclick = async () => {
   if ((fra == 'samme' || fra == 'kopi') && raekke) {
     const o = JSON.parse(snap()); ops = o.opsaetning;
     if (fra == 'kopi') kilde = { vagter: o.plan.vagter, nw: M.NW, holdStart: M.HOLD_START, p: o.plan };
+  } else if (fra == 'butik') {
+    const { data } = await client.from('vagtplan_butik').select('opsaetning').eq('butik_id', aktuelButik.id).maybeSingle();
+    if (!data) { $('#ndFejl').textContent = 'Butikkens medarbejdere kunne ikke hentes. Prøv igen.'; return; }
+    ops = data.opsaetning;
   } else if (fra == 'skabelon') {
     const { data } = await client.from('vagtplan').select('opsaetning, plan').eq('id', $('#ndSkabelon').value).maybeSingle();
     if (!data) { $('#ndFejl').textContent = 'Skabelonen kunne ikke hentes. Prøv igen.'; return; }
@@ -772,7 +798,7 @@ $('#ndSletSkabelon').onclick = async () => {
   if (error) { $('#ndFejl').textContent = 'Skabelonen blev ikke slettet.'; return; }
   skabeloner = skabeloner.filter(s => s.id != id);
   $('#ndSkabelon').querySelector(`option[value="${id}"]`).remove();
-  if (!skabeloner.length) { $('#ndSkabelonLinje').hidden = true; $('#ndSkabelonL').classList.add('slukket'); $('#ndSkabelonL').querySelector('input').disabled = true; document.querySelector('#nd input[name=ndFra][value=' + (raekke ? 'samme' : 'tom') + ']').checked = true; }
+  if (!skabeloner.length) { $('#ndSkabelonLinje').hidden = true; $('#ndSkabelonL').classList.add('slukket'); $('#ndSkabelonL').querySelector('input').disabled = true; document.querySelector('#nd input[name=ndFra][value=' + (raekke ? 'samme' : !$('#ndButikL').hidden ? 'butik' : 'tom') + ']').checked = true; }
 };
 
 // ---------- Login / adgang ----------
@@ -1131,7 +1157,7 @@ if (window.top !== window) {
   start().catch(() => vis('loginVis'));
 }
 </script>
-<script src="medarbejdere.js?v=2026-09-26-2"></script>
-<script src="regler.js?v=2026-09-26-2"></script>
-<script src="assistent-ui.js?v=2026-09-26-2"></script>
+<script src="medarbejdere.js?v=2026-10-01-1"></script>
+<script src="regler.js?v=2026-10-01-1"></script>
+<script src="assistent-ui.js?v=2026-10-01-1"></script>
 </body></html>
