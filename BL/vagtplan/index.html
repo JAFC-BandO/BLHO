@@ -23,8 +23,8 @@ window.addEventListener('storage', e => { if (e.key === 'blho-tema') saetTema();
 if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('change', saetTema);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="motor.js?v=2026-10-01-1"></script>
-<script src="opsaetning.js?v=2026-10-01-1"></script>
+<script src="motor.js?v=2026-10-01-2"></script>
+<script src="opsaetning.js?v=2026-10-01-2"></script>
 <script src="assistent.js?v=2026-10-01-1"></script>
 <style>
 /* Farverne ligger som variabler, saa lys/moerk tilstand styres ét sted. Temaet vaelges med
@@ -369,7 +369,7 @@ body.ai-aaben .ai-panel{transform:none}
 <div class="indstillinger">
   <label>Første uge starter <input type="date" id="start" title="En vagtplan starter altid en mandag"></label>
   <label id="t2Label"><span id="t2Tekst">2 personer fra</span> <select id="t2" title="Bemandingens starttidspunkt, når reglerne giver to muligheder ('eller fra')"></select></label>
-  <label>Ekstra personer <select id="ekstra" title="Hvor mange ekstra personer planen må bruge. De overtager den ene weekenddag for dem, der ellers skal arbejde både lørdag og søndag."></select></label>
+  <label>Ekstra personer <select id="ekstra" title="Hvor mange ekstra personer (som skal findes) planen må bruge til de vagter, personalet ikke kan dække efter reglerne. Med 0 laver planlæggeren planen med personalet alene, hvis det kan lade sig gøre."></select></label>
   <label>Ekstra må arbejde <select id="ekstraRegel" title="Hvor tit de ekstra personer må arbejde weekend. Alle weekend-ønsker kræver ca. 13 timers weekendarbejde om ugen fra ekstra folk — jo sjældnere hver enkelt må arbejde, jo flere ekstra personer skal der til.">
 <option value="3-0">hver 3. weekend, én dag</option><option value="3-1">hver 3. weekend, begge dage</option>
 <option value="2-0">hver 2. weekend, én dag</option><option value="2-1">hver 2. weekend, begge dage</option>
@@ -831,6 +831,10 @@ function vaelgPlan(r, bevar) {
   raekke = r; konflikt = false; $('#konflikt').style.display = 'none';
   visPlanIndhold(true);
   if (!aktuelButik || aktuelButik.id != r.butik_id) aktuelButik = { id: r.butik_id, navn: butikNavn(r) };
+  // Opsaetningen koeres gennem medarbejder-modellen, saa aeldre planer foelger de nyeste regler
+  // (fx at en medarbejder uden faste vagter altid fordeles af planlaeggeren) -- uden at nogen
+  // skal gemme medarbejderne igen. Gemmes med planen naeste gang.
+  if (r.opsaetning && (r.opsaetning.personer || []).length) r.opsaetning = window.VagtplanOpsaetning.fraModel(window.VagtplanOpsaetning.tilModel(r.opsaetning), r.opsaetning);
   const pl = lesPlan(r.plan);
   M = nyMotor(r.opsaetning, pl.holdStart); M.T2 = pl.t2; M.EKSTRA = pl.ekstra; M.EKSTRA_REGEL = pl.ekstraRegel; M.START = pl.start;
   saetUndtagelser(pl.undtagelser);
@@ -950,7 +954,8 @@ function opdaterKontroller() {
     $('#t2').innerHTML = M.T2VALG.map(t => `<option value="${t}">${M.f(t)}</option>`).join('');
     $('#t2').value = M.T2;
   }
-  const maxE = Math.max(M.maxAflastning, M.EKSTRA);
+  // Mindst 0-3 at vaelge imellem -- ogsaa uden weekend-hold, hvor der ingen "dobbelt-weekender" er
+  const maxE = Math.max(M.maxAflastning, M.EKSTRA, 3);
   $('#ekstra').innerHTML = Array.from({ length: maxE + 1 }, (_, n) => `<option value="${n}">${n}</option>`).join('');
   $('#ekstra').value = M.EKSTRA;
   $('#ekstraRegel').value = M.EKSTRA_REGEL.afstand + '-' + (M.EKSTRA_REGEL.begge ? 1 : 0);
@@ -998,7 +1003,7 @@ $('#medarbejdere').onclick = () => aabnMedarbejdere();
 // M.foreslaa() (motor.js) proever baade "2 pers. fra 15:00" og "fra 15:15" og tusindvis af
 // fordelinger, og vaelger den plan der overholder reglerne bedst. Det tager op mod et sekund,
 // saa knappen viser "Beregner…" -- setTimeout giver browseren tid til at tegne den foerst.
-const FORSLAG_FORKLARING = '<p><b>Sådan laves forslag:</b> "Foreslå ny plan" prøver tusindvis af måder at fordele vagterne på og vælger den plan, der overholder alle regler og derefter bedst: opfylder weekend-ønskerne, bruger færrest timer med ekstra personer, undgår mærkelige mødetider og fordeler timerne jævnt mellem dem, der ikke har faste vagter. Har en bemanding et "eller fra"-tidspunkt, prøves begge, og det senere vælges kun, når det normale ville kræve ekstra folk. Ekstra personer dækker det, personalet ikke kan dække efter reglerne. Faste vagter og weekend-holdene flyttes aldrig.</p>';
+const FORSLAG_FORKLARING = '<p><b>Sådan laves forslag:</b> "Foreslå ny plan" bygger planen op dag for dag ud fra, hvornår hver medarbejder kan arbejde, deres timer og butikkens regler – medarbejdere uden faste vagter fordeler planlæggeren selv. Derefter prøver den tusindvis af ændringer (flytte, dele, forlænge og bytte vagter) og vælger den plan, der overholder alle regler og derefter bedst: opfylder weekend-ønskerne, bruger færrest timer med ekstra personer, undgår mærkelige mødetider og fordeler timerne jævnt. Har en bemanding et "eller fra"-tidspunkt, prøves begge, og det senere vælges kun, når det normale ville kræve ekstra folk. Ekstra personer bruges kun til det, personalet ikke kan dække efter reglerne. Faste vagter og weekend-holdene flyttes aldrig.</p>';
 function foreslaa() {
   const knap = $('#gen');
   knap.disabled = true; knap.textContent = 'Beregner…';
@@ -1157,7 +1162,7 @@ if (window.top !== window) {
   start().catch(() => vis('loginVis'));
 }
 </script>
-<script src="medarbejdere.js?v=2026-10-01-1"></script>
+<script src="medarbejdere.js?v=2026-10-01-2"></script>
 <script src="regler.js?v=2026-10-01-1"></script>
 <script src="assistent-ui.js?v=2026-10-01-1"></script>
 </body></html>
