@@ -45,6 +45,16 @@ Datoerne angives enten som "datoer" (en liste af enkelte datoer) eller som en sa
 - {"type":"fjern_aftale","navn":…,"datoer":[…]} – fjern en tidligere aftale (fri, tidsbegrænsning eller låst vagt) for personen de dage.
 - {"type":"tilgaengelighed","navn":…,"ugedage":[…],"kan":true|false,"fra":…,"til":…} – FAST ændring af, hvornår personen kan arbejde hver uge (0=mandag … 6=søndag). Kun når lederen siger, at det gælder fremover ("kan ikke arbejde mandage mere", "kan nu også om lørdagen").
 - {"type":"timer","navn":…,"timeart":"min"|"praecis"|"oenske"|"ingen","timer":N} – FAST ændring af personens timer: min = mindst N timer om ugen i snit over 4 uger, praecis = præcis N timer hver uge, oenske = gerne mindst N timer om ugen, ingen = intet krav.
+- {"type":"regel","regel":…,"navne":[…],…} – opret en NY FAST REGEL, som planlæggeren overholder fremover. Reglen vises under "Regler", hvor lederen kan fjerne den igen. "navne": hvem reglen gælder – navne fra medarbejderlisten og/eller jobtyper fra listen (fx ["Ungarbejder"]), eller ["alle"]. "regel" er én af:
+  · "maks_dage_i_traek" med "antal": højst N arbejdsdage i træk.
+  · "maks_timer_uge" med "timer": højst N timer om ugen.
+  · "maks_dage_uge" med "antal": højst N arbejdsdage om ugen.
+  · "maks_vagt" med "timer": en vagt må højst vare N timer.
+  · "tidsrum" med "fra" og/eller "til" (og evt. "ugedage"): må kun arbejde inden for tidsrummet – udelad det klokkeslæt, der ikke er sagt noget om, og udelad "ugedage", hvis det gælder alle dage. Fx "ungarbejdere må ikke arbejde efter kl. 17" = til "17:00".
+  · "ikke_dage" med "ugedage": må aldrig arbejde de ugedage (0=mandag … 6=søndag).
+  · "ikke_sammen": de nævnte (mindst to) må ikke være på arbejde samtidig.
+  · "weekend_hver" med "antal": højst hver N. weekend.
+  Én regel-handling pr. regel. Du kan kun TILFØJE regler – du kan ikke fjerne regler eller ændre butikkens åbningstider og bemanding; det gør lederen under "Regler".
 - {"type":"ny_plan"} – lav hele planen forfra. Kun når lederen udtrykkeligt beder om en helt ny plan.
 
 Sådan gør du:
@@ -52,10 +62,12 @@ Sådan gør du:
 - Tjek ugedagen for hver dato i vagtlisten i konteksten, så du ikke tager fejl af datoerne.
 - Kun datoer i planen kan ændres. Ligger noget uden for planen, så sig det i "svar".
 - Er det uklart, hvem eller hvilke dage det gælder, så spørg i "svar" og lav ingen handlinger. Gæt aldrig et navn, der ikke står på listen – men skriver lederen et navn lidt anderledes (fx Freja/Freya), så brug navnet fra listen.
-- Fri, kun_tid og vagt gælder kun de nævnte datoer. Brug kun "tilgaengelighed" og "timer" ved faste ændringer.
+- Fri, kun_tid og vagt gælder kun de nævnte datoer. Brug kun "tilgaengelighed", "timer" og "regel" ved faste ændringer.
+- Brug "regel", når lederen beder om en regel ("lav en regel", "fremover må … højst/aldrig/ikke …"), eller når det gælder flere personer, en jobtype eller alle. Én persons faste arbejdstider ("kan ikke mandage mere") er stadig "tilgaengelighed", og et timekrav (mindst/præcis/gerne N timer) er stadig "timer" – men et LOFT ("højst N timer om ugen") er regel "maks_timer_uge".
+- Kan lederens regel ikke udtrykkes med regeltyperne ovenfor, så lav den ikke – sig i "svar", hvilke slags regler du kan lave.
 - Spørgsmål om planen (hvem arbejder hvornår, timer, problemer) besvares ud fra konteksten uden handlinger. Brug tallene under "Timer pr. uge" i stedet for at regne selv.
 - "Ekstra person" er en pladsholder for en ekstra medarbejder eller vikar, der skal findes.
-- Beder lederen om noget, du ikke kan (fx at ændre butikkens åbningstider eller regler), så forklar kort i "svar", at det gøres under "Regler".
+- Beder lederen om noget, du ikke kan (fx at ændre butikkens åbningstider eller bemanding, eller at fjerne en regel), så forklar kort i "svar", at det gøres under "Regler".
 - Lov ALDRIG noget i "svar", som handlingerne ikke gør. Kan en del af lederens ønske ikke udtrykkes med handlingerne og felterne ovenfor, så gør det, der kan, og sig ærligt, hvad der ikke kan lade sig gøre.
 - Du kender medarbejdernes jobtyper (fx ungarbejder, salgsassistent) fra listen. Planlæggeren overholder selv reglerne om dem (fx at ungarbejdere ikke må stå alene).
 
@@ -90,6 +102,10 @@ const SKEMA = {
           handling('fjern_aftale', { navn: STR, ...PERIODE }, ['navn']),
           handling('tilgaengelighed', { navn: STR, ugedage: { type: 'array', items: { type: 'integer' } }, kan: { type: 'boolean' }, fra: STR, til: STR }, ['navn', 'ugedage', 'kan']),
           handling('timer', { navn: STR, timeart: { type: 'string', enum: ['ingen', 'min', 'praecis', 'oenske'] }, timer: { type: 'number' } }, ['navn', 'timeart', 'timer']),
+          handling('regel', {
+            regel: { type: 'string', enum: ['maks_dage_i_traek', 'maks_timer_uge', 'maks_dage_uge', 'maks_vagt', 'tidsrum', 'ikke_dage', 'ikke_sammen', 'weekend_hver'] },
+            navne: LISTE, antal: { type: 'integer' }, timer: { type: 'number' }, ugedage: { type: 'array', items: { type: 'integer' } }, fra: STR, til: STR,
+          }, ['regel', 'navne']),
           handling('ny_plan', {}),
         ],
       },

@@ -23,9 +23,9 @@ window.addEventListener('storage', e => { if (e.key === 'blho-tema') saetTema();
 if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('change', saetTema);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="motor.js?v=2026-10-01-3"></script>
-<script src="opsaetning.js?v=2026-10-01-2"></script>
-<script src="assistent.js?v=2026-10-01-2"></script>
+<script src="motor.js?v=2026-10-01-4"></script>
+<script src="opsaetning.js?v=2026-10-01-3"></script>
+<script src="assistent.js?v=2026-10-01-3"></script>
 <style>
 /* Farverne ligger som variabler, saa lys/moerk tilstand styres ét sted. Temaet vaelges med
    knappen i butik-redigerings topbar og deles via localStorage 'blho-tema' (se <head>). */
@@ -125,6 +125,8 @@ td.stille{color:var(--mut)}
 .rg-linje .rg-eller{color:var(--mut);margin-left:6px}
 #rdForm h4{margin:10px 0 2px;font-size:14px}
 #rdForm .md-linje input[type=number]{width:4.5em}
+.regel-linje{display:flex;gap:12px;align-items:center;justify-content:space-between;margin:6px 0}
+.regel-linje button{flex:none;color:var(--bad);font-size:13px;padding:4px 10px}
 label.rg-tjek{display:flex;align-items:center;gap:8px;margin:8px 0}
 label.rg-tjek input{width:auto;margin:0}
 #rgNoter{height:auto;font:inherit;font-size:14px}
@@ -982,6 +984,11 @@ function reglerHtml(C) {
   const O = window.VagtplanOpsaetning, job = C.jobtyper || {};
   return O.beskrivRegler(C).map(x => `<p><b>${esc(x.titel)}:</b> ${esc(x.tekst)}</p>`).join('')
     + (C.noter ? `<p><b>Andre aftaler:</b> ${esc(C.noter).replace(/\n/g, '<br>')}</p>` : '')
+    // Regler lavet af assistenten -- kan fjernes igen her (klik-handleren ligger ved de andre klik)
+    + '<h4 style="margin:14px 0 4px">Regler lavet af assistenten</h4>'
+    + ((C.ekstraRegler || []).length
+      ? C.ekstraRegler.map(r => `<p class="regel-linje"><span>${esc(O.beskrivRegel(r, C))}</span><button type="button" data-fjern-regel="${esc(r.id)}" title="Fjern reglen – planlæggeren bruger den ikke mere">✕ Fjern</button></p>`).join('')
+      : '<p class="s">Ingen endnu. Skriv fx "Lav en regel: Anna må højst arbejde 3 dage i træk" til assistenten – så står reglen her og kan fjernes igen.</p>')
     + '<h4 style="margin:14px 0 4px">Medarbejdere</h4>'
     + O.tilModel(C).map(m => `<p><b>${esc(m.navn)}</b> (${esc(job[m.type] || '')}): ${esc(O.beskriv(m))}.</p>`).join('')
     + FORSLAG_FORKLARING;
@@ -1094,6 +1101,11 @@ document.addEventListener('click', e => {
   if (t.dataset.add !== undefined) openE(null, +t.dataset.add);
   if (t.dataset.person !== undefined) aabnMedarbejdere(t.dataset.person);
   if (t.dataset.uger !== undefined && !t.disabled) skiftUger(+t.dataset.uger);
+  if (t.dataset.fjernRegel !== undefined) {
+    const C = Object.assign({}, raekke.opsaetning, { ekstraRegler: (raekke.opsaetning.ekstraRegler || []).filter(r => String(r.id) != t.dataset.fjernRegel) });
+    genopbygMotor(C); render(); aendret();
+    gemStatus('Reglen er fjernet. Tryk "Gem vagtplan" for at gemme.', 'ok');
+  }
   if (t.dataset.fjernAftale !== undefined) { const l = M.UNDTAGELSER.slice(); l.splice(+t.dataset.fjernAftale, 1); saetUndtagelser(l); render(); aendret(); }
 });
 function openE(i, d) {
@@ -1164,5 +1176,5 @@ if (window.top !== window) {
 </script>
 <script src="medarbejdere.js?v=2026-10-01-2"></script>
 <script src="regler.js?v=2026-10-01-1"></script>
-<script src="assistent-ui.js?v=2026-10-01-1"></script>
+<script src="assistent-ui.js?v=2026-10-01-2"></script>
 </body></html>
