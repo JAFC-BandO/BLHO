@@ -139,7 +139,9 @@ Sig '[3/8] Registrerer opgaverne...'
 # besked til en terminerende PowerShell-fejl. Ramt paa Aalborg 2. september 2026, hvor
 # opsaetningen stoppede midt i trin 3.
 & cmd.exe /c 'schtasks /Delete /TN "BLHO-Checkin" /F >nul 2>&1'
-& schtasks.exe /Create /TN 'BLHO-Checkin' /SC MINUTE /MO 1 /RU 'SYSTEM' /RL HIGHEST /F `
+# Hvert 2. minut (ikke hvert minut): Supabase logger hvert kald, og check-in hvert minut fra alle
+# bokse fyldte gratisplanens log-kvote. Fjernkommandoer tager saa op til 2 minutter.
+& schtasks.exe /Create /TN 'BLHO-Checkin' /SC MINUTE /MO 2 /RU 'SYSTEM' /RL HIGHEST /F `
   /TR 'powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\blho\checkin.ps1' |
   ForEach-Object { Sig "      $_" 'DarkGray' }
 
