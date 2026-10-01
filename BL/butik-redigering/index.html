@@ -142,7 +142,10 @@
      (skaermindholdet) paa butiks-fanen eller "Gem vagtplan" paa vagtplan-fanen. Fast bredde,
      saa ?- og tema-knappen staar samme sted paa begge faner. */
   .gem-plads { display: flex; justify-content: flex-end; align-items: center; gap: 6px; width: 226px; }
-  #saveBtn, #vpGem { min-width: 140px; }
+  /* Samme faste hoejde paa begge fanernes gem-knap -- "Gemt ✓" (flueben + kant) var 5 px hoejere
+     end "Gem ændringer", saa hele topbaren voksede og rykkede ned, naar man skiftede til vagtplanen. */
+  #saveBtn, #vpGem { min-width: 140px; height: 32px; padding-top: 0; padding-bottom: 0; line-height: 1;
+    box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; }
   .vp-handlinger { display: none; align-items: center; gap: 6px; }
   body.fane-vagtplan .vp-handlinger { display: flex; }
   body.fane-vagtplan #saveBtn { display: none; }
