@@ -1121,6 +1121,13 @@
   let synligSideId = null;
   let liveViewIntervals = [];
   let liveViewPollHandle = null;
+  // Live View faar besked via Supabase Realtime, naar butikkens indhold eller den faelles
+  // skabelon gemmes (samme mekanisme som skaerm.html), i stedet for at spoerge hvert minut:
+  // Supabase logger hvert kald, og en redigering der stod aaben hele dagen fyldte godt i
+  // gratisplanens log-kvote. Pollen er nu kun et sikkerhedsnet (se loadButikData).
+  let liveViewKanal = null, liveViewRealtimeOk = false, liveViewForbundetFoer = false;
+  let liveViewRealtimeStartet = 0, liveViewSidstHentet = 0, liveViewHentTimer = null;
+  let liveViewForaeldet = false, liveViewSkjultSiden = 0;
   // Samme "kun gentegn hvis noget reelt aendrede sig"-noegle som skaerm.htmls sidstOpdateret
   // -- ellers gentegnede Live View (og dermed nulstillede rotator-tid/video/nyhedsbanner-
   // scroll fra bunden) hvert 10. sekund UANSET om noget reelt var nyt, hvilket saa ud som et
@@ -1419,11 +1426,16 @@
     renderPropsPanel();
 
     await loadLiveView();
+    startLiveViewRealtime();
     if (liveViewPollHandle) clearInterval(liveViewPollHandle);
-    // Hvert minut og kun mens fanen er synlig (var hvert 10. sekund): Live View genindlaeses i
-    // forvejen straks efter ens eget Gem, saa pollen fanger kun andres aendringer -- og
-    // Supabase logger hvert kald (gratisplanens log-kvote). Se ogsaa visibilitychange nedenfor.
-    liveViewPollHandle = setInterval(() => { if (!document.hidden && aktivFane === 'butik') loadLiveView(); }, 60000);
+    // Sikkerhedsnet, kun mens fanen er synlig: hvert 15. minut naar Realtime er forbundet,
+    // ellers hvert minut (som foer). Er Realtime nede, proeves en ny kanal hvert 10. minut.
+    liveViewPollHandle = setInterval(() => {
+      if (document.hidden || aktivFane !== 'butik') return;
+      if (!liveViewRealtimeOk && Date.now() - liveViewRealtimeStartet > 10 * 60000) startLiveViewRealtime();
+      if (liveViewRealtimeOk && Date.now() - liveViewSidstHentet < 15 * 60000) return;
+      loadLiveView();
+    }, 60000);
     redNulstil(); // ny butik: frisk fortryd-historik
     vagtplanFoelgButik(); // vagtplanen er pr. butik
   }
@@ -1570,6 +1582,7 @@
     } else {
       renderCanvas();
       updateSlideOverlay();
+      if (liveViewForaeldet && currentButikId) loadLiveView();
     }
   }
   document.querySelectorAll('.hovedfane').forEach(b => b.addEventListener('click', () => skiftFane(b.dataset.fane)));
@@ -1978,9 +1991,19 @@
     return 'for ' + Math.floor(timer / 24) + ' dage siden';
   }
 
-  function enhedStatusFarve(iso) {
+  // Boksene checker ind hvert 5. minut om dagen og hver time om natten (serveren bestemmer,
+  // se migration_checkin_interval.sql) og gemmer hvornaar de naeste gang skal melde sig
+  // (naeste_checkin_at). "For sent" maales derfor fra DET tidspunkt -- ellers stod alle bokse
+  // som offline hele natten. Bokse med det gamle script (uden naeste_checkin_at) maales fra
+  // sidste check-in som foer.
+  function checkinMaalFra(iso, naesteIso) {
+    if (naesteIso && new Date(naesteIso) > new Date(iso)) return naesteIso;
+    return iso;
+  }
+
+  function enhedStatusFarve(iso, naesteIso) {
     if (!iso) return '#999';
-    const minutter = (Date.now() - new Date(iso).getTime()) / 60000;
+    const minutter = (Date.now() - new Date(checkinMaalFra(iso, naesteIso)).getTime()) / 60000;
     if (minutter < 3) return '#1a9b4b';
     if (minutter < 15) return '#c98a1b';
     return '#c0392b';
@@ -2049,12 +2072,19 @@
   // tal = mere "i orden", saa en almindelig stigende sortering giver online oeverst.
   // 3 (aldrig set) ligger efter 2 (nede): en enhed der ALDRIG har meldt sig er typisk
   // en der ikke er sat op endnu, ikke et akut problem som en der lige er faldet ud.
-  function enhedStatusRang(iso) {
+  function enhedStatusRang(iso, naesteIso) {
     if (!iso) return 3;
-    const minutter = (Date.now() - new Date(iso).getTime()) / 60000;
+    const minutter = (Date.now() - new Date(checkinMaalFra(iso, naesteIso)).getTime()) / 60000;
     if (minutter < 3) return 0;
     if (minutter < 15) return 1;
     return 2;
+  }
+
+  // "ca. kl. 21:04" -- hvornaar boksen naeste gang melder sig (og dermed udfoerer en ventende
+  // kommando). Kun naar tidspunktet ligger ude i fremtiden.
+  function naesteCheckinTekst(e) {
+    if (!e.naeste_checkin_at || new Date(e.naeste_checkin_at) <= new Date()) return '';
+    return 'ca. kl. ' + new Date(e.naeste_checkin_at).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
   }
 
   function enhedButikNavn(e) {
@@ -2102,7 +2132,7 @@
       default:
         // Online oeverst, og indenfor hver gruppe alfabetisk -- saa raekkefoelgen er
         // forudsigelig og ikke hopper rundt ved hvert auto-refresh.
-        return kopi.sort((a, b) => enhedStatusRang(a.sidst_set_at) - enhedStatusRang(b.sidst_set_at) ||
+        return kopi.sort((a, b) => enhedStatusRang(a.sidst_set_at, a.naeste_checkin_at) - enhedStatusRang(b.sidst_set_at, b.naeste_checkin_at) ||
                                    efterNavn(a, b));
     }
   }
@@ -2134,7 +2164,7 @@
     // det man kigger efter, og ellers skal man taelle groenne prikker manuelt.
     const antalTaeller = document.getElementById('enhederAntal');
     if (antalTaeller) {
-      const online = alleEnheder.filter(e => enhedStatusRang(e.sidst_set_at) === 0).length;
+      const online = alleEnheder.filter(e => enhedStatusRang(e.sidst_set_at, e.naeste_checkin_at) === 0).length;
       const aldrig = alleEnheder.filter(e => !e.sidst_set_at).length;
       antalTaeller.textContent = online + ' af ' + alleEnheder.length + ' online' +
         (aldrig ? ' · ' + aldrig + ' aldrig set' : '');
@@ -2145,7 +2175,7 @@
       row.style.cssText = 'display:flex; align-items:flex-start; gap:10px; background:var(--ui-flade-graa); border-radius:8px; padding:10px 12px; font-size:13px;';
 
       const dot = document.createElement('span');
-      dot.style.cssText = 'width:10px; height:10px; border-radius:50%; background:' + enhedStatusFarve(e.sidst_set_at) + '; flex-shrink:0;';
+      dot.style.cssText = 'width:10px; height:10px; border-radius:50%; background:' + enhedStatusFarve(e.sidst_set_at, e.naeste_checkin_at) + '; flex-shrink:0;';
       row.appendChild(dot);
 
       // Fri hukommelse ved seneste check-in -- givet UDEN SSH, saa et hukommelsespres der
@@ -2168,7 +2198,9 @@
         '<div style="font-weight:600;">' + escapeHtml(e.navn) + ' <span style="color:var(--ui-tekst-aaa); font-weight:400; font-size:11px;">(' + enhedTypeNavn(e.type) + ')</span></div>' +
         '<div style="color:var(--ui-tekst-888); font-size:11px;">' + escapeHtml(e.butikker ? e.butikker.navn : '?') + ' · ' +
           tidSiden(e.sidst_set_at) + (e.lokal_ip ? ' · ' + escapeHtml(e.lokal_ip) : '') +
-          (e.kommando ? ' · ⏳ ' + escapeHtml(kommandoLabel(e.kommando)) + ' afventer' : '') + '</div>' +
+          (naesteCheckinTekst(e) ? ' · næste ' + naesteCheckinTekst(e) : '') +
+          (e.kommando ? ' · ⏳ ' + escapeHtml(kommandoLabel(e.kommando)) + ' afventer' +
+            (naesteCheckinTekst(e) ? ' (sker ' + naesteCheckinTekst(e) + ')' : '') : '') + '</div>' +
         memHtml +
         '<div style="color:var(--ui-tekst-aaa); font-size:10px; margin-top:2px;">ID (til check-in-scriptet): ' +
           '<code class="enhedIdKopier" data-id="' + e.id + '" style="cursor:pointer; background:var(--ui-flade-neutral); padding:1px 5px; border-radius:3px;" title="Klik for at kopiere">' +
@@ -2191,7 +2223,7 @@
         // problemet -- og vises i stedet, med det rigtige naeste skridt (fysisk genstart --
         // "Genstart enhed"-knappen gaar jo netop gennem det doede loop og virker ikke).
         (function () {
-          const checkinFrisk = e.sidst_set_at && (Date.now() - new Date(e.sidst_set_at).getTime()) < 3 * 60 * 1000;
+          const checkinFrisk = e.sidst_set_at && enhedStatusRang(e.sidst_set_at, e.naeste_checkin_at) === 0;
           if (e.tailscale_ok === false && checkinFrisk) {
             return '<div style="color:var(--ui-fejl-tekst2); font-size:11px; font-weight:600; margin-top:2px;">⚠️ Tailscale nede' +
               (e.tailscale_ok_sidst_at ? ' (sidst OK ' + tidSiden(e.tailscale_ok_sidst_at) + ')' : '') +
@@ -2412,9 +2444,9 @@
     // Auto-opdatér mens panelet er åbent, så et fejlfindings-svar dukker op af sig selv
     // uden man skal lukke/genåbne panelet manuelt hvert minut for at tjekke.
     if (enhederPollHandle) clearInterval(enhederPollHandle);
-    // Hvert 30. sekund og kun mens fanen er synlig -- boksene checker alligevel kun ind hvert
-    // 2. minut (log-kvoten), saa hyppigere ville bare hente det samme igen.
-    enhederPollHandle = setInterval(() => { if (!document.hidden) loadEnheder(); }, 30000);
+    // Hvert minut og kun mens fanen er synlig -- boksene checker alligevel hoejst ind hvert
+    // 5. minut (log-kvoten), saa hyppigere ville bare hente det samme igen.
+    enhederPollHandle = setInterval(() => { if (!document.hidden) loadEnheder(); }, 60000);
   });
   document.getElementById('enhederCloseBtn').addEventListener('click', async () => {
     document.getElementById('enhederOverlay').style.display = 'none';
@@ -2831,14 +2863,14 @@
   }
 
   async function tjekOfflineSkaerme() {
-    let q = client.from('enheder').select('navn, sidst_set_at, butik_id, butikker(navn)');
+    let q = client.from('enheder').select('navn, sidst_set_at, naeste_checkin_at, butik_id, butikker(navn)');
     // En almindelig admin ser alligevel kun sin egen butiks enheder via RLS, men filteret
     // goer det eksplicit - og sparer superadmin for at hente alt naar de kigger paa én butik.
     if (!erSuperadmin) q = q.eq('butik_id', currentButikId);
     const { data, error } = await q;
     if (error || !data) return;
 
-    const nede = data.filter(e => e.sidst_set_at && minutterSiden(e.sidst_set_at) > OFFLINE_MINUTTER);
+    const nede = data.filter(e => e.sidst_set_at && minutterSiden(checkinMaalFra(e.sidst_set_at, e.naeste_checkin_at)) > OFFLINE_MINUTTER);
     if (!nede.length) return;
 
     // Én advarsel pr. hændelse, ikke pr. login. Noeglen indeholder hvilke enheder der er
@@ -3981,11 +4013,52 @@
 
   // Kommer man tilbage til fanen (eller skifter fra vagtplanen), opdateres Live View med det
   // samme i stedet for at vente op til et minut paa naeste poll.
+  // Med Realtime forbundet er Live View allerede opdateret -- medmindre fanen har vaeret skjult
+  // laenge (browseren kan have sat forbindelsen paa pause imens).
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && aktivFane === 'butik' && currentButikId) loadLiveView();
+    if (document.hidden) { liveViewSkjultSiden = Date.now(); return; }
+    if (aktivFane !== 'butik' || !currentButikId) return;
+    if (!liveViewRealtimeOk || liveViewForaeldet || Date.now() - liveViewSkjultSiden > 5 * 60000) loadLiveView();
   });
 
+  function startLiveViewRealtime() {
+    const gammel = liveViewKanal;
+    liveViewKanal = null;
+    liveViewRealtimeOk = false;
+    liveViewForbundetFoer = false;
+    liveViewRealtimeStartet = Date.now();
+    if (gammel) { try { client.removeChannel(gammel); } catch (e) { /* allerede lukket */ } }
+    if (!currentButikId) return;
+    try {
+      const denne = client.channel('liveview-' + currentButikId)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'content', filter: 'butik_id=eq.' + currentButikId }, liveViewHentSnart)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'sabloner', filter: 'standard=eq.true' }, liveViewHentSnart)
+        .subscribe((status) => {
+          if (denne !== liveViewKanal) return; // gammel kanal (butiksskift eller ny kanal)
+          liveViewRealtimeOk = status === 'SUBSCRIBED';
+          if (liveViewRealtimeOk) {
+            // Var forbindelsen nede, kan vi have misset en aendring imens
+            if (liveViewForbundetFoer) liveViewHentSnart();
+            liveViewForbundetFoer = true;
+          }
+        });
+      liveViewKanal = denne;
+    } catch (e) {
+      liveViewRealtimeOk = false;
+    }
+  }
+
+  // Kort forsinkelse, saa flere gem lige efter hinanden giver én hentning. Staar man paa
+  // vagtplan-fanen, hentes der foerst, naar man kommer tilbage (se skiftFane).
+  function liveViewHentSnart() {
+    if (aktivFane !== 'butik') { liveViewForaeldet = true; return; }
+    if (liveViewHentTimer) return;
+    liveViewHentTimer = setTimeout(() => { liveViewHentTimer = null; if (currentButikId) loadLiveView(); }, 2000);
+  }
+
   async function loadLiveView() {
+    liveViewSidstHentet = Date.now();
+    liveViewForaeldet = false;
     const box = document.getElementById('liveViewBox');
     const badge = document.getElementById('liveViewBadge');
 

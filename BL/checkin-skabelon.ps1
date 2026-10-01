@@ -1,4 +1,5 @@
-# BLHO check-in. Koeres hvert 2. minut af den planlagte opgave BLHO-Checkin, som SYSTEM.
+# BLHO check-in. Koeres hvert 2. minut af den planlagte opgave BLHO-Checkin, som SYSTEM -- men
+# kalder kun Supabase, naar serveren siger det er tid (hvert 5. min om dagen, hver time om natten).
 # (Hvert 2. minut og genbrugt login: Supabase logger hvert kald, og hvert minut med nyt login
 # fyldte gratisplanens log-kvote.)
 # Genereret af win-setup.ps1 - ret hellere der, og koer scriptet igen.
@@ -41,6 +42,23 @@ if ($nuUtc.Hour -eq 4 -and $oppetimer -gt 6 -and (Get-Content $rebootFil -ErrorA
   Log ("Lokalt sikkerhedsnet udloeser genstart (oppe i {0:N1} timer, ingen server-genstart)" -f $oppetimer)
   Restart-Computer -Force
   exit
+}
+
+# Hvor tit der checkes ind, bestemmer SERVEREN (enhed_checkin -> naeste_sek): hvert 5. minut om
+# dagen, hver time om natten (log-kvoten paa gratisplanen). Opgaven koerer stadig hvert 2. minut,
+# saa Tailscale-vagthunden holdes i gang -- men login og kaldet til Supabase springes over, til det
+# er tid. Mangler filen (eller svarede serveren uden naeste_sek), checkes der ind hver gang.
+$naesteFil = Join-Path $STATEDIR 'naeste_checkin.txt'
+$naesteAt = 0
+try { $naesteAt = [long](Get-Content $naesteFil -ErrorAction Stop | Select-Object -First 1) } catch { }
+if ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() -lt ($naesteAt - 60)) {
+  $tsIp = $null
+  try { $tsIp = (& $TS ip -4 2>$null | Select-Object -First 1) } catch { }
+  if ((Test-Path $TS) -and -not $tsIp) {
+    Log 'tailscale svarer ikke - genstarter tjenesten'
+    Restart-Service Tailscale -Force -ErrorAction SilentlyContinue
+  }
+  exit 0
 }
 
 # Login genbruges (gemt i state-mappen; et token gaelder 1 time) i stedet for et nyt login
@@ -117,6 +135,14 @@ try {
 
 $kommando       = $res[0].kommando
 $customKommando = $res[0].custom_kommando
+# Hvornaar der skal checkes ind naeste gang (se ovenfor). Uden naeste_sek -> hver gang.
+$naesteSek = 0
+try { $naesteSek = [int]$res[0].naeste_sek } catch { }
+if ($naesteSek -gt 0) {
+  Set-Content -Path $naesteFil -Value ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() + $naesteSek) -Encoding ascii
+} else {
+  Remove-Item $naesteFil -ErrorAction SilentlyContinue
+}
 
 if ($kommando -eq 'reboot') {
   Log 'Fjernkommando: reboot'
