@@ -95,7 +95,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-10-01-realtime1';
+  const SCRIPT_VERSION = '2026-10-01-realtime2';
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
@@ -151,7 +151,8 @@
     // session op -- den skal ikke ogsaa skrive et ekstra "status"-opslag i Aktivitetsloggen,
     // det ville bare se ud som om enheden tjekkede ind dobbelt saa tit.
     if (window.self !== window.top) return;
-    logAdminHandling('status', 'Kører normalt. ' + (senesteLogLinjer[senesteLogLinjer.length - 1] || ''));
+    logAdminHandling('status', 'Kører normalt. Realtime: ' + (realtimeOk ? 'forbundet' : realtimeHarVaeretForbundet ? 'IKKE forbundet' : 'forbinder') + '. ' +
+      (senesteLogLinjer[senesteLogLinjer.length - 1] || ''));
   }
   window.addEventListener('error', (e) => {
     logJsFejl((e.message || 'Ukendt fejl') + ' @ ' + (e.filename || '?') + ':' + (e.lineno || '?'));
@@ -167,8 +168,12 @@
   // skaerme alene ~45.000 kald i doegnet, mere end gratisplanens log-kvote (1 GB/maaned).
   // Pollingen er nu kun et sikkerhedsnet: sjaeldent, naar Realtime er forbundet, og hvert
   // minut, naar den ikke er (fx blokeret websocket) -- saa skaermen ALDRIG gaar i staa.
+  // Om natten (19-06, butikkerne er lukkede) er sikkerhedsnettet endnu sjaeldnere.
   const POLL_MS = 15 * 60 * 1000;
+  const POLL_NAT_MS = 60 * 60 * 1000;
   const POLL_UDEN_REALTIME_MS = 60 * 1000;
+  const POLL_UDEN_REALTIME_NAT_MS = 5 * 60 * 1000;
+  function erNat() { const t = new Date().getHours(); return t >= 19 || t < 6; }
   const screen = document.getElementById('screen');
   const params = new URLSearchParams(location.search);
   const email = params.get('email');
@@ -523,6 +528,7 @@
   // som sammenligner opdateret_at og genindlaeser siden, hvis der reelt er nyt (praecis som
   // pollingen gjorde). Kort forsinkelse, saa flere gem lige efter hinanden giver én hentning.
   let realtimeOk = false, realtimeHarVaeretForbundet = false, hentSnartTimer = null;
+  let kanal = null, genstartTimer = null, genstartForsoeg = 0;
   function hentSnart(grund) {
     if (hentSnartTimer) return;
     debugLog('Realtime: ' + grund + ' -- henter om 3 s');
@@ -530,34 +536,97 @@
   }
   function startRealtime() {
     try {
-      client.channel('skaerm-' + butikId)
+      const denne = client.channel('skaerm-' + butikId)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'content', filter: 'butik_id=eq.' + butikId }, () => hentSnart('indholdet er gemt'))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'sabloner', filter: 'standard=eq.true' }, () => hentSnart('den faelles skabelon er gemt'))
         .subscribe((status, err) => {
+          if (denne !== kanal) return; // en gammel kanal vi selv har lukket (genstartRealtime)
           debugLog('Realtime: ' + status + (err ? ' (' + (err.message || err) + ')' : ''));
           if (status === 'SUBSCRIBED') {
             realtimeOk = true;
+            genstartForsoeg = 0;
             // Var forbindelsen nede et stykke tid, kan vi have misset en aendring imens
             if (realtimeHarVaeretForbundet) hentSnart('forbundet igen');
             realtimeHarVaeretForbundet = true;
           } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
             realtimeOk = false;
+            planlaegGenstartRealtime(status);
           }
         });
+      kanal = denne;
     } catch (e) {
       realtimeOk = false;
       debugLog('Realtime kunne ikke starte: ' + e.message + ' -- bruger polling hvert minut');
+      planlaegGenstartRealtime('fejl');
     }
   }
-  // Sikkerheds-poll: hvert 15. minut med Realtime, hvert minut uden.
+  // Selv-helbredelse: lukker serveren kanalen (CLOSED -- fx fordi login'et udloeb, foer det blev
+  // fornyet), proever supabase-js IKKE selv igen, og skaermen ville spoerge hvert minut resten af
+  // dagen (set paa Vanloese 1. okt. 2026). Saa lukker vi kanalen helt og starter en ny. Ved
+  // CHANNEL_ERROR/TIMED_OUT proever supabase-js selv; vi griber kun ind, hvis det ikke er
+  // lykkedes inden da. Stigende ventetid (15 s, 1 min, 5 min, saa hvert 15. min), saa en
+  // blokeret websocket ikke giver et nyt forbindelsesforsoeg hvert minut.
+  function planlaegGenstartRealtime(grund) {
+    if (genstartTimer) return;
+    const ventetider = [15000, 60000, 5 * 60000, 15 * 60000];
+    const ms = ventetider[Math.min(genstartForsoeg, ventetider.length - 1)];
+    genstartForsoeg++;
+    genstartTimer = setTimeout(() => {
+      genstartTimer = null;
+      if (!realtimeOk) genstartRealtime(grund);
+    }, ms);
+  }
+  function genstartRealtime(grund) {
+    clearTimeout(genstartTimer); genstartTimer = null;
+    debugLog('Realtime: starter kanalen forfra (' + grund + ')');
+    const gammel = kanal;
+    kanal = null;
+    if (gammel) { try { client.removeChannel(gammel); } catch (e) { /* allerede lukket */ } }
+    startRealtime();
+  }
+  // Sikkerheds-poll: hvert 15. minut med Realtime (1 time om natten), hvert minut uden (5 min om natten).
   function planlaegPoll() {
-    const ms = realtimeOk ? POLL_MS : POLL_UDEN_REALTIME_MS;
+    const nat = erNat();
+    const ms = realtimeOk ? (nat ? POLL_NAT_MS : POLL_MS) : (nat ? POLL_UDEN_REALTIME_NAT_MS : POLL_UDEN_REALTIME_MS);
     setTimeout(() => {
       debugLog('Poll (' + (realtimeOk ? 'sikkerhedsnet, Realtime er forbundet' : 'Realtime er ikke forbundet') + ')...');
       hentContent();
       planlaegPoll();
     }, ms);
   }
+
+  // ---------- Login-fornyelse efter SERVERENS ur ----------
+  // supabase-js fornyer login'et (gyldigt 1 time) ud fra boksens EGET ur. Gaar uret bagud
+  // (Vanloese gik 5,5 min bagud 1. okt. 2026, og automatisk tid kan ikke slaas til uden fysisk
+  // adgang), udloeber login'et hos serveren foer det bliver fornyet: kaldene faar 401 i nogle
+  // minutter hver time, og serveren lukker Realtime-kanalen. Vi maaler derfor uret mod serverens
+  // (iat i et token serveren LIGE har udstedt) og fornyer selv 5 min foer udloeb efter serverens
+  // ur. Gaar uret rigtigt eller foran, fornyer supabase-js i forvejen selv i tide, og saa sker
+  // der intet ekstra her -- vi kan kun nogensinde forny TIDLIGERE end supabase-js selv ville.
+  let fornyTimer = null;
+  function planlaegFornyelse(session) {
+    try {
+      const del = session.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      const claims = JSON.parse(atob(del));
+      const bagud = claims.iat * 1000 - Date.now(); // > 0: boksens ur gaar bagud
+      if (!(bagud > 30000)) return;
+      clearTimeout(fornyTimer);
+      const om = Math.max(claims.exp * 1000 - bagud - Date.now() - 5 * 60000, 10000);
+      debugLog('Uret gaar ' + Math.round(bagud / 1000) + ' s bagud -- fornyer selv login om ' + Math.round(om / 60000) + ' min');
+      fornyTimer = setTimeout(() => {
+        client.auth.refreshSession().then(({ error }) => { if (error) debugLog('Login-fornyelse fejlede: ' + error.message); });
+      }, om);
+    } catch (e) { /* ulaeseligt token -- supabase-js' egen fornyelse klarer det */ }
+  }
+  client.auth.onAuthStateChange((event, session) => {
+    if (!session || !session.access_token) return;
+    // Kun et token serveren LIGE har udstedt kan maale uret (iat = serverens tid lige nu).
+    // Kaldes via setTimeout: supabase-js maa ikke kaldes direkte inde fra sin egen callback.
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') setTimeout(() => planlaegFornyelse(session), 0);
+    if (event === 'TOKEN_REFRESHED' && butikId && kanal && !realtimeOk && window.self === window.top) {
+      setTimeout(() => genstartRealtime('login fornyet'), 0);
+    }
+  });
 
   async function start() {
     if (email && password) {
