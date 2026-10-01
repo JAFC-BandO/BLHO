@@ -344,9 +344,20 @@
         const q = findPerson(C, v);
         if (q) { if (!ids.includes(q)) ids.push(q); } else ukendt.push(v);
       });
+      // "undtagen": dem reglen ikke gaelder (navne eller jobtyper)
+      const undtagen = [];
+      (Array.isArray(h.undtagen) ? h.undtagen : h.undtagen ? [h.undtagen] : []).map(v => String(v).trim()).filter(Boolean).forEach(v => {
+        const t = v.toLowerCase(), typ = Object.keys(job).find(k => { const n = String(job[k]).toLowerCase(); return t == k.toLowerCase() || [n, n + 'e', n + 'r', n + 'er', n + 'ne', n + 'erne'].includes(t); });
+        if (typ) { C.personer.forEach(p => { if (p.type == typ && !undtagen.includes(p.id)) undtagen.push(p.id); }); return; }
+        const q = findPerson(C, v);
+        if (q) { if (!undtagen.includes(q)) undtagen.push(q); } else ukendt.push(v);
+      });
       if (ukendt.length) { fejl(`Jeg kan ikke finde ${ukendt.map(v => '"' + v + '"').join(', ')} blandt medarbejderne, så reglen er ikke lavet.`); return; }
+      if (type == 'maks_personer_dag') { alle = true; undtagen.length = 0; }
       if (!alle && !ids.length && !typer.length) { fejl('Jeg ved ikke, hvem reglen skal gælde for.'); return; }
       const hv = alle ? { alle: true } : Object.assign({}, typer.length ? { typer: typer.sort() } : {}, ids.length ? { personer: ids.sort() } : {});
+      const undt = undtagen.filter(p => !ids.includes(p)).sort();
+      if (undt.length && (alle || typer.length)) hv.undtagen = undt;
       const r = { type, hvem: hv };
       const antal = Math.round(Number(h.antal)), t = Number(String(h.timer).replace(',', '.'));
       const ds = [...new Set((Array.isArray(h.ugedage) ? h.ugedage : []).map(Number))].filter(d => d >= 0 && d <= 6).sort();
@@ -372,8 +383,17 @@
       } else if (type == 'ikke_dage') {
         if (!ds.length) { fejl('Jeg ved ikke, hvilke ugedage reglen skal gælde.'); return; }
         r.ugedage = ds;
+      } else if (type == 'aaben_til_luk') {
+        const n = h.antal == null ? 0 : antal;
+        if (!(n >= 0 && n <= 7)) { fejl('Jeg forstod ikke, hvor mange vagter fra åbning til luk der må være om ugen.'); return; }
+        r.antal = n;
+        if (ds.length && ds.length < 7) r.ugedage = ds;
+      } else if (type == 'maks_personer_dag') {
+        if (!(antal >= 1 && antal <= 20)) { fejl('Jeg forstod ikke, hvor mange der højst må være på arbejde i løbet af dagen.'); return; }
+        r.antal = antal;
+        if (ds.length && ds.length < 7) r.ugedage = ds;
       } else if (type == 'ikke_sammen') {
-        const antalP = C.personer.filter(p => alle || typer.includes(p.type) || ids.includes(p.id)).length;
+        const antalP = C.personer.filter(p => !undt.includes(p.id) && (alle || typer.includes(p.type) || ids.includes(p.id))).length;
         if (antalP < 2) { fejl('"Må ikke arbejde sammen" kræver mindst to medarbejdere.'); return; }
       }
       if (valg.idag) r.fraDato = lokalDato(valg.idag);
