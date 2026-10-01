@@ -95,7 +95,7 @@
 </div>
 
 <script>
-  const SCRIPT_VERSION = '2026-08-24-master32';
+  const SCRIPT_VERSION = '2026-10-01-realtime1';
 
   const SUPABASE_URL = 'https://irijatnmgvutrqngwpaa.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
@@ -141,7 +141,10 @@
   // Let, sjaelden "status"-log (ikke hver eneste debugLog-linje -- det ville drukne
   // Aktivitetslog i stoej) -- saa superadmin kan se om en butiks skaerm reelt er i live og
   // fungerer normalt, ikke kun naar noget gaar galt.
-  const STATUS_LOG_MS = 5 * 60 * 1000;
+  // Hver 30. minut (var 5): Supabase logger hvert kald, og "Kører normalt" hvert 5. minut fra
+  // alle skaerme fyldte unoedigt i gratisplanens log-kvote. Boksens egen check-in viser i
+  // forvejen, om den er i live.
+  const STATUS_LOG_MS = 30 * 60 * 1000;
   function logStatus() {
     // Se forbeeredGenindlaesning: en skjult forhaandsindlaesning af NAESTE generation af
     // siden koerer det samme script forfra i en iframe, udelukkende for at varme cache/
@@ -158,10 +161,14 @@
     logJsFejl('Unhandled promise: ' + grund);
   });
 
-  // 30s i stedet for tidligere 10s: en aendring skal jo bare vises inden for et minuts tid,
-  // ikke oejeblikkeligt -- og hver poll er et Supabase-kald i den SAMME Chrome-proces der
-  // ogsaa tegner skaermen, saa sjaeldnere kald letter reelt presset paa svag Android-hardware.
-  const POLL_MS = 30000;
+  // Opdateringer kommer via Supabase Realtime (se startRealtime): skaermen faar besked med det
+  // samme, naar butikkens indhold eller den faelles skabelon gemmes. Tidligere spurgte hver
+  // skaerm hvert 30. sekund -- og da Supabase logger hvert eneste kald (~2,5 KB stykket), gav 9
+  // skaerme alene ~45.000 kald i doegnet, mere end gratisplanens log-kvote (1 GB/maaned).
+  // Pollingen er nu kun et sikkerhedsnet: sjaeldent, naar Realtime er forbundet, og hvert
+  // minut, naar den ikke er (fx blokeret websocket) -- saa skaermen ALDRIG gaar i staa.
+  const POLL_MS = 15 * 60 * 1000;
+  const POLL_UDEN_REALTIME_MS = 60 * 1000;
   const screen = document.getElementById('screen');
   const params = new URLSearchParams(location.search);
   const email = params.get('email');
@@ -498,14 +505,58 @@
     if (!ok) return;
 
     await hentContent();
-    debugLog('Starter polling hvert ' + (POLL_MS / 1000) + 's');
-    setInterval(() => {
-      debugLog('Poll...');
-      hentContent();
-    }, POLL_MS);
+
+    // Den skjulte forhaandsindlaesning (se forbeeredGenindlaesning) skal kun hente og tegne én
+    // gang og saa fjernes -- ingen Realtime-forbindelse eller polling dér.
+    if (window.self !== window.top) return;
+
+    startRealtime();
+    planlaegPoll();
 
     logStatus();
     setInterval(logStatus, STATUS_LOG_MS);
+  }
+
+  // ---------- Realtime + sikkerheds-poll ----------
+  // Realtime-kanalen lytter efter aendringer i butikkens content-raekke og i den faelles
+  // skabelon. En aendring giver ikke selv data -- den udloeser bare den almindelige hentContent(),
+  // som sammenligner opdateret_at og genindlaeser siden, hvis der reelt er nyt (praecis som
+  // pollingen gjorde). Kort forsinkelse, saa flere gem lige efter hinanden giver én hentning.
+  let realtimeOk = false, realtimeHarVaeretForbundet = false, hentSnartTimer = null;
+  function hentSnart(grund) {
+    if (hentSnartTimer) return;
+    debugLog('Realtime: ' + grund + ' -- henter om 3 s');
+    hentSnartTimer = setTimeout(() => { hentSnartTimer = null; hentContent(); }, 3000);
+  }
+  function startRealtime() {
+    try {
+      client.channel('skaerm-' + butikId)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'content', filter: 'butik_id=eq.' + butikId }, () => hentSnart('indholdet er gemt'))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'sabloner', filter: 'standard=eq.true' }, () => hentSnart('den faelles skabelon er gemt'))
+        .subscribe((status, err) => {
+          debugLog('Realtime: ' + status + (err ? ' (' + (err.message || err) + ')' : ''));
+          if (status === 'SUBSCRIBED') {
+            realtimeOk = true;
+            // Var forbindelsen nede et stykke tid, kan vi have misset en aendring imens
+            if (realtimeHarVaeretForbundet) hentSnart('forbundet igen');
+            realtimeHarVaeretForbundet = true;
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            realtimeOk = false;
+          }
+        });
+    } catch (e) {
+      realtimeOk = false;
+      debugLog('Realtime kunne ikke starte: ' + e.message + ' -- bruger polling hvert minut');
+    }
+  }
+  // Sikkerheds-poll: hvert 15. minut med Realtime, hvert minut uden.
+  function planlaegPoll() {
+    const ms = realtimeOk ? POLL_MS : POLL_UDEN_REALTIME_MS;
+    setTimeout(() => {
+      debugLog('Poll (' + (realtimeOk ? 'sikkerhedsnet, Realtime er forbundet' : 'Realtime er ikke forbundet') + ')...');
+      hentContent();
+      planlaegPoll();
+    }, ms);
   }
 
   async function start() {
