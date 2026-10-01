@@ -1224,8 +1224,16 @@
     // Timekrav pr. person til timetabellen: minimum-snit og/eller fast ugentligt antal.
     const minSnit = p => { const x = (C.minSnit || []).find(y => y.p == p); return x ? x.timer : null; };
     const ugeTimer = p => { const x = (C.ugeTimer || []).find(y => y.p == p); return x ? x.timer : null; };
+    // Er p's minimum-snit brudt? Samme regel som regeltjekket: snittet over hver 4-ugers periode
+    // (ikke over hele planen), nedsat for fridage. Til timetabellen.
+    function snitBrud(p) {
+      const m = minSnit(p); if (m == null) return false;
+      const vinduer = RULLENDE ? WK.map(s => [0, 1, 2, 3].map(k => (s + k) % NW))
+        : NW >= 4 ? WK.slice(0, NW - 3).map(s => [0, 1, 2, 3].map(k => s + k)) : [WK];
+      return vinduer.some(v => v.reduce((a, w) => a + hrs(p, w), 0) / v.length < m * v.reduce((a, w) => a + andel(p, w), 0) / v.length - 1e-9);
+    }
 
-    Object.assign(M, { need, ext, nmi, av, cov, best, gen, genWeek, hrs, check, minSnit, ugeTimer, vurder, foreslaa, reparer, kan, kanTage, fasteNoegler, saetUndtagelser, undtagelse, LEN, FLEX });
+    Object.assign(M, { need, ext, nmi, av, cov, best, gen, genWeek, hrs, check, minSnit, snitBrud, ugeTimer, vurder, foreslaa, reparer, kan, kanTage, fasteNoegler, saetUndtagelser, undtagelse, LEN, FLEX });
     return M;
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = { lavMotor, STANDARD_REGLER };

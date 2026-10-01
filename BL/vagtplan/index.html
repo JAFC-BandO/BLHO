@@ -23,7 +23,7 @@ window.addEventListener('storage', e => { if (e.key === 'blho-tema') saetTema();
 if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('change', saetTema);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="motor.js?v=2026-10-01-7"></script>
+<script src="motor.js?v=2026-10-01-8"></script>
 <script src="opsaetning.js?v=2026-10-01-4"></script>
 <script src="assistent.js?v=2026-10-01-4"></script>
 <style>
@@ -1091,8 +1091,8 @@ function render() {
     return !visLoen ? '' : `<td class="loen-start">${tal(sum)}</td><td class="${!tl ? 'stille' : ''}">${sats}</td><td class="${!tl ? 'stille' : ''}">${!tl ? '–' : kr(i)}</td>`;
   };
   const rk = ps.map(p => {
-    const h = WK.map(w => M.hrs(p, w)), a = h.reduce((x, y) => x + y) / NW, m = M.minSnit(p), u = M.ugeTimer(p), bad = (m && a < m) || (u != null && h.some(x => x != u));
-    return `<tr><td><button type="button" class="navn-knap" data-person="${esc(p)}" title="Ret ${esc(P[p][0])}">${esc(P[p][0])}</button> <small>${esc(R[P[p][1]])}</small></td>${VW.map(w => `<td>${h[w]}</td>`).join('')}<td class="${bad ? 'w' : ''}">${a.toFixed(1)}${m ? ' (min ' + m + ')' : ''}</td>${loenCeller(h, tlP[p] || null)}</tr>`;
+    const h = WK.map(w => M.hrs(p, w)), a = h.reduce((x, y) => x + y) / NW, m = M.minSnit(p), u = M.ugeTimer(p), bad = M.snitBrud(p) || (u != null && h.some(x => x != u));
+    return `<tr><td><button type="button" class="navn-knap" data-person="${esc(p)}" title="Ret ${esc(P[p][0])}">${esc(P[p][0])}</button> <small>${esc(R[P[p][1]])}</small></td>${VW.map(w => `<td>${h[w]}</td>`).join('')}<td class="${bad ? 'w' : ''}"${m ? ` title="Mindst ${m} timer om ugen i snit over hver 4-ugers periode. Snittet her er over hele planen."` : ''}>${a.toFixed(1)}${m ? ' (min ' + m + ')' : ''}</td>${loenCeller(h, tlP[p] || null)}</tr>`;
   }).join('') + Array.from({ length: Math.max(nx, M.EKSTRA) }, (_, k) => {
     const hh = WK.map(w => M.S.reduce((a, x, i) => a + (EX[i] == k + 1 && x.w == w ? (x.e - x.s) / 60 : 0), 0));
     return `<tr><td>Ekstra person ${k + 1} <small>skal findes</small></td>${VW.map(w => `<td>${hh[w]}</td>`).join('')}<td>${(hh.reduce((a, b) => a + b) / NW).toFixed(1)}</td>${loenCeller(hh, tlE)}</tr>`;
