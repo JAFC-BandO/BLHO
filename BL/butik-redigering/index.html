@@ -1991,7 +1991,7 @@
     return 'for ' + Math.floor(timer / 24) + ' dage siden';
   }
 
-  // Boksene checker ind hvert 5. minut om dagen og hver time om natten (serveren bestemmer,
+  // Boksene checker ind hvert 10. minut om dagen og hver time om natten (serveren bestemmer,
   // se migration_checkin_interval.sql) og gemmer hvornaar de naeste gang skal melde sig
   // (naeste_checkin_at). "For sent" maales derfor fra DET tidspunkt -- ellers stod alle bokse
   // som offline hele natten. Bokse med det gamle script (uden naeste_checkin_at) maales fra
@@ -2445,7 +2445,7 @@
     // uden man skal lukke/genåbne panelet manuelt hvert minut for at tjekke.
     if (enhederPollHandle) clearInterval(enhederPollHandle);
     // Hvert minut og kun mens fanen er synlig -- boksene checker alligevel hoejst ind hvert
-    // 5. minut (log-kvoten), saa hyppigere ville bare hente det samme igen.
+    // 10. minut (log-kvoten), saa hyppigere ville bare hente det samme igen.
     enhederPollHandle = setInterval(() => { if (!document.hidden) loadEnheder(); }, 60000);
   });
   document.getElementById('enhederCloseBtn').addEventListener('click', async () => {

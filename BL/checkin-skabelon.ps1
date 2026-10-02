@@ -1,5 +1,5 @@
 # BLHO check-in. Koeres hvert 2. minut af den planlagte opgave BLHO-Checkin, som SYSTEM -- men
-# kalder kun Supabase, naar serveren siger det er tid (hvert 5. min om dagen, hver time om natten).
+# kalder kun Supabase, naar serveren siger det er tid (hvert 10. min om dagen, hver time om natten).
 # (Hvert 2. minut og genbrugt login: Supabase logger hvert kald, og hvert minut med nyt login
 # fyldte gratisplanens log-kvote.)
 # Genereret af win-setup.ps1 - ret hellere der, og koer scriptet igen.
@@ -44,7 +44,7 @@ if ($nuUtc.Hour -eq 4 -and $oppetimer -gt 6 -and (Get-Content $rebootFil -ErrorA
   exit
 }
 
-# Hvor tit der checkes ind, bestemmer SERVEREN (enhed_checkin -> naeste_sek): hvert 5. minut om
+# Hvor tit der checkes ind, bestemmer SERVEREN (enhed_checkin -> naeste_sek): hvert 10. minut om
 # dagen, hver time om natten (log-kvoten paa gratisplanen). Opgaven koerer stadig hvert 2. minut,
 # saa Tailscale-vagthunden holdes i gang -- men login og kaldet til Supabase springes over, til det
 # er tid. Mangler filen (eller svarede serveren uden naeste_sek), checkes der ind hver gang.
