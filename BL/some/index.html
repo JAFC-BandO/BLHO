@@ -51,7 +51,7 @@ select{padding:7px 10px;border:1px solid var(--felt);border-radius:8px;backgroun
 .kort h2 small{font-weight:400;color:var(--mut);margin-left:6px}
 .to{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:16px}
 .to>.kort{margin-bottom:16px}
-.noegletal{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.noegletal{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
 .tal{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px 14px}
 .tal .navn{font-size:12px;font-weight:600;color:var(--mut)}
 .tal .vaerdi{font-size:23px;font-weight:700;margin:2px 0;font-variant-numeric:tabular-nums}
@@ -109,7 +109,7 @@ td .lille.op,td .lille.ned{font-weight:600}
 .besked{background:var(--badge);color:var(--brand-tekst);border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:14px}
 .besked.fejl{background:var(--fejl-bg);color:var(--fejl)}
 @media (max-width:900px){.to{grid-template-columns:minmax(0,1fr)}}
-@media (max-width:760px){.indhold{padding:12px}.opslag{grid-template-columns:44px 1fr}.opslag img,.opslag .tom{width:44px;height:44px}.opslag .tal2{grid-column:2;text-align:left}}
+@media (max-width:760px){.noegletal{grid-template-columns:repeat(2,minmax(0,1fr))}.indhold{padding:12px}.opslag{grid-template-columns:44px 1fr}.opslag img,.opslag .tom{width:44px;height:44px}.opslag .tal2{grid-column:2;text-align:left}}
 @media (prefers-reduced-motion:reduce){.indhold{transition:none}}
 </style></head><body>
 
