@@ -247,9 +247,18 @@ function harForrige() {
   const p = periode();
   return !!data.foerste_dato && data.foerste_dato <= plusDage(p.fra, -p.dage);
 }
-function pct(nu, foer) {
-  if (nu == null || !foer || !harForrige()) return null;
-  return (nu - foer) / foer * 100;
+// Sammenligner kun de konti, der har tal i BEGGE perioder -- ellers ligner det en stor
+// stigning, naar en konto bare mangler historik (fx Instagrams foelgertal, som Meta kun
+// udleverer 30 dage tilbage). udeladt = de platforme der ikke er med i sammenligningen.
+function sammenlign(konti, felt) {
+  if (!harForrige()) return null;
+  let nu = 0, foer = 0, med = 0; const udeladt = new Set();
+  konti.forEach(k => {
+    const a = k.nu[felt], b = k.foer[felt];
+    if (a != null && Number(b) > 0) { nu += Number(a); foer += Number(b); med++; }
+    else if (Number(a) > 0) udeladt.add(k.platform);
+  });
+  return med ? { pct: (nu - foer) / foer * 100, foer, uden: [...udeladt].map(p => PLATFORM[p]).join(' og ') } : null;
 }
 function pctHtml(p) {
   if (p == null) return '';
@@ -281,9 +290,9 @@ function tegn() {
     ['Reaktioner og likes', 'likes', 'På opslag slået op i perioden'], ['Kommentarer', 'kommentarer', 'På opslag slået op i perioden'],
   ];
   $('#noegletal').innerHTML = kort.map(([navn, felt, hjaelp]) => {
-    const nu = sum(k, 'nu', felt), foer = sum(k, 'foer', felt), p = pct(nu, foer);
+    const nu = sum(k, 'nu', felt), s = sammenlign(k, felt);
     return `<div class="tal" title="${esc(hjaelp)}"><div class="navn">${navn}</div><div class="vaerdi">${nu != null && nu >= 1e6 ? kortTal(nu) : tal(nu)}</div>` +
-      `<div class="aendring">${p == null ? '&nbsp;' : pctHtml(p) + ' fra ' + tal(foer)}</div></div>`;
+      `<div class="aendring">${!s ? '&nbsp;' : pctHtml(s.pct) + ' fra ' + tal(s.foer) + (s.uden ? ` <span title="${s.uden} har ikke tal for forrige periode og er ikke med i sammenligningen">(uden ${s.uden})</span>` : '')}</div></div>`;
   }).join('');
 
   tegnGraf();
@@ -417,18 +426,18 @@ function tegnKonti() {
     // Facebook-siden og Instagram-kontoen for samme butik hedder det samme hos Meta
     const m = new Map();
     k.forEach(x => {
-      if (!m.has(x.navn)) m.set(x.navn, { navn: x.navn, platforme: [], nu: {}, foer: {} });
+      if (!m.has(x.navn)) m.set(x.navn, { navn: x.navn, platforme: [], konti: [], nu: {}, foer: {} });
       const b = m.get(x.navn);
-      b.platforme.push(x.platform);
+      b.platforme.push(x.platform); b.konti.push(x);
       ['nu', 'foer'].forEach(t => KOL.forEach(([, f]) => { if (x[t][f] != null) b[t][f] = (b[t][f] || 0) + Number(x[t][f]); }));
     });
     r = [...m.values()];
-  } else r = k.map(x => ({ navn: x.navn, brugernavn: x.brugernavn, platforme: [x.platform], nu: x.nu, foer: x.foer }));
+  } else r = k.map(x => ({ navn: x.navn, brugernavn: x.brugernavn, platforme: [x.platform], konti: [x], nu: x.nu, foer: x.foer }));
   const s = sortering;
   r.sort((a, b) => s.felt === 'navn' ? a.navn.localeCompare(b.navn, 'da') * (s.ned ? -1 : 1) : ((b.nu[s.felt] ?? -1) - (a.nu[s.felt] ?? -1)) * (s.ned ? 1 : -1));
   tabelRaekker = r;
   $('#kontiAntal').textContent = r.length ? r.length + (visning === 'butik' ? (r.length === 1 ? ' butik' : ' butikker') : ' konti') : '';
-  const celle = (x, f) => { const p = pct(x.nu[f], x.foer[f]); return `<td>${tal(x.nu[f])}${p == null ? '' : `<div class="lille">${pctHtml(p)}</div>`}</td>`; };
+  const celle = (x, f) => { const c = sammenlign(x.konti, f); return `<td>${tal(x.nu[f])}${!c ? '' : `<div class="lille"${c.uden ? ` title="Uden ${c.uden}, som ikke har tal for forrige periode"` : ''}>${pctHtml(c.pct)}${c.uden ? '*' : ''}</div>`}</td>`; };
   $('#konti').innerHTML = `<thead><tr><th data-felt="navn" class="${s.felt === 'navn' ? 'sorteret' : ''}">${visning === 'butik' ? 'Butik' : 'Konto'}${s.felt === 'navn' ? (s.ned ? ' ↓' : ' ↑') : ''}</th>${KOL.map(([n, f]) => `<th data-felt="${f}" class="${s.felt === f ? 'sorteret' : ''}">${n}${s.felt === f ? (s.ned ? ' ↓' : ' ↑') : ''}</th>`).join('')}</tr></thead><tbody>${
     r.map(x => `<tr><td><div class="konto">${x.platforme.map(p => `<span class="prik ${p}" title="${PLATFORM[p]}"></span>`).join('')}<span>${esc(x.navn)}${x.brugernavn ? ` <span class="lille">@${esc(x.brugernavn)}</span>` : ''}</span></div></td>${KOL.map(([, f]) => celle(x, f)).join('')}</tr>`).join('')
     || `<tr><td colspan="${KOL.length + 1}" class="lille">Ingen konti endnu.</td></tr>`}</tbody>`;

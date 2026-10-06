@@ -11,6 +11,7 @@
 //
 // Body (valgfri): { "dage": N } -- hvor mange dage tilbage der hentes (standard 3, foerste
 // gang 90). Meta retter tallene lidt de foerste doegn, derfor hentes de seneste dage igen.
+// { "dage": 30, "slut": 60 } henter historik: de 30 dage der sluttede for 60 dage siden.
 //
 // Ingen hemmeligheder eller persondata i denne fil (repoet er offentligt).
 
@@ -114,9 +115,9 @@ const SIDE_MAAL: [string, string[]][] = [
   ['foelgere', ['page_follows', 'page_fans']],
 ];
 
-async function hentSide(side: Json, kontoId: string, dage: number, ud: Dage, opslag: Raekke[], fejl: string[]) {
+async function hentSide(side: Json, kontoId: string, dage: number, slut: number, ud: Dage, opslag: Raekke[], fejl: string[]) {
   const tok = side.access_token;
-  const nu = Math.floor(Date.now() / 1000);
+  const nu = Math.floor(Date.now() / 1000) - slut * DAG;
   const fra = nu - Math.min(dage, 90) * DAG;
   for (const [felt, navne] of SIDE_MAAL) {
     let sidst = '';
@@ -131,10 +132,10 @@ async function hentSide(side: Json, kontoId: string, dage: number, ud: Dage, ops
     }
     if (!fundet) fejl.push(`${side.name} (Facebook) ${felt}: ${sidst}`);
   }
-  if (side.followers_count != null) ud.saet(kontoId, iDag(), 'foelgere', side.followers_count);
+  if (!slut && side.followers_count != null) ud.saet(kontoId, iDag(), 'foelgere', side.followers_count);
 
   const felter = 'id,created_time,message,permalink_url,full_picture,status_type,shares,reactions.summary(total_count).limit(0),comments.summary(total_count).limit(0)';
-  const p = { since: nu - Math.max(dage, 30) * DAG, limit: 50 };
+  const p = { since: nu - (slut ? dage : Math.max(dage, 30)) * DAG, until: nu, limit: 50 };
   let liste: Json[];
   try {
     liste = await grafAlle(side.id + '/published_posts', { ...p, fields: felter + ',insights.metric(post_media_view){name,values}' }, tok);
@@ -155,8 +156,8 @@ async function hentSide(side: Json, kontoId: string, dage: number, ud: Dage, ops
   }
 }
 
-async function hentInstagram(ig: Json, navn: string, tok: string, kontoId: string, dage: number, ud: Dage, opslag: Raekke[], fejl: string[]) {
-  const midnat = Math.floor(Date.now() / 1000 / DAG) * DAG;
+async function hentInstagram(ig: Json, navn: string, tok: string, kontoId: string, dage: number, slut: number, ud: Dage, opslag: Raekke[], fejl: string[]) {
+  const midnat = Math.floor(Date.now() / 1000 / DAG) * DAG - slut * DAG;
   // Tidsserier (hoejst 30 dage ad gangen). follower_count findes kun for konti med 100+ foelgere.
   for (const [maal, felt] of [['reach', 'raekkevidde'], ['follower_count', 'nye_foelgere']]) {
     try {
@@ -165,7 +166,7 @@ async function hentInstagram(ig: Json, navn: string, tok: string, kontoId: strin
     } catch (e) { fejl.push(`${navn} (Instagram) ${felt}: ${(e as Error).message}`); }
   }
   // Visninger og interaktioner findes kun som en sum for et tidsrum -- derfor ét kald pr. dag.
-  for (let i = 1; i <= Math.min(dage, 7); i++) {
+  for (let i = 1; i <= Math.min(dage, slut ? 30 : 7); i++) {
     const start = midnat - i * DAG;
     try {
       const d = await graf(ig.id + '/insights', { metric: 'views,total_interactions', metric_type: 'total_value', period: 'day', since: start, until: start + DAG }, tok);
@@ -174,10 +175,10 @@ async function hentInstagram(ig: Json, navn: string, tok: string, kontoId: strin
       }
     } catch (e) { fejl.push(`${navn} (Instagram) visninger: ${(e as Error).message}`); break; }
   }
-  if (ig.followers_count != null) ud.saet(kontoId, iDag(), 'foelgere', ig.followers_count);
+  if (!slut && ig.followers_count != null) ud.saet(kontoId, iDag(), 'foelgere', ig.followers_count);
 
   const felter = 'id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,like_count,comments_count';
-  const p = { since: midnat - Math.max(dage, 30) * DAG, limit: 50 };
+  const p = { since: midnat - (slut ? dage : Math.max(dage, 30)) * DAG, until: midnat, limit: 50 };
   let liste: Json[];
   try {
     liste = await grafAlle(ig.id + '/media', { ...p, fields: felter + ',insights.metric(views,reach,shares){name,values}' }, tok);
@@ -241,6 +242,7 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   const foerste = ((await db('some_dag?select=dato&limit=1')) ?? []).length === 0;
   const dage = Math.max(1, Math.min(90, Number(body?.dage) || (foerste ? 90 : 3)));
+  const slut = Math.max(0, Math.min(730, Math.floor(Number(body?.slut) || 0)));
 
   const [log] = await db('some_sync_log', { method: 'POST', headers: { Prefer: 'return=representation' }, body: '{}' });
   const fejl: string[] = [];
@@ -266,10 +268,10 @@ Deno.serve(async (req) => {
     const opslag: Raekke[] = [];
     await iHold(sider, 4, async (s) => {
       const fb = id.get('facebook:' + s.id);
-      if (fb?.aktiv) await hentSide(s, fb.id, dage, ud, opslag, fejl);
+      if (fb?.aktiv) await hentSide(s, fb.id, dage, slut, ud, opslag, fejl);
       const ig = s.instagram_business_account;
       const igK = ig && id.get('instagram:' + ig.id);
-      if (igK?.aktiv) await hentInstagram(ig, igK.navn, s.access_token, igK.id, dage, ud, opslag, fejl);
+      if (igK?.aktiv) await hentInstagram(ig, igK.navn, s.access_token, igK.id, dage, slut, ud, opslag, fejl);
     });
     await upsert('some_dag', 'konto_id,dato', ud.alle());
     await upsert('some_opslag', 'konto_id,ekstern_id', opslag);
@@ -280,5 +282,5 @@ Deno.serve(async (req) => {
     return svar({ fejl: 'Indsamlingen fejlede: ' + fejl[0] });
   }
   await db('some_sync_log?id=eq.' + log.id, { method: 'PATCH', body: JSON.stringify({ afsluttet_at: new Date().toISOString(), ok: true, konti: antal, fejl: fejl.length ? fejl.slice(0, 60) : null }) });
-  return svar({ ok: true, konti: antal, dage, advarsler: fejl.length });
+  return svar({ ok: true, konti: antal, dage, slut, advarsler: fejl.length });
 });
