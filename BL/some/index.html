@@ -249,16 +249,24 @@ function harForrige() {
 }
 // Sammenligner kun de konti, der har tal i BEGGE perioder -- ellers ligner det en stor
 // stigning, naar en konto bare mangler historik (fx Instagrams foelgertal, som Meta kun
-// udleverer 30 dage tilbage). udeladt = de platforme der ikke er med i sammenligningen.
+// udleverer 30 dage tilbage). Tal der taelles ud fra opslag (opslag, likes, kommentarer) er
+// noget andet: ingen opslag i forrige periode er et rigtigt 0, ikke manglende historik.
+const FRA_OPSLAG = ['opslag', 'likes', 'kommentarer', 'delinger'];
 function sammenlign(konti, felt) {
   if (!harForrige()) return null;
-  let nu = 0, foer = 0, med = 0; const udeladt = new Set();
+  const nul = FRA_OPSLAG.includes(felt);
+  let nu = 0, foer = 0, med = 0; const ude = [];
   konti.forEach(k => {
-    const a = k.nu[felt], b = k.foer[felt];
-    if (a != null && Number(b) > 0) { nu += Number(a); foer += Number(b); med++; }
-    else if (Number(a) > 0) udeladt.add(k.platform);
+    const a = k.nu[felt] ?? (nul ? 0 : null), b = k.foer[felt] ?? (nul ? 0 : null);
+    if (a != null && b != null) { nu += Number(a); foer += Number(b); med++; }
+    else if (a != null) ude.push(k);
   });
-  return med ? { pct: (nu - foer) / foer * 100, foer, uden: [...udeladt].map(p => PLATFORM[p]).join(' og ') } : null;
+  if (!med || !(foer > 0)) return null;
+  // "uden Instagram" kun naar hele platformen mangler -- ellers antallet af konti
+  const helt = RAEKKEFOELGE.filter(p => ude.some(k => k.platform === p) && !konti.some(k => k.platform === p && !ude.includes(k)));
+  const rest = ude.filter(k => !helt.includes(k.platform)).length;
+  const uden = [...helt.map(p => PLATFORM[p]), ...(rest ? [rest + (rest === 1 ? ' konto' : ' konti')] : [])].join(' og ');
+  return { pct: (nu - foer) / foer * 100, foer, uden };
 }
 function pctHtml(p) {
   if (p == null) return '';
