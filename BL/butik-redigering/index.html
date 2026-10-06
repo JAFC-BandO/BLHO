@@ -130,14 +130,17 @@
   .hovedfane { background: none; color: #040DB1; font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 20px; }
   .hovedfane:hover { background: rgba(4,13,177,.08); }
   .hovedfane.aktiv { background: #040DB1; color: white; }
-  #vagtplanVisning { display: none; }
-  body.fane-vagtplan #app { display: flex !important; flex-direction: column; height: 100vh; }
+  #vagtplanVisning, #someVisning { display: none; }
+  body.fane-vagtplan #app, body.fane-some #app { display: flex !important; flex-direction: column; height: 100vh; }
   /* Kun selve redigeringsfladen og dens tilstands-bannere skjules. Topbaren er uaendret
      (butik, Admin-menu, ikoner bliver hvor de er), og overlays som Enheder/Aktivitetslog
      kan stadig aabnes oven paa vagtplanen. */
   body.fane-vagtplan #app > .main,
   body.fane-vagtplan #faellesSlideBanner,
-  body.fane-vagtplan #masterEditBanner { display: none !important; }
+  body.fane-vagtplan #masterEditBanner,
+  body.fane-some #app > .main,
+  body.fane-some #faellesSlideBanner,
+  body.fane-some #masterEditBanner { display: none !important; }
   /* Gem-pladsen: Fortryd/Gentag (virker paa den fane man staar paa) + "Gem ændringer"
      (skaermindholdet) paa butiks-fanen eller "Gem vagtplan" paa vagtplan-fanen. Fast bredde,
      saa ?- og tema-knappen staar samme sted paa begge faner. */
@@ -150,6 +153,8 @@
   body.fane-vagtplan .vp-handlinger { display: flex; }
   body.fane-vagtplan #saveBtn { display: none; }
   body.fane-vagtplan #saveMsg { visibility: hidden; }
+  /* SoMe-fanen viser kun tal -- der er intet at gemme eller fortryde */
+  body.fane-some #saveBtn, body.fane-some #saveMsg { visibility: hidden; }
   .vp-ikon { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0;
     border-radius: 8px; background: var(--ui-flade-blaa); color: var(--ui-brand-tekst); }
   .vp-ikon svg { width: 17px; height: 17px; }
@@ -159,11 +164,11 @@
   #vpGem { padding: 8px 14px; }
   #vpGem:disabled { background: transparent; color: var(--ui-tekst-888); border: 1px solid var(--ui-kant); cursor: default; }
   @media (max-width: 760px) { .gem-plads { width: auto; } }
-  body.fane-vagtplan #vagtplanVisning { display: block; flex: 1; min-height: 0; }
+  body.fane-vagtplan #vagtplanVisning, body.fane-some #someVisning { display: block; flex: 1; min-height: 0; }
   /* Vagtplan-assistentens panel (i iframen) fylder hoejre side -- saa ville feedback-knappen
      ligge oven paa dens tekstfelt. Den skjules, mens panelet er aabent (kun paa vagtplan-fanen). */
   body.fane-vagtplan.vp-assistent-aaben #feedbackFloatBtn { display: none !important; }
-  #vagtplanVisning iframe { width: 100%; height: 100%; border: 0; display: block; }
+  #vagtplanVisning iframe, #someVisning iframe { width: 100%; height: 100%; border: 0; display: block; }
 
   .main {
     display: grid;
@@ -582,11 +587,12 @@
           </div>
         </div>
       </div>
-      <!-- Hovedfaner: kun synlige for brugere i vagtplan_adgang (se visVagtplanKnap) -- ikke
-           koblet til superadmin eller butik. -->
+      <!-- Hovedfaner: Vagtplan ses kun af brugere i vagtplan_adgang og SoMe kun af brugere i
+           some_adgang (se visVagtplanKnap) -- ikke koblet til superadmin eller butik. -->
       <nav class="hovedfaner" id="hovedfaner" aria-label="Skift side">
         <button type="button" class="hovedfane aktiv" data-fane="butik">Butik-redigering</button>
-        <button type="button" class="hovedfane" data-fane="vagtplan">Vagtplan</button>
+        <button type="button" class="hovedfane" data-fane="vagtplan" hidden>Vagtplan</button>
+        <button type="button" class="hovedfane" data-fane="some" hidden>SoMe</button>
       </nav>
     </div>
     <div class="topbar-actions">
@@ -607,6 +613,8 @@
 
   <!-- Vagtplanens iframe oprettes foerst naar fanen aabnes (skiftFane). -->
   <div id="vagtplanVisning"></div>
+  <!-- SoMe-performance (BL/some/): samme moenster som vagtplanen. -->
+  <div id="someVisning"></div>
 
   <div id="faellesSlideBanner" style="display:none; align-items:center; justify-content:space-between; background:#4d5bff; color:#fff; font-weight:700; font-size:13px; padding:8px 20px;">
     <span id="faellesSlideBannerTekst">Du bygger et FÆLLES SLIDE — byg det som en helt almindelig side.</span>
@@ -1549,11 +1557,16 @@
   async function visVagtplanKnap(brugerId) {
     const faner = document.getElementById('hovedfaner');
     faner.classList.remove('synlig');
-    const { data } = await client.from('vagtplan_adgang').select('bruger_id').eq('bruger_id', brugerId).maybeSingle();
-    if (!data) return;
+    const knap = f => faner.querySelector('[data-fane="' + f + '"]');
+    const [vp, so] = await Promise.all(['vagtplan_adgang', 'some_adgang'].map(t =>
+      client.from(t).select('bruger_id').eq('bruger_id', brugerId).maybeSingle()));
+    knap('vagtplan').hidden = !vp.data;
+    knap('some').hidden = !so.data;
+    if (!vp.data && !so.data) return;
     faner.classList.add('synlig');
-    // #vagtplan i adressen (fx et bogmaerke, eller et reload mens man stod paa vagtplanen)
-    if (location.hash === '#vagtplan') skiftFane('vagtplan');
+    // #vagtplan/#some i adressen (fx et bogmaerke, eller et reload mens man stod paa fanen)
+    if (location.hash === '#vagtplan' && vp.data) skiftFane('vagtplan');
+    if (location.hash === '#some' && so.data) skiftFane('some');
   }
   // Vagtplanen ligger i en iframe under den SAMME topbar, saa et fanebyt ikke genindlaeser
   // siden. Iframen oprettes foerste gang fanen aabnes og bliver derefter liggende, saa man
@@ -1564,10 +1577,21 @@
     if (fane === aktivFane) return;
     aktivFane = fane;
     document.body.classList.toggle('fane-vagtplan', fane === 'vagtplan');
+    document.body.classList.toggle('fane-some', fane === 'some');
     document.querySelectorAll('.hovedfane').forEach(b => b.classList.toggle('aktiv', b.dataset.fane === fane));
     opdaterFortrydKnapper();
-    history.replaceState(null, '', location.pathname + location.search + (fane === 'vagtplan' ? '#vagtplan' : ''));
-    if (fane === 'vagtplan') {
+    history.replaceState(null, '', location.pathname + location.search + (fane === 'butik' ? '' : '#' + fane));
+    if (fane === 'some') {
+      const vis = document.getElementById('someVisning');
+      if (!vis.querySelector('iframe')) {
+        const ramme = document.createElement('iframe');
+        ramme.title = 'SoMe-performance';
+        // ?v= skal bumpes naar some/index.html aendres (samme grund som for vagtplanen nedenfor)
+        ramme.src = '../some/?indlejret=1&v=2026-10-06-1';
+        vis.appendChild(ramme);
+      }
+      updateSlideOverlay();
+    } else if (fane === 'vagtplan') {
       const vis = document.getElementById('vagtplanVisning');
       if (!vis.querySelector('iframe')) {
         const ramme = document.createElement('iframe');
@@ -1613,7 +1637,8 @@
   };
   // Fortryd/Gentag-knapperne i topbaren virker paa den fane man staar paa
   function opdaterFortrydKnapper() {
-    const kan = aktivFane === 'vagtplan' ? vagtplanKan : { fortryd: redPos > 0, gentag: redPos < redHist.length - 1 };
+    const kan = aktivFane === 'vagtplan' ? vagtplanKan : aktivFane === 'some' ? { fortryd: false, gentag: false }
+      : { fortryd: redPos > 0, gentag: redPos < redHist.length - 1 };
     document.getElementById('fortrydKnap').disabled = !kan.fortryd;
     document.getElementById('gentagKnap').disabled = !kan.gentag;
   }
@@ -1638,6 +1663,7 @@
       else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redGentag(); }
       return;
     }
+    if (aktivFane !== 'vagtplan') return;
     const a = vagtplanApi();
     if (!a) return;
     if (k === 's') { e.preventDefault(); a.gem(); }
@@ -1762,6 +1788,7 @@
     skiftFane('butik');
     document.getElementById('hovedfaner').classList.remove('synlig');
     document.getElementById('vagtplanVisning').innerHTML = ''; // vagtplanen maa ikke overleve et log ud
+    document.getElementById('someVisning').innerHTML = '';
     vagtplanUgemt = false;
     app.style.display = 'none';
     loginWrap.style.display = 'flex';
