@@ -205,7 +205,8 @@ begin
     from public.brugere b
     join auth.users u on u.id = b.id
     left join public.butikker bu on bu.id = b.butik_id
-    left join public.some_adgang a on a.bruger_id = b.id), '[]'::jsonb);
+    left join public.some_adgang a on a.bruger_id = b.id
+    where b.rolle is distinct from 'skaerm'), '[]'::jsonb); -- skaermenes egne konti skal ikke paa listen
 end $$;
 revoke execute on function public.some_adgang_liste() from public, anon;
 grant execute on function public.some_adgang_liste() to authenticated;
