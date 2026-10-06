@@ -6,8 +6,11 @@
 // og kan startes fra siden med "Opdater nu" af brugere i some_adgang.
 //
 // Noegler: ligger krypteret i Supabase Vault og hentes med RPC'en some_noegler, som kun
-// service_role maa kalde. 'meta_system_token' er systembrugerens token fra Meta Business
-// Manager -- kontiene findes automatisk ud fra de sider, systembrugeren har faaet tildelt.
+// service_role maa kalde. 'meta_system_token' er tokenet fra Meta (en systembruger i Business
+// Manager, eller et forlaenget bruger-token) -- kontiene findes automatisk ud fra de sider,
+// tokenet har adgang til. Hver sides egen noegle gemmes desuden i Vault ('meta_side_tokens'):
+// lavet fra et forlaenget token udloeber de ikke, saa indsamlingen koerer videre paa dem, naar
+// bruger-tokenet udloeber efter ca. 60 dage.
 //
 // Body (valgfri): { "dage": N } -- hvor mange dage tilbage der hentes (standard 3, foerste
 // gang 90). Meta retter tallene lidt de foerste doegn, derfor hentes de seneste dage igen.
@@ -204,6 +207,31 @@ async function hentInstagram(ig: Json, navn: string, tok: string, kontoId: strin
   }
 }
 
+const SIDE_FELTER = 'id,name,username,followers_count,picture{url},instagram_business_account{id,username,name,followers_count,profile_picture_url}';
+
+// Finder siderne: foerst med hoved-tokenet (finder ogsaa nye sider og gemmer deres noegler),
+// ellers med de gemte side-noegler.
+async function findSider(token: string | undefined, gemteTekst: string | undefined, fejl: string[]): Promise<Json[]> {
+  let aarsag = 'Meta-tokenet mangler';
+  if (token) {
+    try {
+      const sider = await grafAlle('me/accounts', { fields: SIDE_FELTER + ',access_token', limit: 100 }, token, 10);
+      await db('rpc/some_gem_side_tokens', { method: 'POST', body: JSON.stringify({ p: sider.map((s) => ({ id: s.id, navn: s.name, access_token: s.access_token })) }) })
+        .catch((e) => fejl.push('Sidernes noegler kunne ikke gemmes: ' + (e as Error).message));
+      return sider;
+    } catch (e) { aarsag = (e as Error).message; }
+  }
+  let gemte: Json[] = [];
+  try { gemte = JSON.parse(gemteTekst ?? '[]'); } catch { /* ingen gemte noegler */ }
+  const sider: Json[] = [];
+  for (const g of gemte) {
+    try { sider.push({ ...(await graf(g.id, { fields: SIDE_FELTER }, g.access_token)), access_token: g.access_token }); }
+    catch (e) { fejl.push(`${g.navn ?? g.id}: ${(e as Error).message}`); }
+  }
+  if (!sider.length) throw new Error(aarsag);
+  return sider;
+}
+
 // Koerer opgaverne et par stykker ad gangen, saa Meta ikke faar 30 samtidige kald
 async function iHold<T>(ting: T[], samtidig: number, f: (t: T) => Promise<void>) {
   let i = 0;
@@ -237,7 +265,7 @@ Deno.serve(async (req) => {
   }
 
   const token = noegler.meta_system_token;
-  if (!token) return svar({ fejl: 'Meta-adgangen er ikke sat op endnu (meta_system_token mangler i Supabase Vault).', kode: 'ingen_noegle' });
+  if (!token && !noegler.meta_side_tokens) return svar({ fejl: 'Meta-adgangen er ikke sat op endnu (meta_system_token mangler i Supabase Vault).', kode: 'ingen_noegle' });
 
   const body = await req.json().catch(() => ({}));
   const foerste = ((await db('some_dag?select=dato&limit=1')) ?? []).length === 0;
@@ -249,10 +277,7 @@ Deno.serve(async (req) => {
   let antal = 0;
   try {
     // ---------- Find kontiene ----------
-    const sider = await grafAlle('me/accounts', {
-      fields: 'id,name,username,access_token,followers_count,picture{url},instagram_business_account{id,username,name,followers_count,profile_picture_url}',
-      limit: 100,
-    }, token, 10);
+    const sider = await findSider(token, noegler.meta_side_tokens, fejl);
     const konti: Raekke[] = [];
     for (const s of sider) {
       konti.push({ platform: 'facebook', ekstern_id: s.id, navn: s.name, brugernavn: s.username ?? null, billede_url: s.picture?.data?.url ?? null });

@@ -229,10 +229,24 @@ grant execute on function public.some_adgang_saet(uuid, boolean) to authenticate
 create or replace function public.some_noegler()
 returns jsonb language sql stable security definer set search_path = '' as $$
   select coalesce(jsonb_object_agg(name, decrypted_secret), '{}'::jsonb)
-  from vault.decrypted_secrets where name in ('meta_system_token', 'some_cron_noegle');
+  from vault.decrypted_secrets where name in ('meta_system_token', 'some_cron_noegle', 'meta_side_tokens');
 $$;
 revoke execute on function public.some_noegler() from public, anon, authenticated;
 grant execute on function public.some_noegler() to service_role;
+
+-- some-sync gemmer hver sides egen noegle her (som JSON). Lavet fra et forlaenget token
+-- udloeber de ikke, saa indsamlingen kan koere videre, naar bruger-tokenet udloeber.
+create or replace function public.some_gem_side_tokens(p jsonb)
+returns void language plpgsql security definer set search_path = '' as $$
+declare v_id uuid;
+begin
+  select id into v_id from vault.secrets where name = 'meta_side_tokens';
+  if v_id is null then perform vault.create_secret(p::text, 'meta_side_tokens');
+  else perform vault.update_secret(v_id, p::text);
+  end if;
+end $$;
+revoke execute on function public.some_gem_side_tokens(jsonb) from public, anon, authenticated;
+grant execute on function public.some_gem_side_tokens(jsonb) to service_role;
 
 -- ---------- Daglig indsamling ----------
 create extension if not exists pg_net;
