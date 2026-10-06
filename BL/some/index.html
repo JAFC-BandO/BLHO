@@ -525,14 +525,29 @@ $('#konti').addEventListener('click', e => {
 });
 $('#csv').addEventListener('click', hentCsv);
 $('#opslagSort').addEventListener('change', hentOpslag);
-$('#opdater').addEventListener('click', async () => {
+// Friske tal: naar siden aabnes -- og hvert 5. minut mens den er aaben og synlig -- hentes nye
+// tal fra Meta, hvis den seneste indsamling er mere end 5 minutter gammel. Tidsstemplet ligger
+// i databasen og deles af alle, saa flere aabne faner ikke starter hver sin indsamling. Der
+// hentes intet, mens fanen er skjult (log-kvoten).
+const FRISK_MS = 5 * 60 * 1000;
+let opdaterer = false;
+async function opdater(manuel) {
+  if (opdaterer) return;
+  const s = data && data.sidste_sync;
+  if (!manuel && s && s.startet_at && Date.now() - new Date(s.startet_at).getTime() < FRISK_MS) return;
+  opdaterer = true;
   const k = $('#opdater');
   k.disabled = true; k.textContent = 'Henter…';
   const { data: r, error } = await client.functions.invoke('some-sync', { body: {} });
   k.disabled = false; k.textContent = 'Opdater nu';
-  if (error || !r || r.fejl) { besked((r && r.fejl) || 'De nye tal kunne ikke hentes lige nu. Prøv igen om lidt.', true); return; }
+  opdaterer = false;
+  if (manuel && (error || !r || r.fejl)) { besked((r && r.fejl) || 'De nye tal kunne ikke hentes lige nu. Prøv igen om lidt.', true); return; }
   await hent();
-});
+}
+const synlig = () => !document.hidden && innerWidth > 0; // 0 = iframen er skjult bag en anden fane
+$('#opdater').addEventListener('click', () => opdater(true));
+setInterval(() => { if (synlig() && data) hent().then(() => opdater(false)); }, FRISK_MS);
+document.addEventListener('visibilitychange', () => { if (synlig() && data) opdater(false); });
 // Grafen tegnes i rigtige pixels (saa tekst ikke straekkes) og tegnes derfor om, naar bredden aendres
 let bredde = 0;
 new ResizeObserver(() => { const b = $('#graf').clientWidth; if (data && b && Math.abs(b - bredde) > 4) { bredde = b; skjulTip(); tegnGraf(); } }).observe($('#graf'));
@@ -546,6 +561,7 @@ async function start() {
   if (!adg) { vis('ingenAdgangVis'); return; }
   vis('app');
   await hent();
+  opdater(false);
 }
 if (window.top !== window) start().catch(() => vis('ingenAdgangVis'));
 </script>
