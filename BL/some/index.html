@@ -163,8 +163,16 @@ function besked(tekst, fejl) {
 const valgte = () => data.konti.filter(k => platform === 'alle' || k.platform === platform);
 const sum = (konti, tid, felt) => { let s = null; konti.forEach(k => { const v = k[tid][felt]; if (v != null) s = (s || 0) + Number(v); }); return s; };
 
+// Sammenligningen vises kun, naar der findes tal for HELE den forrige periode -- ellers
+// sammenlignes en fuld periode med et par dage, og procenterne bliver meningsloese.
+function harForrige() {
+  const p = periode(), fra = tilDato(p.fra), til = tilDato(p.til);
+  const laengde = Math.round((til - fra) / 864e5) + 1;
+  fra.setDate(fra.getDate() - laengde);
+  return !!data.foerste_dato && data.foerste_dato <= tilStreng(fra);
+}
 function aendring(nu, foer) {
-  if (nu == null || !foer) return '<span class="aendring">ingen sammenligning endnu</span>';
+  if (nu == null || !foer || !harForrige()) return '<span class="aendring">ingen sammenligning endnu</span>';
   const pct = (nu - foer) / foer * 100;
   const kl = pct > 0.05 ? 'op' : pct < -0.05 ? 'ned' : '';
   return `<span class="aendring"><span class="${kl}">${pct > 0 ? '▲' : pct < 0 ? '▼' : ''} ${Math.abs(pct).toLocaleString('da-DK', { maximumFractionDigits: 1 })}%</span> fra ${tal(foer)}</span>`;

@@ -130,8 +130,9 @@ returns jsonb language sql stable set search_path = public as $$
     select konto_id, sum(nye_foelgere) nye, sum(visninger) vis, sum(raekkevidde) raek, sum(interaktioner) inter
     from some_dag, gr where dato between gr.f_fra and gr.f_til group by 1),
   f_nu as (
+    -- + 1: perioden slutter i gaar, men foelgertallet er et oejebliksbillede fra i dag
     select distinct on (konto_id) konto_id, foelgere from some_dag
-    where dato <= p_til and foelgere is not null order by konto_id, dato desc),
+    where dato <= p_til + 1 and foelgere is not null order by konto_id, dato desc),
   f_foer as (
     select distinct on (konto_id) konto_id, foelgere from some_dag
     where dato < p_fra and foelgere is not null order by konto_id, dato desc),
