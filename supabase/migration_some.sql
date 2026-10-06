@@ -118,7 +118,8 @@ begin
 end $$;
 
 -- ---------- Oversigt til siden ----------
--- Summerer perioden og den tilsvarende periode lige foer (til sammenligning) pr. konto.
+-- Summerer perioden og den tilsvarende periode lige foer (til sammenligning) pr. konto, plus
+-- dagsserier pr. platform (grafen) og opslagenes fordeling paa ugedag/klokkeslaet (dansk tid).
 -- Koerer som brugeren selv, saa RLS afgoer adgangen.
 create or replace function public.some_oversigt(p_fra date, p_til date)
 returns jsonb language sql stable set search_path = public as $$
@@ -129,8 +130,8 @@ returns jsonb language sql stable set search_path = public as $$
   foer as (
     select konto_id, sum(nye_foelgere) nye, sum(visninger) vis, sum(raekkevidde) raek, sum(interaktioner) inter
     from some_dag, gr where dato between gr.f_fra and gr.f_til group by 1),
+  -- + 1: perioden slutter i gaar, men foelgertallet er et oejebliksbillede fra i dag
   f_nu as (
-    -- + 1: perioden slutter i gaar, men foelgertallet er et oejebliksbillede fra i dag
     select distinct on (konto_id) konto_id, foelgere from some_dag
     where dato <= p_til + 1 and foelgere is not null order by konto_id, dato desc),
   f_foer as (
@@ -141,7 +142,11 @@ returns jsonb language sql stable set search_path = public as $$
     from some_opslag where oprettet_at >= p_fra and oprettet_at < p_til + 1 group by 1),
   o_foer as (
     select konto_id, count(*) antal, sum(likes) likes, sum(kommentarer) kom, sum(delinger) del
-    from some_opslag, gr where oprettet_at >= gr.f_fra and oprettet_at < gr.f_til + 1 group by 1)
+    from some_opslag, gr where oprettet_at >= gr.f_fra and oprettet_at < gr.f_til + 1 group by 1),
+  serie as (
+    select d.dato, k.platform, sum(d.visninger) vis, sum(d.raekkevidde) raek, sum(d.interaktioner) inter, sum(d.nye_foelgere) nye
+    from some_dag d join some_konti k on k.id = d.konto_id and k.aktiv, gr
+    where d.dato between gr.f_fra and p_til group by d.dato, k.platform)
   select jsonb_build_object(
     'konti', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -157,11 +162,19 @@ returns jsonb language sql stable set search_path = public as $$
       left join o_nu on o_nu.konto_id = k.id left join o_foer on o_foer.konto_id = k.id
       where k.aktiv), '[]'::jsonb),
     'serie', coalesce((
-      select jsonb_agg(jsonb_build_object('dato', s.dato, 'platform', s.platform, 'visninger', s.vis, 'interaktioner', s.inter) order by s.dato)
+      select jsonb_agg(jsonb_build_object('dato', dato, 'platform', platform, 'visninger', vis, 'raekkevidde', raek,
+        'interaktioner', inter, 'nye_foelgere', nye) order by dato) from serie where dato >= p_fra), '[]'::jsonb),
+    'serie_foer', coalesce((
+      select jsonb_agg(jsonb_build_object('dato', dato, 'platform', platform, 'visninger', vis, 'raekkevidde', raek,
+        'interaktioner', inter, 'nye_foelgere', nye) order by dato) from serie where dato < p_fra), '[]'::jsonb),
+    'tider', coalesce((
+      select jsonb_agg(jsonb_build_object('platform', t.platform, 'ugedag', t.ugedag, 'time', t.time, 'antal', t.antal, 'interaktioner', t.inter))
       from (
-        select d.dato, k.platform, sum(d.visninger) vis, sum(d.interaktioner) inter
-        from some_dag d join some_konti k on k.id = d.konto_id and k.aktiv
-        where d.dato between p_fra and p_til group by d.dato, k.platform) s), '[]'::jsonb),
+        select k.platform, extract(isodow from o.oprettet_at at time zone 'Europe/Copenhagen')::int ugedag,
+          extract(hour from o.oprettet_at at time zone 'Europe/Copenhagen')::int "time",
+          count(*) antal, sum(coalesce(o.likes, 0) + coalesce(o.kommentarer, 0) + coalesce(o.delinger, 0)) inter
+        from some_opslag o join some_konti k on k.id = o.konto_id and k.aktiv
+        where o.oprettet_at >= p_fra and o.oprettet_at < p_til + 1 group by 1, 2, 3) t), '[]'::jsonb),
     'foerste_dato', (select min(dato) from some_dag),
     'sidste_sync', (select jsonb_build_object('startet_at', startet_at, 'afsluttet_at', afsluttet_at, 'ok', ok, 'konti', konti, 'fejl', fejl)
       from some_sync_log order by id desc limit 1)
@@ -169,6 +182,47 @@ returns jsonb language sql stable set search_path = public as $$
 $$;
 revoke execute on function public.some_oversigt(date, date) from public, anon;
 grant execute on function public.some_oversigt(date, date) to authenticated;
+
+-- ---------- Styring af adgangen (Admin-menuen i butik-redigering) ----------
+-- Kun brugere med kan_styre maa se og aendre, hvem der har SoMe-fanen. Flaget saettes med SQL:
+--   update public.some_adgang set kan_styre = true where bruger_id = (select id from auth.users where email = '...');
+alter table public.some_adgang add column if not exists kan_styre boolean not null default false;
+
+create or replace function public.kan_styre_some()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.some_adgang where bruger_id = auth.uid() and kan_styre);
+$$;
+revoke execute on function public.kan_styre_some() from public, anon;
+grant execute on function public.kan_styre_some() to authenticated;
+
+create or replace function public.some_adgang_liste()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.kan_styre_some() then raise exception 'Ingen adgang'; end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('bruger_id', b.id, 'navn', b.navn, 'email', u.email, 'butik', bu.navn,
+      'har', a.bruger_id is not null, 'kan_styre', coalesce(a.kan_styre, false)) order by bu.navn nulls last, u.email)
+    from public.brugere b
+    join auth.users u on u.id = b.id
+    left join public.butikker bu on bu.id = b.butik_id
+    left join public.some_adgang a on a.bruger_id = b.id), '[]'::jsonb);
+end $$;
+revoke execute on function public.some_adgang_liste() from public, anon;
+grant execute on function public.some_adgang_liste() to authenticated;
+
+-- Den der styrer adgangen kan ikke fjerne sig selv (eller andre med kan_styre) ved en fejl
+create or replace function public.some_adgang_saet(p_bruger uuid, p_har boolean)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.kan_styre_some() then raise exception 'Ingen adgang'; end if;
+  if p_har then
+    insert into public.some_adgang (bruger_id) values (p_bruger) on conflict do nothing;
+  else
+    delete from public.some_adgang where bruger_id = p_bruger and not kan_styre;
+  end if;
+end $$;
+revoke execute on function public.some_adgang_saet(uuid, boolean) from public, anon;
+grant execute on function public.some_adgang_saet(uuid, boolean) to authenticated;
 
 -- ---------- Noegler til some-sync (kun service_role) ----------
 create or replace function public.some_noegler()

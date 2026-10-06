@@ -22,58 +22,95 @@ if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('c
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-/* Samme farve-variabler som vagtplanen, saa de to faner ligner hinanden i lys og moerk tilstand */
-:root{--bg:#f4f4f2;--fg:#1a1a1a;--mut:#6c6577;--card:#fff;--bd:#e2e2e2;--felt:#ddd;--bad:#c93a3a;--ok:#2b8a4f;--brand:#040DB1;--brand-tekst:#040DB1;--badge:#eef0fd;--fejl-bg:#fdecea;--fejl:#b92a15;--facebook:#1877F2;--instagram:#D93175;--tiktok:#241F21;color-scheme:light}
-:root[data-tema="moerk"]{--bg:#15161b;--fg:#e8e8ee;--mut:#9a9cab;--card:#1e2029;--bd:#3a3d4a;--felt:#4a4d5a;--bad:#ff7a7a;--ok:#6fd49a;--brand:#3d47e0;--brand-tekst:#9aa6ff;--badge:#262b4d;--fejl-bg:#3a2023;--fejl:#ff7b6b;--facebook:#5aa2ff;--instagram:#f06aa3;--tiktok:#d0d0d8;color-scheme:dark}
+/* Samme farve-variabler som vagtplanen, saa de to faner ligner hinanden i lys og moerk tilstand.
+   Platformenes farver (--facebook/--instagram) er valgt saa de kan skelnes ved farveblindhed og
+   har kontrast nok mod kortets flade i begge temaer -- skift dem ikke uden at tjekke det igen. */
+:root{--bg:#f4f4f2;--fg:#1a1a1a;--mut:#6c6577;--card:#fff;--bd:#e2e2e2;--gitter:#ececec;--felt:#ddd;--bad:#c93a3a;--ok:#2b8a4f;--brand:#040DB1;--brand-tekst:#040DB1;--badge:#eef0fd;--fejl-bg:#fdecea;--fejl:#b92a15;--facebook:#1877F2;--instagram:#D93175;--tiktok:#241F21;--varme:#040DB1;color-scheme:light}
+:root[data-tema="moerk"]{--bg:#15161b;--fg:#e8e8ee;--mut:#9a9cab;--card:#1e2029;--bd:#3a3d4a;--gitter:#2b2e39;--felt:#4a4d5a;--bad:#ff7a7a;--ok:#6fd49a;--brand:#3d47e0;--brand-tekst:#9aa6ff;--badge:#262b4d;--fejl-bg:#3a2023;--fejl:#ff7b6b;--facebook:#3b82f6;--instagram:#e0508c;--tiktok:#d0d0d8;--varme:#8a97ff;color-scheme:dark}
 *{box-sizing:border-box}[hidden]{display:none!important}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);margin:0;color:var(--fg);font-size:15px;line-height:1.4}
-.indhold{padding:16px 20px 40px;max-width:1280px;margin:0 auto}
+.indhold{padding:16px 20px 48px;max-width:1320px;margin:0 auto;transition:opacity .15s}
+.indhold.henter{opacity:.55}
 .laeser{text-align:center;color:var(--mut);padding:20vh 20px}
 .hoved{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-bottom:16px}
 .hoved h1{font-size:20px;margin:0;color:var(--brand-tekst)}
-.hoved .luft{flex:1}
+.luft{flex:1}
 select,button{font-family:inherit;font-size:13px}
 select{padding:7px 10px;border:1px solid var(--felt);border-radius:8px;background:var(--card);color:var(--fg)}
 .knap{padding:7px 14px;border:none;border-radius:8px;background:var(--brand);color:#fff;font-weight:600;cursor:pointer}
 .knap:disabled{opacity:.5;cursor:default}
+.knap.stille{background:var(--badge);color:var(--brand-tekst)}
+:focus-visible{outline:2px solid var(--brand-tekst);outline-offset:2px}
 .chips{display:inline-flex;background:var(--badge);border-radius:20px;padding:3px;gap:2px}
 .chip{background:none;border:none;color:var(--brand-tekst);font-weight:700;font-size:12px;padding:4px 12px;border-radius:20px;cursor:pointer}
 .chip.aktiv{background:var(--brand);color:#fff}
 .status{font-size:12px;color:var(--mut)}.status.bad{color:var(--bad)}
-.kort{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:16px}
-.kort h2{font-size:15px;margin:0 0 12px}
+.kort{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:16px;min-width:0}
+.kort-hoved{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:12px}
+.kort h2{font-size:15px;margin:0}
 .kort h2 small{font-weight:400;color:var(--mut);margin-left:6px}
-.noegletal{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
-.tal{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px 16px}
+.to{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:16px}
+.to>.kort{margin-bottom:16px}
+.noegletal{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.tal{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px 14px}
 .tal .navn{font-size:12px;font-weight:600;color:var(--mut)}
-.tal .vaerdi{font-size:24px;font-weight:700;margin:2px 0}
-.tal .aendring{font-size:12px;color:var(--mut)}
+.tal .vaerdi{font-size:23px;font-weight:700;margin:2px 0;font-variant-numeric:tabular-nums}
+.aendring{font-size:12px;color:var(--mut)}
 .op{color:var(--ok);font-weight:700}.ned{color:var(--bad);font-weight:700}
-.graf svg{width:100%;height:220px;display:block}
-.graf .akse{font-size:11px;fill:var(--mut)}
+/* --- Grafen --- */
+.forklaring{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--mut)}
+.forklaring span{display:inline-flex;align-items:center;gap:6px}
+.streg{display:inline-block;width:16px;height:0;border-top:2px solid}
+.streg.stiplet{border-top-style:dashed;border-color:var(--mut)}
+#graf{position:relative}
+#graf svg{display:block;width:100%;height:280px;cursor:crosshair;border-radius:6px}
+#graf text{font-size:11px;fill:var(--mut);font-variant-numeric:tabular-nums}
+#tip{position:fixed;z-index:50;pointer-events:none;background:var(--card);border:1px solid var(--bd);border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.18);padding:10px 12px;font-size:12px;min-width:150px;max-width:260px}
+#tip .t-titel{font-weight:600;margin-bottom:6px}
+#tip .t-linje{display:flex;align-items:center;gap:8px;line-height:1.7}
+#tip .t-linje b{font-size:13px;font-variant-numeric:tabular-nums;margin-left:auto;padding-left:12px}
+#tip .t-linje span.n{color:var(--mut)}
+#tip .t-sum{border-top:1px solid var(--bd);margin-top:4px;padding-top:4px}
+details.tabelvisning{margin-top:10px;font-size:12px}
+details.tabelvisning summary{cursor:pointer;color:var(--mut)}
+details.tabelvisning .rul{max-height:260px;overflow:auto;margin-top:8px}
+/* --- Tabeller --- */
 .rul{overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
 th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--bd);white-space:nowrap}
 th:first-child,td:first-child{text-align:left}
-th{font-size:12px;color:var(--mut);font-weight:600;cursor:pointer;user-select:none}
+th{font-size:12px;color:var(--mut);font-weight:600}
+th[data-felt]{cursor:pointer;user-select:none}
 th.sorteret{color:var(--brand-tekst)}
-tr:last-child td{border-bottom:none}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:var(--badge)}
+td .lille.op,td .lille.ned{font-weight:600}
 .konto{display:flex;align-items:center;gap:8px}
-.prik{width:9px;height:9px;border-radius:50%;flex:none}
+.prik{width:9px;height:9px;border-radius:50%;flex:none;display:inline-block}
 .prik.facebook{background:var(--facebook)}.prik.instagram{background:var(--instagram)}.prik.tiktok{background:var(--tiktok)}
 .lille{font-size:11px;color:var(--mut)}
+/* --- Top-opslag --- */
 .opslag{display:grid;grid-template-columns:56px 1fr auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--bd)}
 .opslag:last-child{border-bottom:none}
 .opslag img,.opslag .tom{width:56px;height:56px;border-radius:8px;object-fit:cover;background:var(--badge)}
 .opslag .tekst{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;font-size:13px}
-.opslag a{color:inherit;text-decoration:none}.opslag a:hover .tekst{text-decoration:underline}
-.opslag .tal2{text-align:right;font-size:12px;color:var(--mut);white-space:nowrap}
+.opslag a{color:inherit;text-decoration:none;min-width:0}.opslag a:hover .tekst{text-decoration:underline}
+.opslag .tal2{text-align:right;font-size:12px;color:var(--mut);white-space:nowrap;font-variant-numeric:tabular-nums}
 .opslag .tal2 b{color:var(--fg);font-size:14px}
-.besked{background:var(--badge);color:var(--brand-tekst);border-radius:12px;padding:16px;margin-bottom:16px;font-size:14px}
+/* --- Bedste tidspunkt --- */
+.varmekort{display:grid;grid-template-columns:auto repeat(7,minmax(0,1fr));gap:2px;font-size:11px}
+.varmekort .akse{color:var(--mut);padding:2px 6px 2px 0;display:flex;align-items:center}
+.varmekort .top{justify-content:center;padding:0 0 2px}
+.celle{height:30px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums;background:var(--gitter);color:var(--mut);border:0;padding:0;font-size:11px;font-family:inherit}
+.celle.har{cursor:default}
+.celle.har:hover,.celle.har:focus-visible{outline:2px solid var(--fg);outline-offset:0}
+.bedst{margin:12px 0 0;padding:0;list-style:none;font-size:13px}
+.bedst li{padding:2px 0}.bedst b{font-variant-numeric:tabular-nums}
+.besked{background:var(--badge);color:var(--brand-tekst);border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:14px}
 .besked.fejl{background:var(--fejl-bg);color:var(--fejl)}
-details.advarsler{font-size:12px;color:var(--mut);margin-top:8px}
-details.advarsler li{margin:2px 0}
+@media (max-width:900px){.to{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:760px){.indhold{padding:12px}.opslag{grid-template-columns:44px 1fr}.opslag img,.opslag .tom{width:44px;height:44px}.opslag .tal2{grid-column:2;text-align:left}}
+@media (prefers-reduced-motion:reduce){.indhold{transition:none}}
 </style></head><body>
 
 <div class="laeser" id="laeserVis">Indlæser…</div>
@@ -83,35 +120,65 @@ details.advarsler li{margin:2px 0}
   <div class="hoved">
     <h1>SoMe-performance</h1>
     <span class="chips" id="platforme"></span>
-    <span class="luft"></span>
-    <span class="status" id="status"></span>
     <select id="periode" aria-label="Periode">
       <option value="7">Seneste 7 dage</option>
       <option value="28" selected>Seneste 28 dage</option>
       <option value="90">Seneste 90 dage</option>
       <option value="aar">I år</option>
     </select>
+    <span class="luft"></span>
+    <span class="status" id="status"></span>
     <button class="knap" id="opdater" title="Hent de nyeste tal fra Facebook og Instagram nu">Opdater nu</button>
   </div>
 
   <div id="besked" class="besked" hidden></div>
   <div class="noegletal" id="noegletal"></div>
 
-  <div class="kort graf">
-    <h2>Visninger pr. dag</h2>
+  <div class="kort">
+    <div class="kort-hoved">
+      <h2 id="grafTitel">Visninger pr. dag</h2>
+      <span class="chips" id="metrikker"></span>
+      <span class="luft"></span>
+      <div class="forklaring" id="forklaring"></div>
+    </div>
     <div id="graf"></div>
+    <details class="tabelvisning"><summary>Vis tallene som tabel</summary><div class="rul"><table id="grafTabel"></table></div></details>
   </div>
 
   <div class="kort">
-    <h2>Konti <small id="kontiAntal"></small></h2>
+    <div class="kort-hoved">
+      <h2>Butikker og konti <small id="kontiAntal"></small></h2>
+      <span class="chips" id="visninger">
+        <button type="button" class="chip aktiv" data-v="butik">Pr. butik</button>
+        <button type="button" class="chip" data-v="konto">Pr. konto</button>
+      </span>
+      <span class="luft"></span>
+      <button class="knap stille" id="csv" title="Hent tabellen som en fil, der kan åbnes i Excel">Hent som CSV</button>
+    </div>
     <div class="rul"><table id="konti"></table></div>
   </div>
 
-  <div class="kort">
-    <h2>Top-opslag <small>flest likes i perioden</small></h2>
-    <div id="opslag"></div>
+  <div class="to">
+    <div class="kort">
+      <div class="kort-hoved">
+        <h2>Top-opslag</h2>
+        <span class="luft"></span>
+        <select id="opslagSort" aria-label="Sortér top-opslag">
+          <option value="likes">Flest likes</option>
+          <option value="kommentarer">Flest kommentarer</option>
+          <option value="visninger">Flest visninger</option>
+        </select>
+      </div>
+      <div id="opslag"></div>
+    </div>
+    <div class="kort">
+      <div class="kort-hoved"><h2>Hvornår klarer opslag sig bedst? <small>interaktioner pr. opslag i snit</small></h2></div>
+      <div class="varmekort" id="varmekort"></div>
+      <ol class="bedst" id="bedst"></ol>
+    </div>
   </div>
 </div>
+<div id="tip" hidden></div>
 
 <script>
 // Tallene ligger i Supabase (some_konti, some_dag, some_opslag) bag RLS, der kun lukker brugere
@@ -125,16 +192,25 @@ const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { stora
 
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const tal = n => n == null ? '–' : Number(n).toLocaleString('da-DK');
+const tal = n => n == null ? '–' : Number(n).toLocaleString('da-DK', { maximumFractionDigits: 1 });
 const kortTal = n => n == null ? '–' : Number(n).toLocaleString('da-DK', { notation: 'compact', maximumFractionDigits: 1 });
 const tilStreng = dt => dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
 const tilDato = s => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, m - 1, d); };
+const plusDage = (s, n) => { const d = tilDato(s); d.setDate(d.getDate() + n); return tilStreng(d); };
 const datoKort = dt => dt.toLocaleDateString('da-DK', { day: 'numeric', month: 'short' });
+const datoLang = dt => dt.toLocaleDateString('da-DK', { weekday: 'long', day: 'numeric', month: 'long' });
 const PLATFORM = { facebook: 'Facebook', instagram: 'Instagram', tiktok: 'TikTok' };
+const RAEKKEFOELGE = ['facebook', 'instagram', 'tiktok']; // fast -- farven foelger platformen
+const METRIK = { visninger: 'Visninger', raekkevidde: 'Rækkevidde', interaktioner: 'Interaktioner', nye_foelgere: 'Nye følgere' };
+const UGEDAGE = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
+const BLOKKE = [[0, 6], [6, 9], [9, 12], [12, 15], [15, 18], [18, 21], [21, 24]];
 
 let data = null;            // svaret fra some_oversigt
 let platform = 'alle';
+let metrik = 'visninger';
+let visning = 'butik';
 let sortering = { felt: 'foelgere', ned: true };
+let tabelRaekker = [];      // det tabellen viser lige nu (til CSV)
 
 function vis(id) { ['laeserVis', 'ingenAdgangVis', 'app'].forEach(x => { $('#' + x).hidden = x != id; }); }
 
@@ -143,16 +219,18 @@ function periode() {
   const til = new Date(); til.setDate(til.getDate() - 1);
   const v = $('#periode').value;
   const fra = v === 'aar' ? new Date(til.getFullYear(), 0, 1) : new Date(til.getFullYear(), til.getMonth(), til.getDate() - (Number(v) - 1));
-  return { fra: tilStreng(fra), til: tilStreng(til) };
+  return { fra: tilStreng(fra), til: tilStreng(til), dage: Math.round((til - fra) / 864e5) + 1 };
 }
 
+// Mens der hentes, bliver den gamle visning staaende (lidt nedtonet), saa siden ikke hopper.
 async function hent() {
   const p = periode();
+  $('#app').classList.add('henter');
   const { data: d, error } = await client.rpc('some_oversigt', { p_fra: p.fra, p_til: p.til });
-  if (error) { besked('Kunne ikke hente tallene. Prøv igen om lidt.', true); return; }
+  $('#app').classList.remove('henter');
+  if (error) { besked('Tallene kunne ikke hentes. Prøv igen om lidt.', true); return; }
   data = d;
   tegn();
-  hentOpslag(p);
 }
 
 function besked(tekst, fejl) {
@@ -166,111 +244,290 @@ const sum = (konti, tid, felt) => { let s = null; konti.forEach(k => { const v =
 // Sammenligningen vises kun, naar der findes tal for HELE den forrige periode -- ellers
 // sammenlignes en fuld periode med et par dage, og procenterne bliver meningsloese.
 function harForrige() {
-  const p = periode(), fra = tilDato(p.fra), til = tilDato(p.til);
-  const laengde = Math.round((til - fra) / 864e5) + 1;
-  fra.setDate(fra.getDate() - laengde);
-  return !!data.foerste_dato && data.foerste_dato <= tilStreng(fra);
+  const p = periode();
+  return !!data.foerste_dato && data.foerste_dato <= plusDage(p.fra, -p.dage);
 }
-function aendring(nu, foer) {
-  if (nu == null || !foer || !harForrige()) return '<span class="aendring">ingen sammenligning endnu</span>';
-  const pct = (nu - foer) / foer * 100;
-  const kl = pct > 0.05 ? 'op' : pct < -0.05 ? 'ned' : '';
-  return `<span class="aendring"><span class="${kl}">${pct > 0 ? '▲' : pct < 0 ? '▼' : ''} ${Math.abs(pct).toLocaleString('da-DK', { maximumFractionDigits: 1 })}%</span> fra ${tal(foer)}</span>`;
+function pct(nu, foer) {
+  if (nu == null || !foer || !harForrige()) return null;
+  return (nu - foer) / foer * 100;
+}
+function pctHtml(p) {
+  if (p == null) return '';
+  const kl = p > 0.05 ? 'op' : p < -0.05 ? 'ned' : '';
+  return `<span class="${kl}">${p > 0.05 ? '▲' : p < -0.05 ? '▼' : ''} ${Math.abs(p).toLocaleString('da-DK', { maximumFractionDigits: 1 })}%</span>`;
 }
 
 function tegn() {
-  const findes = [...new Set(data.konti.map(k => k.platform))];
+  const findes = RAEKKEFOELGE.filter(p => data.konti.some(k => k.platform === p));
   if (platform !== 'alle' && !findes.includes(platform)) platform = 'alle';
   $('#platforme').innerHTML = ['alle', ...findes].map(p => `<button type="button" class="chip${p === platform ? ' aktiv' : ''}" data-p="${p}">${p === 'alle' ? 'Alle' : PLATFORM[p]}</button>`).join('');
   $('#platforme').hidden = findes.length < 2;
+  $('#metrikker').innerHTML = Object.entries(METRIK).map(([k, n]) => `<button type="button" class="chip${k === metrik ? ' aktiv' : ''}" data-m="${k}">${n}</button>`).join('');
 
   const s = data.sidste_sync;
-  if (!data.konti.length) {
-    besked(s && s.ok === false && s.fejl ? 'Indsamlingen fejlede: ' + s.fejl[0]
-      : 'Der er ikke hentet nogen tal endnu. Når Meta-adgangen er sat op i Supabase, hentes tallene automatisk hver morgen – eller tryk "Opdater nu".');
-  } else besked('');
+  if (s && s.ok === false) besked('Den seneste indsamling fejlede: ' + ((s.fejl && s.fejl[0]) || 'ukendt fejl') + ' Tallene nedenfor er fra sidste vellykkede indsamling.', true);
+  else if (!data.konti.length) besked('Der er ikke hentet nogen tal endnu. Tryk "Opdater nu" for at hente dem – ellers hentes de automatisk hver morgen.');
+  else if (!harForrige()) besked('Sammenligning med forrige periode vises, når der er samlet tal ind for en hel periode mere. Prøv en kortere periode for at se den tidligere.');
+  else besked('');
   $('#status').textContent = s && s.afsluttet_at ? 'Opdateret ' + new Date(s.afsluttet_at).toLocaleString('da-DK', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
   $('#status').classList.toggle('bad', !!s && s.ok === false);
 
   const k = valgte();
   const kort = [
-    ['Følgere', 'foelgere'], ['Nye følgere', 'nye_foelgere'], ['Opslag', 'opslag'],
-    ['Visninger', 'visninger'], ['Reaktioner og likes', 'likes'], ['Kommentarer', 'kommentarer'],
+    ['Følgere', 'foelgere', 'Antal følgere lige nu'], ['Nye følgere', 'nye_foelgere', 'Nye følgere i perioden'],
+    ['Opslag', 'opslag', 'Opslag slået op i perioden'], ['Visninger', 'visninger', 'Hvor mange gange indholdet er blevet vist'],
+    ['Rækkevidde', 'raekkevidde', 'Antal personer nået pr. dag, lagt sammen. Den samme person tæller med hver dag, hun ser noget.'],
+    ['Interaktioner', 'interaktioner', 'Reaktioner, kommentarer, delinger og klik'],
+    ['Reaktioner og likes', 'likes', 'På opslag slået op i perioden'], ['Kommentarer', 'kommentarer', 'På opslag slået op i perioden'],
   ];
-  $('#noegletal').innerHTML = kort.map(([navn, felt]) => {
-    const nu = sum(k, 'nu', felt), foer = sum(k, 'foer', felt);
-    return `<div class="tal"><div class="navn">${navn}</div><div class="vaerdi" title="${tal(nu)}">${nu != null && nu >= 1e6 ? kortTal(nu) : tal(nu)}</div>${aendring(nu, foer)}</div>`;
+  $('#noegletal').innerHTML = kort.map(([navn, felt, hjaelp]) => {
+    const nu = sum(k, 'nu', felt), foer = sum(k, 'foer', felt), p = pct(nu, foer);
+    return `<div class="tal" title="${esc(hjaelp)}"><div class="navn">${navn}</div><div class="vaerdi">${nu != null && nu >= 1e6 ? kortTal(nu) : tal(nu)}</div>` +
+      `<div class="aendring">${p == null ? '&nbsp;' : pctHtml(p) + ' fra ' + tal(foer)}</div></div>`;
   }).join('');
 
   tegnGraf();
-  tegnKonti(k);
+  tegnKonti();
+  tegnTider();
+  hentOpslag();
 }
 
-function tegnGraf() {
-  const pr = new Map();
-  data.serie.forEach(r => { if (platform === 'alle' || r.platform === platform) pr.set(r.dato, (pr.get(r.dato) || 0) + Number(r.visninger || 0)); });
+// ---------- Fælles tooltip (graf og varmekort) ----------
+const tip = $('#tip');
+function visTip(x, y, byg) {
+  tip.textContent = '';
+  byg(tip);
+  tip.hidden = false;
+  const r = tip.getBoundingClientRect();
+  let l = x + 14, t = y - r.height / 2;
+  if (l + r.width > innerWidth - 8) l = x - r.width - 14;
+  tip.style.left = Math.max(8, l) + 'px';
+  tip.style.top = Math.max(8, Math.min(innerHeight - r.height - 8, t)) + 'px';
+}
+const skjulTip = () => { tip.hidden = true; };
+// Navne kommer udefra (Meta) -- derfor textContent og aldrig innerHTML i tooltippet
+function el(tag, klasse, tekst) { const e = document.createElement(tag); if (klasse) e.className = klasse; if (tekst != null) e.textContent = tekst; return e; }
+function tipLinje(farve, navn, vaerdi, stiplet) {
+  const l = el('div', 't-linje');
+  if (farve) { const s = el('span', 'streg' + (stiplet ? ' stiplet' : '')); if (!stiplet) s.style.borderColor = farve; l.appendChild(s); }
+  l.appendChild(el('span', 'n', navn));
+  l.appendChild(el('b', '', vaerdi));
+  return l;
+}
+
+// ---------- Grafen: én linje pr. platform + forrige periode (stiplet) ----------
+let grafTilstand = null;
+function grafData() {
   const p = periode(), dage = [];
-  for (let d = tilDato(p.fra), slut = tilDato(p.til); d <= slut; d.setDate(d.getDate() + 1)) dage.push(tilStreng(d));
-  const v = dage.map(d => pr.get(d) || 0), maks = Math.max(...v, 1);
-  if (!pr.size) { $('#graf').innerHTML = '<div class="lille">Ingen tal i perioden endnu.</div>'; return; }
-  const B = 1000, H = 220, top = 14, bund = 22, venstre = 4;
-  const x = i => venstre + (dage.length < 2 ? 0 : i * (B - 2 * venstre) / (dage.length - 1));
-  const y = n => top + (H - top - bund) * (1 - n / maks);
-  const linje = v.map((n, i) => x(i).toFixed(1) + ',' + y(n).toFixed(1)).join(' ');
-  const bredde = (B - 2 * venstre) / dage.length;
-  $('#graf').innerHTML = `<svg viewBox="0 0 ${B} ${H}" preserveAspectRatio="none" role="img" aria-label="Visninger pr. dag">
-    <line x1="0" x2="${B}" y1="${y(0)}" y2="${y(0)}" stroke="var(--bd)"/><line x1="0" x2="${B}" y1="${y(maks)}" y2="${y(maks)}" stroke="var(--bd)" stroke-dasharray="3 4"/>
-    <polygon points="${x(0)},${y(0)} ${linje} ${x(dage.length - 1)},${y(0)}" fill="var(--brand)" opacity=".12"/>
-    <polyline points="${linje}" fill="none" stroke="var(--brand-tekst)" stroke-width="2" vector-effect="non-scaling-stroke"/>
-    ${dage.map((d, i) => `<rect x="${(x(i) - bredde / 2).toFixed(1)}" y="0" width="${bredde.toFixed(1)}" height="${H - bund}" fill="transparent"><title>${datoKort(tilDato(d))}: ${tal(v[i])}</title></rect>`).join('')}
-  </svg><div class="lille" style="display:flex;justify-content:space-between"><span>${datoKort(tilDato(dage[0]))}</span><span>Højeste dag: ${tal(maks)}</span><span>${datoKort(tilDato(dage[dage.length - 1]))}</span></div>`;
+  for (let i = 0; i < p.dage; i++) dage.push(plusDage(p.fra, i));
+  const pl = RAEKKEFOELGE.filter(x => (platform === 'alle' || x === platform) && data.konti.some(k => k.platform === x));
+  const opslag = (liste) => { const m = new Map(); liste.forEach(r => m.set(r.platform + '|' + r.dato, r[metrik])); return m; };
+  const nu = opslag(data.serie), foer = opslag(data.serie_foer);
+  const serier = pl.map(x => ({ id: x, navn: PLATFORM[x], farve: `var(--${x})`, v: dage.map(d => { const n = nu.get(x + '|' + d); return n == null ? null : Number(n); }) }));
+  const saml = (m, forskyd) => dage.map(d => { let s = null; pl.forEach(x => { const n = m.get(x + '|' + plusDage(d, forskyd)); if (n != null) s = (s || 0) + Number(n); }); return s; });
+  return { dage, serier, total: saml(nu, 0), forrige: harForrige() ? saml(foer, -p.dage) : null, forskyd: -p.dage };
+}
+function paenTop(maks) {
+  if (!(maks > 0)) return 4;
+  const p = Math.pow(10, Math.floor(Math.log10(maks))), n = maks / p;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 4 ? 4 : n <= 5 ? 5 : n <= 8 ? 8 : 10) * p;
+}
+function tegnGraf() {
+  const g = grafData(), boks = $('#graf');
+  $('#grafTitel').textContent = METRIK[metrik] + ' pr. dag';
+  const flere = g.serier.length > 1;
+  $('#forklaring').innerHTML = (flere ? g.serier.map(s => `<span><i class="streg" style="border-color:${s.farve}"></i>${esc(s.navn)}</span>`).join('') : '') +
+    (g.forrige ? '<span><i class="streg stiplet"></i>Forrige periode</span>' : '');
+  const alle = g.serier.flatMap(s => s.v).concat(g.forrige || []).filter(n => n != null);
+  if (!alle.length) { boks.innerHTML = '<div class="lille" style="padding:40px 0;text-align:center">Der er ingen tal for ' + esc(METRIK[metrik].toLowerCase()) + ' i perioden endnu.</div>'; $('#grafTabel').innerHTML = ''; grafTilstand = null; return; }
+
+  const B = Math.max(320, boks.clientWidth), H = 280, V = 46, HO = 14, T = 12, BU = 26;
+  const top = paenTop(Math.max(...alle)), n = g.dage.length;
+  const x = i => V + (n < 2 ? (B - V - HO) / 2 : i * (B - V - HO) / (n - 1));
+  const y = v => T + (H - T - BU) * (1 - v / top);
+  const sti = v => { let d = '', pen = false; v.forEach((p, i) => { if (p == null) { pen = false; return; } d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p).toFixed(1); pen = true; }); return d; };
+  let svg = `<svg viewBox="0 0 ${B} ${H}" role="img" tabindex="0" aria-label="${esc(METRIK[metrik])} pr. dag. Brug piletasterne for at se de enkelte dage.">`;
+  for (let i = 0; i <= 4; i++) {
+    const v = top * i / 4;
+    svg += `<line x1="${V}" x2="${B - HO}" y1="${y(v)}" y2="${y(v)}" stroke="var(--gitter)"/><text x="${V - 8}" y="${y(v) + 4}" text-anchor="end">${kortTal(v)}</text>`;
+  }
+  const trin = Math.max(1, Math.ceil(n / Math.max(2, Math.floor((B - V) / 90))));
+  for (let i = 0; i < n; i += trin) if (n - 1 - i >= trin / 2) svg += `<text x="${x(i)}" y="${H - 6}" text-anchor="${i === 0 ? 'start' : 'middle'}">${datoKort(tilDato(g.dage[i]))}</text>`;
+  svg += `<text x="${x(n - 1)}" y="${H - 6}" text-anchor="end">${datoKort(tilDato(g.dage[n - 1]))}</text>`;
+  if (g.forrige) svg += `<path d="${sti(g.forrige)}" fill="none" stroke="var(--mut)" stroke-width="1.5" stroke-dasharray="4 4" opacity=".7"/>`;
+  if (!flere && g.serier[0]) {
+    // Flade under linjen -- kun naar der er én serie, og kun hvor der er sammenhaengende tal
+    const v = g.serier[0].v; let a = '', start = -1;
+    v.forEach((p, i) => { if (p != null && start < 0) start = i; if ((p == null || i === n - 1) && start >= 0) { const slut = p == null ? i - 1 : i; if (slut > start) a += `M${x(start)} ${y(0)}` + v.slice(start, slut + 1).map((q, j) => `L${x(start + j).toFixed(1)} ${y(q).toFixed(1)}`).join('') + `L${x(slut)} ${y(0)}Z`; start = -1; } });
+    svg += `<path d="${a}" fill="${g.serier[0].farve}" opacity=".1"/>`;
+  }
+  g.serier.forEach(s => { svg += `<path d="${sti(s.v)}" fill="none" stroke="${s.farve}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`; });
+  svg += `<line id="sigte" y1="${T}" y2="${H - BU}" stroke="var(--mut)" stroke-width="1" visibility="hidden"/>`;
+  g.serier.forEach((s, j) => { svg += `<circle id="punkt${j}" r="4.5" fill="${s.farve}" stroke="var(--card)" stroke-width="2" visibility="hidden"/>`; });
+  boks.innerHTML = svg + '</svg>';
+
+  const sv = boks.querySelector('svg');
+  grafTilstand = { g, x, y, sv, B, V, HO, i: -1 };
+  const tilIndeks = e => { const r = sv.getBoundingClientRect(); const px = (e.clientX - r.left) * B / r.width; return Math.max(0, Math.min(n - 1, Math.round((px - V) / ((B - V - HO) / Math.max(1, n - 1))))); };
+  sv.addEventListener('pointermove', e => visPunkt(tilIndeks(e), e.clientY));
+  sv.addEventListener('pointerleave', skjulPunkt);
+  sv.addEventListener('blur', skjulPunkt);
+  sv.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    const i = grafTilstand.i < 0 ? n - 1 : Math.max(0, Math.min(n - 1, grafTilstand.i + (e.key === 'ArrowLeft' ? -1 : 1)));
+    visPunkt(i);
+  });
+
+  $('#grafTabel').innerHTML = `<thead><tr><th>Dato</th>${g.serier.map(s => `<th>${esc(s.navn)}</th>`).join('')}${flere ? '<th>I alt</th>' : ''}${g.forrige ? '<th>Forrige periode</th>' : ''}</tr></thead><tbody>` +
+    g.dage.map((d, i) => `<tr><td>${datoKort(tilDato(d))}</td>${g.serier.map(s => `<td>${tal(s.v[i])}</td>`).join('')}${flere ? `<td>${tal(g.total[i])}</td>` : ''}${g.forrige ? `<td>${tal(g.forrige[i])}</td>` : ''}</tr>`).join('') + '</tbody>';
+}
+function visPunkt(i, musY) {
+  const t = grafTilstand; if (!t) return;
+  t.i = i;
+  const r = t.sv.getBoundingClientRect(), px = t.x(i);
+  const sigte = t.sv.querySelector('#sigte');
+  sigte.setAttribute('x1', px); sigte.setAttribute('x2', px); sigte.setAttribute('visibility', 'visible');
+  t.g.serier.forEach((s, j) => {
+    const c = t.sv.querySelector('#punkt' + j);
+    if (s.v[i] == null) c.setAttribute('visibility', 'hidden');
+    else { c.setAttribute('cx', px); c.setAttribute('cy', t.y(s.v[i])); c.setAttribute('visibility', 'visible'); }
+  });
+  const dato = tilDato(t.g.dage[i]);
+  visTip(r.left + px * r.width / t.B, musY ?? r.top + r.height / 2, n => {
+    n.appendChild(el('div', 't-titel', datoLang(dato)));
+    t.g.serier.forEach(s => n.appendChild(tipLinje(s.farve, s.navn, tal(s.v[i]))));
+    if (t.g.serier.length > 1) { const l = tipLinje(null, 'I alt', tal(t.g.total[i])); l.classList.add('t-sum'); n.appendChild(l); }
+    if (t.g.forrige) n.appendChild(tipLinje('x', datoKort(tilDato(plusDage(t.g.dage[i], t.g.forskyd))), tal(t.g.forrige[i]), true));
+  });
+}
+function skjulPunkt() {
+  const t = grafTilstand; if (!t) return;
+  t.i = -1;
+  t.sv.querySelectorAll('#sigte,circle').forEach(e => e.setAttribute('visibility', 'hidden'));
+  skjulTip();
 }
 
-function tegnKonti(k) {
-  const kol = [['Følgere', 'foelgere'], ['Nye følgere', 'nye_foelgere'], ['Opslag', 'opslag'], ['Visninger', 'visninger'], ['Interaktioner', 'interaktioner'], ['Likes', 'likes'], ['Kommentarer', 'kommentarer']];
+// ---------- Butikker og konti ----------
+const KOL = [['Følgere', 'foelgere'], ['Nye følgere', 'nye_foelgere'], ['Opslag', 'opslag'], ['Visninger', 'visninger'], ['Interaktioner', 'interaktioner'], ['Likes', 'likes'], ['Kommentarer', 'kommentarer']];
+function tegnKonti() {
+  const k = valgte();
+  let r;
+  if (visning === 'butik') {
+    // Facebook-siden og Instagram-kontoen for samme butik hedder det samme hos Meta
+    const m = new Map();
+    k.forEach(x => {
+      if (!m.has(x.navn)) m.set(x.navn, { navn: x.navn, platforme: [], nu: {}, foer: {} });
+      const b = m.get(x.navn);
+      b.platforme.push(x.platform);
+      ['nu', 'foer'].forEach(t => KOL.forEach(([, f]) => { if (x[t][f] != null) b[t][f] = (b[t][f] || 0) + Number(x[t][f]); }));
+    });
+    r = [...m.values()];
+  } else r = k.map(x => ({ navn: x.navn, brugernavn: x.brugernavn, platforme: [x.platform], nu: x.nu, foer: x.foer }));
   const s = sortering;
-  const r = k.slice().sort((a, b) => s.felt === 'navn'
-    ? a.navn.localeCompare(b.navn, 'da') * (s.ned ? -1 : 1)
-    : ((b.nu[s.felt] ?? -1) - (a.nu[s.felt] ?? -1)) * (s.ned ? 1 : -1));
-  $('#kontiAntal').textContent = k.length ? k.length + ' konti' : '';
-  $('#konti').innerHTML = `<thead><tr><th data-felt="navn" class="${s.felt === 'navn' ? 'sorteret' : ''}">Konto</th>${kol.map(([n, f]) => `<th data-felt="${f}" class="${s.felt === f ? 'sorteret' : ''}">${n}${s.felt === f ? (s.ned ? ' ↓' : ' ↑') : ''}</th>`).join('')}</tr></thead><tbody>${
-    r.map(x => `<tr><td><div class="konto"><span class="prik ${x.platform}" title="${PLATFORM[x.platform]}"></span><span>${esc(x.navn)}${x.brugernavn ? ` <span class="lille">@${esc(x.brugernavn)}</span>` : ''}</span></div></td>${kol.map(([, f]) => `<td>${tal(x.nu[f])}</td>`).join('')}</tr>`).join('')
-    || `<tr><td colspan="${kol.length + 1}" class="lille">Ingen konti endnu.</td></tr>`}</tbody>`;
+  r.sort((a, b) => s.felt === 'navn' ? a.navn.localeCompare(b.navn, 'da') * (s.ned ? -1 : 1) : ((b.nu[s.felt] ?? -1) - (a.nu[s.felt] ?? -1)) * (s.ned ? 1 : -1));
+  tabelRaekker = r;
+  $('#kontiAntal').textContent = r.length ? r.length + (visning === 'butik' ? (r.length === 1 ? ' butik' : ' butikker') : ' konti') : '';
+  const celle = (x, f) => { const p = pct(x.nu[f], x.foer[f]); return `<td>${tal(x.nu[f])}${p == null ? '' : `<div class="lille">${pctHtml(p)}</div>`}</td>`; };
+  $('#konti').innerHTML = `<thead><tr><th data-felt="navn" class="${s.felt === 'navn' ? 'sorteret' : ''}">${visning === 'butik' ? 'Butik' : 'Konto'}${s.felt === 'navn' ? (s.ned ? ' ↓' : ' ↑') : ''}</th>${KOL.map(([n, f]) => `<th data-felt="${f}" class="${s.felt === f ? 'sorteret' : ''}">${n}${s.felt === f ? (s.ned ? ' ↓' : ' ↑') : ''}</th>`).join('')}</tr></thead><tbody>${
+    r.map(x => `<tr><td><div class="konto">${x.platforme.map(p => `<span class="prik ${p}" title="${PLATFORM[p]}"></span>`).join('')}<span>${esc(x.navn)}${x.brugernavn ? ` <span class="lille">@${esc(x.brugernavn)}</span>` : ''}</span></div></td>${KOL.map(([, f]) => celle(x, f)).join('')}</tr>`).join('')
+    || `<tr><td colspan="${KOL.length + 1}" class="lille">Ingen konti endnu.</td></tr>`}</tbody>`;
+}
+function hentCsv() {
+  const p = periode(), felt = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const linjer = [[visning === 'butik' ? 'Butik' : 'Konto', 'Platform', ...KOL.map(k => k[0])].map(felt).join(';')]
+    .concat(tabelRaekker.map(x => [x.navn, x.platforme.map(q => PLATFORM[q]).join(' + '), ...KOL.map(([, f]) => x.nu[f] ?? '')].map(felt).join(';')));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + linjer.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+  a.download = `some-${p.fra}-til-${p.til}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-async function hentOpslag(p) {
-  const naeste = tilDato(p.til); naeste.setDate(naeste.getDate() + 1);
+// ---------- Top-opslag ----------
+async function hentOpslag() {
+  const p = periode(), felt = $('#opslagSort').value;
   let q = client.from('some_opslag')
-    .select('ekstern_id,oprettet_at,tekst,permalink,billede_url,likes,kommentarer,visninger,some_konti!inner(navn,platform)')
-    .gte('oprettet_at', p.fra).lt('oprettet_at', tilStreng(naeste))
-    .order('likes', { ascending: false, nullsFirst: false }).limit(10);
+    .select('ekstern_id,oprettet_at,tekst,permalink,billede_url,likes,kommentarer,delinger,visninger,some_konti!inner(navn,platform,aktiv)')
+    .eq('some_konti.aktiv', true)
+    .gte('oprettet_at', p.fra).lt('oprettet_at', plusDage(p.til, 1))
+    .order(felt, { ascending: false, nullsFirst: false }).limit(8);
   if (platform !== 'alle') q = q.eq('some_konti.platform', platform);
   const { data: o } = await q;
-  $('#opslag').innerHTML = (o || []).map(x => `<div class="opslag">
+  $('#opslag').innerHTML = (o || []).map(x => {
+    const inter = (x.likes || 0) + (x.kommentarer || 0) + (x.delinger || 0);
+    const rate = x.visninger ? ` · ${(inter / x.visninger * 100).toLocaleString('da-DK', { maximumFractionDigits: 1 })}% engagement` : '';
+    return `<div class="opslag">
     ${x.billede_url ? `<img src="${esc(x.billede_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML='<div class=tom></div>'">` : '<div class="tom"></div>'}
-    <a href="${esc(/^https:\/\//.test(x.permalink || '') ? x.permalink : '#')}" target="_blank" rel="noopener"><div class="lille"><span class="prik ${x.some_konti.platform}" style="display:inline-block"></span> ${esc(x.some_konti.navn)} · ${datoKort(new Date(x.oprettet_at))}</div><div class="tekst">${esc(x.tekst || '(uden tekst)')}</div></a>
-    <div class="tal2"><b>${tal(x.likes)}</b> likes · ${tal(x.kommentarer)} komm.${x.visninger != null ? ' · ' + kortTal(x.visninger) + ' visn.' : ''}</div>
-  </div>`).join('') || '<div class="lille">Ingen opslag i perioden endnu.</div>';
+    <a href="${esc(/^https:\/\//.test(x.permalink || '') ? x.permalink : '#')}" target="_blank" rel="noopener"><div class="lille"><span class="prik ${x.some_konti.platform}"></span> ${esc(x.some_konti.navn)}, ${datoKort(new Date(x.oprettet_at))}</div><div class="tekst">${esc(x.tekst || '(uden tekst)')}</div></a>
+    <div class="tal2"><b>${tal(x.likes)}</b> likes · ${tal(x.kommentarer)} komm.<br>${x.visninger != null ? kortTal(x.visninger) + ' visninger' + rate : '&nbsp;'}</div>
+  </div>`; }).join('') || '<div class="lille">Ingen opslag i perioden endnu.</div>';
 }
 
+// ---------- Hvornår klarer opslag sig bedst? ----------
+function tegnTider() {
+  const celler = UGEDAGE.map(() => BLOKKE.map(() => ({ antal: 0, inter: 0 })));
+  data.tider.forEach(t => {
+    if (platform !== 'alle' && t.platform !== platform) return;
+    const b = BLOKKE.findIndex(([a, z]) => t.time >= a && t.time < z), c = celler[t.ugedag - 1] && celler[t.ugedag - 1][b];
+    if (c) { c.antal += t.antal; c.inter += Number(t.interaktioner || 0); }
+  });
+  const snit = c => c.antal ? c.inter / c.antal : 0;
+  const maks = Math.max(1, ...celler.flat().map(snit));
+  const blokNavn = ([a, z]) => String(a).padStart(2, '0') + '–' + String(z).padStart(2, '0');
+  let h = '<div></div>' + BLOKKE.map(b => `<div class="akse top">${blokNavn(b)}</div>`).join('');
+  celler.forEach((raekke, d) => {
+    h += `<div class="akse">${UGEDAGE[d].slice(0, 3)}</div>`;
+    raekke.forEach((c, b) => {
+      if (!c.antal) { h += '<div class="celle"></div>'; return; }
+      // Én farve fra lys til moerk: jo flere interaktioner pr. opslag, jo kraftigere
+      const styrke = Math.round(12 + 88 * snit(c) / maks);
+      h += `<button type="button" class="celle har" data-d="${d}" data-b="${b}" style="background:color-mix(in srgb, var(--varme) ${styrke}%, var(--card));color:${styrke > 55 ? 'var(--card)' : 'var(--fg)'}" aria-label="${UGEDAGE[d]} ${blokNavn(BLOKKE[b])}: ${tal(snit(c))} interaktioner pr. opslag, ${c.antal} opslag">${kortTal(Math.round(snit(c)))}</button>`;
+    });
+  });
+  const kort = $('#varmekort');
+  kort.innerHTML = h;
+  const visCelle = e => {
+    const k = e.target.closest('.celle.har'); if (!k) return;
+    const c = celler[k.dataset.d][k.dataset.b], r = k.getBoundingClientRect();
+    visTip(r.right - 6, r.top + r.height / 2, n => {
+      n.appendChild(el('div', 't-titel', UGEDAGE[k.dataset.d] + ' kl. ' + blokNavn(BLOKKE[k.dataset.b])));
+      n.appendChild(tipLinje(null, 'Interaktioner pr. opslag', tal(snit(c))));
+      n.appendChild(tipLinje(null, 'Opslag', tal(c.antal)));
+    });
+  };
+  kort.onpointerover = visCelle; kort.onfocusin = visCelle;
+  kort.onpointerleave = skjulTip; kort.onfocusout = skjulTip;
+  // Et enkelt opslag der gik godt er ikke et moenster -- top 3 kraever mindst 3 opslag
+  const top = celler.flatMap((raekke, d) => raekke.map((c, b) => ({ d, b, c }))).filter(x => x.c.antal >= 3).sort((a, z) => snit(z.c) - snit(a.c)).slice(0, 3);
+  $('#bedst').innerHTML = top.map(x => `<li>${UGEDAGE[x.d]} kl. ${blokNavn(BLOKKE[x.b])}: <b>${tal(snit(x.c))}</b> interaktioner pr. opslag <span class="lille">(${x.c.antal} opslag)</span></li>`).join('')
+    || '<li class="lille">Der er for få opslag i perioden til at pege på et bedste tidspunkt.</li>';
+}
+
+// ---------- Betjening ----------
 $('#periode').addEventListener('change', hent);
-$('#platforme').addEventListener('click', e => {
-  const b = e.target.closest('.chip'); if (!b) return;
-  platform = b.dataset.p; tegn(); hentOpslag(periode());
-});
+$('#platforme').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; platform = b.dataset.p; tegn(); });
+$('#metrikker').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; metrik = b.dataset.m; $('#metrikker').querySelectorAll('.chip').forEach(c => c.classList.toggle('aktiv', c === b)); tegnGraf(); });
+$('#visninger').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; visning = b.dataset.v; $('#visninger').querySelectorAll('.chip').forEach(c => c.classList.toggle('aktiv', c === b)); tegnKonti(); });
 $('#konti').addEventListener('click', e => {
-  const th = e.target.closest('th'); if (!th) return;
+  const th = e.target.closest('th[data-felt]'); if (!th) return;
   sortering = { felt: th.dataset.felt, ned: sortering.felt === th.dataset.felt ? !sortering.ned : th.dataset.felt !== 'navn' };
-  tegnKonti(valgte());
+  tegnKonti();
 });
+$('#csv').addEventListener('click', hentCsv);
+$('#opslagSort').addEventListener('change', hentOpslag);
 $('#opdater').addEventListener('click', async () => {
   const k = $('#opdater');
   k.disabled = true; k.textContent = 'Henter…';
   const { data: r, error } = await client.functions.invoke('some-sync', { body: {} });
   k.disabled = false; k.textContent = 'Opdater nu';
-  if (error || !r || r.fejl) { besked((r && r.fejl) || 'Kunne ikke hente nye tal lige nu. Prøv igen om lidt.', true); return; }
+  if (error || !r || r.fejl) { besked((r && r.fejl) || 'De nye tal kunne ikke hentes lige nu. Prøv igen om lidt.', true); return; }
   await hent();
 });
+// Grafen tegnes i rigtige pixels (saa tekst ikke straekkes) og tegnes derfor om, naar bredden aendres
+let bredde = 0;
+new ResizeObserver(() => { const b = $('#graf').clientWidth; if (data && b && Math.abs(b - bredde) > 4) { bredde = b; skjulTip(); tegnGraf(); } }).observe($('#graf'));
+window.addEventListener('scroll', skjulTip, true);
 
 async function start() {
   const { data: { user } } = await client.auth.getUser();
