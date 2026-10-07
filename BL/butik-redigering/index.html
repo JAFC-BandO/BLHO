@@ -1585,6 +1585,7 @@
     knap('vagtplan').hidden = !vp.data;
     knap('some').hidden = !so.data;
     document.getElementById('someAdgangBtn').style.display = so.data && so.data.kan_styre ? '' : 'none';
+    if (so.data && so.data.kan_styre) tjekSomeAlarm();
     if (!vp.data && !so.data) return;
     faner.classList.add('synlig');
     // #vagtplan/#some i adressen (fx et bogmaerke, eller et reload mens man stod paa fanen)
@@ -1610,7 +1611,7 @@
         const ramme = document.createElement('iframe');
         ramme.title = 'SoMe-performance';
         // ?v= skal bumpes naar some/index.html aendres (samme grund som for vagtplanen nedenfor)
-        ramme.src = '../some/?indlejret=1&v=2026-10-07-22';
+        ramme.src = '../some/?indlejret=1&v=2026-10-07-23';
         vis.appendChild(ramme);
       }
       updateSlideOverlay();
@@ -3075,6 +3076,105 @@
     else if (topbar) app.appendChild(bar);
     else app.insertBefore(bar, app.firstChild);
   }
+
+  // ---------- SoMe-alarm: kommer tallene fra Facebook og Instagram stadig ind? ----------
+  // Kun den SoMe-ansvarlige (kan_styre i some_adgang) faar beskeden -- RPC'en some_alarm svarer
+  // null til alle andre. Der spoerges, naar siden aabnes, og igen hvis den har staaet aaben i over
+  // et doegn: indsamlingen koerer hver time og skriver selv i loggen, hvis noget fejler, og Metas
+  // svar om noeglernes udloeb hentes én gang i doegnet -- der er intet at vinde ved at spoerge oftere.
+  let someAlarmTjekket = 0;
+  async function tjekSomeAlarm() {
+    someAlarmTjekket = Date.now();
+    const { data: a, error } = await client.rpc('some_alarm');
+    if (error || !a) return;
+    const nu = Date.now();
+    const dag = v => new Date(v).toLocaleDateString('da-DK', { day: 'numeric', month: 'long', year: 'numeric' });
+    const tid = v => new Date(v).toLocaleString('da-DK', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+    const omAdgang = t => /access token|session has expired|oauth|permission|authoriz/i.test(t);
+    const fejl = [], varsler = [], slags = [];
+    let forny = false;
+
+    // Selve indsamlingen
+    const s = a.sidste || {}, sFejl = Array.isArray(s.fejl) ? s.fejl.map(String) : [];
+    if (s.ok === false) {
+      slags.push('sync');
+      fejl.push('Indsamlingen fejlede ' + tid(s.afsluttet_at) + ': ' + (sFejl[0] || 'ukendt fejl'));
+      forny = sFejl.some(omAdgang);
+    } else if (!a.sidste_ok || nu - new Date(a.sidste_ok).getTime() > 3 * 3600e3) {
+      slags.push('stille');
+      fejl.push(a.sidste_ok ? 'Der er ikke hentet nye tal siden ' + tid(a.sidste_ok) + '.' : 'Der er endnu ikke hentet nogen tal.');
+    } else if (sFejl.length) {
+      slags.push('delvis');
+      fejl.push('Seneste indsamling (' + tid(s.afsluttet_at) + ') kunne ikke hente alt – ' + sFejl.length + (sFejl.length === 1 ? ' fejl: ' : ' fejl, bl.a.: ') + sFejl[0]);
+      forny = sFejl.some(omAdgang);
+    }
+    // Kommer der tal fra begge platforme? (Meta kan holde op med at levere uden at melde fejl)
+    [['Instagram', a.ig], ['Facebook', a.fb]].forEach(([navn, x]) => {
+      if (!x || !x.uden_tal) return;
+      slags.push(navn);
+      const hvem = x.uden_tal >= x.konti ? 'nogen af de ' + x.konti + ' konti'
+        : x.uden_tal + ' af ' + x.konti + ' konti (' + (x.navne || []).slice(0, 4).join(', ') + (x.uden_tal > 4 ? ' m.fl.' : '') + ')';
+      fejl.push(navn + ' har ikke leveret tal for ' + hvem + ' den ' + dag(x.dato + 'T12:00:00') + '.');
+      forny = true;
+    });
+    // Noeglerne hos Meta: gyldighed og udloeb (sekunder siden 1970; 0 = udloeber aldrig). Der varsles 14 dage foer.
+    const t = a.token || {};
+    if (t.bruger && t.bruger.gyldigt === false) {
+      slags.push('token');
+      varsler.push('Dit Meta-token er ikke længere gyldigt. Tallene hentes stadig med sidernes egne nøgler, men nye sider bliver ikke fundet.');
+      forny = true;
+    }
+    [['Dit Meta-token udløber', t.bruger && t.bruger.udloeber, 'tokenfrist'], ['Sidernes nøgler udløber', t.side && t.side.udloeber, 'sidefrist'],
+      ['Metas godkendelse af dataadgangen (gælder Instagram) udløber', Math.min(...[t.bruger, t.side].map(x => x && Number(x.dataadgang)).filter(v => v > 0)), 'datafrist'],
+    ].forEach(([tekst, sek, navn]) => {
+      sek = Number(sek);
+      if (!(sek > 0) || !isFinite(sek)) return;
+      const dage = Math.ceil((sek * 1000 - nu) / 864e5);
+      if (dage > 14) return;
+      slags.push(navn + (dage <= 0 ? '-ude' : ''));
+      if (dage <= 0) fejl.push(tekst.replace(/udløber$/, 'udløb') + ' ' + dag(sek * 1000) + '.');
+      else varsler.push(tekst + ' ' + dag(sek * 1000) + ' (om ' + dage + (dage === 1 ? ' dag' : ' dage') + ').');
+      forny = true;
+    });
+
+    const gammel = document.getElementById('someVarsel');
+    if (gammel) gammel.remove();
+    if (!fejl.length && !varsler.length) return;
+    // Én besked pr. slags problem pr. browsersession (som for skaermene): kvitteret er kvitteret,
+    // men et nyt slags problem giver en ny besked.
+    const noegle = 'blho_some_alarm_' + slags.join('|');
+    try { if (sessionStorage.getItem(noegle)) return; } catch (e) { /* blokeret lagring */ }
+
+    const erFejl = fejl.length > 0;
+    const bar = document.createElement('div');
+    bar.id = 'someVarsel';
+    bar.style.cssText = 'display:flex; align-items:flex-start; justify-content:space-between; gap:16px;' +
+      ' background:var(--ui-flade-' + (erFejl ? 'fejl' : 'advarsel') + '); color:var(--ui-' + (erFejl ? 'fejl-moerk-tekst' : 'advarsel-tekst') + ');' +
+      ' border-bottom:1px solid var(--ui-kant-' + (erFejl ? 'fejl' : 'advarsel') + '); padding:12px 20px; font-size:13px; line-height:1.55;';
+    const tekst = document.createElement('div');
+    tekst.innerHTML =
+      '<b>' + (erFejl ? 'SoMe: tallene fra Facebook og Instagram kommer ikke ind, som de skal' : 'SoMe: adgangen til Meta skal snart fornyes') + '</b>' +
+      '<ul style="margin:6px 0 0 18px; padding:0;">' + fejl.concat(varsler).map(l => '<li>' + escapeHtml(l) + '</li>').join('') + '</ul>' +
+      (forny ? '<div style="margin-top:6px; font-size:12px;">Forny adgangen: lav et nyt forlænget token hos Meta, og sæt det ind i Supabase Vault (meta_system_token). ' +
+        'Beskeden forsvinder, når den næste indsamling er gået godt.</div>' : '');
+    bar.appendChild(tekst);
+    const luk = document.createElement('button');
+    luk.textContent = 'OK';
+    luk.style.cssText = 'flex-shrink:0; padding:6px 16px; font-size:12px; cursor:pointer;';
+    luk.addEventListener('click', () => {
+      try { sessionStorage.setItem(noegle, '1'); } catch (e) { /* blokeret lagring */ }
+      bar.remove();
+    });
+    bar.appendChild(luk);
+    const app = document.getElementById('app');
+    const topbar = app.querySelector('.topbar');
+    if (topbar && topbar.nextSibling) app.insertBefore(bar, topbar.nextSibling);
+    else if (topbar) app.appendChild(bar);
+    else app.insertBefore(bar, app.firstChild);
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && someAlarmTjekket && Date.now() - someAlarmTjekket > 24 * 3600e3) tjekSomeAlarm();
+  });
 
   // ---------- Fælles slides i alle diasshow ----------
   // Slidene gemmes i den faelles skabelons data-objekt og flettes ind ved VISNING

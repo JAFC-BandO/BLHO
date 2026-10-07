@@ -271,6 +271,22 @@ async function findSider(token: string | undefined, gemteTekst: string | undefin
   return sider;
 }
 
+// Hvad Meta selv siger om noeglerne: er de gyldige, hvornaar udloeber de (0 = aldrig), og hvornaar
+// udloeber appens dataadgang. Hentes én gang i doegnet og gemmes i loggen, saa siden kan advare den
+// SoMe-ansvarlige i god tid (RPC'en some_alarm). Sidernes noegler er lavet samtidig og ens, saa én af dem er nok.
+async function tokenStatus(token: string | undefined, sider: Json[]): Promise<Json> {
+  const tjek = async (t: string, med: string) => {
+    try {
+      const d = (await graf('debug_token', { input_token: t }, med)).data ?? {};
+      return { gyldigt: d.is_valid === true, udloeber: d.expires_at ?? null, dataadgang: d.data_access_expires_at ?? null };
+    } catch (e) { return { gyldigt: false, fejl: (e as Error).message.slice(0, 200) }; }
+  };
+  const bruger = token ? await tjek(token, token) : null;
+  const side = sider.find((s) => s.access_token)?.access_token;
+  // Kun brugerens token maa spoerge til en sidenoegle -- er det ugyldigt, ses sidernes tilstand paa selve indsamlingen
+  return { bruger, side: side && bruger?.gyldigt ? await tjek(side, token!) : null };
+}
+
 // Koerer opgaverne et par stykker ad gangen, saa Meta ikke faar alle kald paa én gang
 async function iHold<T>(ting: T[], samtidig: number, f: (t: T) => Promise<void>) {
   let i = 0;
@@ -325,9 +341,15 @@ Deno.serve(async (req) => {
   const [log] = await db('some_sync_log', { method: 'POST', headers: { Prefer: 'return=representation' }, body: '{}' });
   const fejl: string[] = [];
   let antal = 0;
+  let tokenInfo: Json = null;
   try {
     // ---------- Find kontiene ----------
     const sider = await findSider(token, noegler.meta_side_tokens, fejl);
+    // Noeglernes status hentes én gang i doegnet -- ikke ved hver indsamling
+    const sidstTjek = await db('some_sync_log?select=afsluttet_at&token=not.is.null&order=id.desc&limit=1').catch(() => null);
+    if (!sidstTjek?.[0] || Date.now() - new Date(sidstTjek[0].afsluttet_at).getTime() > 23.5 * 3600e3) {
+      tokenInfo = await tokenStatus(token, sider).catch(() => null);
+    }
     const konti: Raekke[] = [];
     for (const s of sider) {
       konti.push({ platform: 'facebook', ekstern_id: s.id, navn: s.name, brugernavn: s.username ?? null, billede_url: s.picture?.data?.url ?? null });
@@ -355,10 +377,10 @@ Deno.serve(async (req) => {
     await upsert('some_opslag', 'konto_id,ekstern_id', opslag);
   } catch (e) {
     fejl.unshift((e as Error).message);
-    await db('some_sync_log?id=eq.' + log.id, { method: 'PATCH', body: JSON.stringify({ afsluttet_at: new Date().toISOString(), ok: false, konti: antal, fejl: fejl.slice(0, 60) }) });
+    await db('some_sync_log?id=eq.' + log.id, { method: 'PATCH', body: JSON.stringify({ afsluttet_at: new Date().toISOString(), ok: false, konti: antal, fejl: fejl.slice(0, 60), token: tokenInfo }) });
     console.error('SoMe-indsamling fejlede', fejl[0]);
     return svar({ fejl: 'Indsamlingen fejlede: ' + fejl[0] });
   }
-  await db('some_sync_log?id=eq.' + log.id, { method: 'PATCH', body: JSON.stringify({ afsluttet_at: new Date().toISOString(), ok: true, konti: antal, fejl: fejl.length ? fejl.slice(0, 60) : null }) });
+  await db('some_sync_log?id=eq.' + log.id, { method: 'PATCH', body: JSON.stringify({ afsluttet_at: new Date().toISOString(), ok: true, konti: antal, fejl: fejl.length ? fejl.slice(0, 60) : null, token: tokenInfo }) });
   return svar({ ok: true, konti: antal, dage, slut, advarsler: fejl.length });
 });

@@ -710,3 +710,37 @@ begin
 end $$;
 revoke execute on function public.some_rapporter_slet(uuid) from public, anon;
 grant execute on function public.some_rapporter_slet(uuid) to authenticated;
+
+-- ---------- Alarm: kommer tallene stadig ind, og er noget ved at udloebe? ----------
+-- Indsamlingen spoerger Meta om noeglernes tilstand én gang i doegnet og gemmer svaret i loggen:
+-- { "bruger": { gyldigt, udloeber, dataadgang }, "side": { ... } } (tider i sekunder; 0 = aldrig).
+alter table public.some_sync_log add column if not exists token jsonb;
+
+-- Til den SoMe-ansvarlige (kan_styre): virker indsamlingen, kommer der tal fra begge platforme,
+-- og hvad siger Meta om noeglerne? Alle andre faar null. Admin-siden (BL/butik-redigering)
+-- formulerer selv beskeden og viser den oeverst.
+create or replace function public.some_alarm()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_sidste some_sync_log; v_ok timestamptz; v_tok jsonb; v_dag date;
+begin
+  if not public.kan_styre_some() then return null; end if;
+  select * into v_sidste from some_sync_log where afsluttet_at is not null order by id desc limit 1;
+  select max(afsluttet_at) into v_ok from some_sync_log where ok;
+  select token into v_tok from some_sync_log where token is not null order by id desc limit 1;
+  -- Instagrams tal for i gaar hentes ved foerste indsamling efter midnat (UTC); Facebook er et
+  -- doegn laengere om at levere. Foer kl. 03 UTC ses der derfor en dag laengere tilbage.
+  v_dag := (now() at time zone 'UTC')::date - case when extract(hour from now() at time zone 'UTC') >= 3 then 1 else 2 end;
+  return jsonb_build_object(
+    'sidste', jsonb_build_object('ok', v_sidste.ok, 'afsluttet_at', v_sidste.afsluttet_at, 'fejl', v_sidste.fejl),
+    'sidste_ok', v_ok,
+    'token', v_tok,
+    'ig', (select jsonb_build_object('dato', v_dag, 'konti', count(*), 'uden_tal', count(*) filter (where g.visninger is null),
+        'navne', jsonb_agg(k.navn order by k.navn) filter (where g.visninger is null))
+      from some_konti k left join some_dag g on g.konto_id = k.id and g.dato = v_dag where k.aktiv and k.platform = 'instagram'),
+    'fb', (select jsonb_build_object('dato', v_dag - 1, 'konti', count(*), 'uden_tal', count(*) filter (where g.visninger is null),
+        'navne', jsonb_agg(k.navn order by k.navn) filter (where g.visninger is null))
+      from some_konti k left join some_dag g on g.konto_id = k.id and g.dato = v_dag - 1 where k.aktiv and k.platform = 'facebook'));
+end $$;
+revoke execute on function public.some_alarm() from public, anon;
+grant execute on function public.some_alarm() to authenticated;
