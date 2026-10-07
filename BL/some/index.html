@@ -349,8 +349,8 @@ function tegn() {
   const p = periode(), iAar = new Date().getFullYear();
   const dato = d => { const t = tilDato(d); return t.toLocaleDateString('da-DK', { day: 'numeric', month: 'short', year: t.getFullYear() === iAar ? undefined : 'numeric' }); };
   forrigeTekst = harForrige() ? dato(p.foerFra) + ' – ' + dato(plusDage(p.fra, -1)) : '';
-  $('#periodeTekst').textContent = 'Viser ' + dato(p.fra) + ' – ' + dato(p.til) + '.' +
-    (forrigeTekst ? ' Pilene og "fra"-tallene sammenligner med perioden lige før: ' + forrigeTekst + '.' : '');
+  $('#periodeTekst').textContent = 'Viser ' + dato(p.fra) + ' – ' + dato(p.til) +
+    (forrigeTekst ? '  ·  Pilene og "fra"-tallene sammenligner med perioden lige før: ' + forrigeTekst : '');
 
   tegnSektioner();
   tegnFoelgere();
