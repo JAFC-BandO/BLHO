@@ -270,6 +270,8 @@ function harForrige() {
 // udleverer 30 dage tilbage). Tal der taelles ud fra opslag (opslag, likes, kommentarer) er
 // noget andet: ingen opslag i forrige periode er et rigtigt 0, ikke manglende historik.
 const FRA_OPSLAG = ['opslag', 'likes', 'kommentarer', 'delinger'];
+// Stories findes kun 24 timer hos Meta og kan ikke hentes bagud -- tallene begynder denne dag.
+const STORIES_FRA = '2026-10-06';
 // (stories er ikke med: foer indsamlingen af dem begyndte, betyder 'ingen' manglende historik)
 function sammenlign(konti, felt) {
   if (!harForrige()) return null;
@@ -339,7 +341,8 @@ function tegn() {
   $('#noegletal').innerHTML = kort.map(([navn, felt, hjaelp]) => {
     const nu = sum(k, 'nu', felt), s = sammenlign(k, felt);
     return `<div class="tal" title="${esc(hjaelp)}"><div class="navn">${navn}</div><div class="vaerdi">${nu != null && nu >= 1e6 ? kortTal(nu) : tal(nu)}</div>` +
-      `<div class="aendring">${!s ? '&nbsp;' : pctHtml(s.pct) + ' fra ' + tal(s.foer) + (s.uden ? ` <span title="${s.uden} har ikke tal for forrige periode og er ikke med i sammenligningen">(uden ${s.uden})</span>` : '')}</div></div>`;
+      `<div class="aendring">${s ? pctHtml(s.pct) + ' fra ' + tal(s.foer) + (s.uden ? `<br><span title="Ændringen er regnet uden ${esc(s.uden)}, fordi der ikke findes tal for forrige periode. Meta udleverer kun Instagrams følgertal 30 dage tilbage, så de bygges op dag for dag fra indsamlingens start.">Ændring uden ${esc(s.uden)}: ingen tal for forrige periode</span>` : '')
+        : felt.startsWith('stor') && nu != null ? 'Siden ' + datoKort(tilDato(STORIES_FRA)) + ' – ingen forrige periode endnu' : '&nbsp;'}</div></div>`;
   }).join('');
 
   tegnGraf();
@@ -365,13 +368,13 @@ const skjulTip = () => { tip.hidden = true; };
 function el(tag, klasse, tekst) { const e = document.createElement(tag); if (klasse) e.className = klasse; if (tekst != null) e.textContent = tekst; return e; }
 function tipLinje(farve, navn, vaerdi, stiplet) {
   const l = el('div', 't-linje');
-  if (farve) { const s = el('span', 'streg' + (stiplet ? ' stiplet' : '')); if (!stiplet) s.style.borderColor = farve; l.appendChild(s); }
+  if (farve) { const s = el('span', 'streg' + (stiplet ? ' stiplet' : '')); if (farve !== 'x') s.style.borderColor = farve; l.appendChild(s); }
   l.appendChild(el('span', 'n', navn));
   l.appendChild(el('b', '', vaerdi));
   return l;
 }
 
-// ---------- Grafen: én linje pr. platform + forrige periode (stiplet) ----------
+// ---------- Grafen: én linje pr. platform + samme platform i forrige periode (stiplet) ----------
 let grafTilstand = null;
 function grafData() {
   const p = periode(), dage = [];
@@ -379,9 +382,11 @@ function grafData() {
   const pl = RAEKKEFOELGE.filter(x => (platform === 'alle' || x === platform) && data.konti.some(k => k.platform === x));
   const opslag = (liste) => { const m = new Map(); liste.forEach(r => m.set(r.platform + '|' + r.dato, r[metrik])); return m; };
   const nu = opslag(data.serie), foer = opslag(data.serie_foer);
-  const serier = pl.map(x => ({ id: x, navn: PLATFORM[x], farve: `var(--${x})`, v: dage.map(d => { const n = nu.get(x + '|' + d); return n == null ? null : Number(n); }) }));
+  const har = harForrige();
+  const raekke = (m, x, forskyd) => dage.map(d => { const n = m.get(x + '|' + plusDage(d, forskyd)); return n == null ? null : Number(n); });
+  const serier = pl.map(x => ({ id: x, navn: PLATFORM[x], farve: `var(--${x})`, v: raekke(nu, x, 0), f: har ? raekke(foer, x, -p.dage) : null }));
   const saml = (m, forskyd) => dage.map(d => { let s = null; pl.forEach(x => { const n = m.get(x + '|' + plusDage(d, forskyd)); if (n != null) s = (s || 0) + Number(n); }); return s; });
-  return { dage, serier, total: saml(nu, 0), forrige: harForrige() ? saml(foer, -p.dage) : null, forskyd: -p.dage };
+  return { dage, serier, total: saml(nu, 0), forrige: har ? saml(foer, -p.dage) : null, forskyd: -p.dage };
 }
 function paenTop(maks) {
   if (!(maks > 0)) return 4;
@@ -394,7 +399,7 @@ function tegnGraf() {
   const flere = g.serier.length > 1;
   $('#forklaring').innerHTML = (flere ? g.serier.map(s => `<span><i class="streg" style="border-color:${s.farve}"></i>${esc(s.navn)}</span>`).join('') : '') +
     (g.forrige ? '<span><i class="streg stiplet"></i>Forrige periode</span>' : '');
-  const alle = g.serier.flatMap(s => s.v).concat(g.forrige || []).filter(n => n != null);
+  const alle = g.serier.flatMap(s => s.v.concat(s.f || [])).filter(n => n != null);
   if (!alle.length) { boks.innerHTML = '<div class="lille" style="padding:40px 0;text-align:center">Der er ingen tal for ' + esc(METRIK[metrik].toLowerCase()) + ' i perioden endnu.</div>'; $('#grafTabel').innerHTML = ''; grafTilstand = null; return; }
 
   const B = Math.max(320, boks.clientWidth), H = 280, V = 46, HO = 14, T = 12, BU = 26;
@@ -410,7 +415,7 @@ function tegnGraf() {
   const trin = Math.max(1, Math.ceil(n / Math.max(2, Math.floor((B - V) / 90))));
   for (let i = 0; i < n; i += trin) if (n - 1 - i >= trin / 2) svg += `<text x="${x(i)}" y="${H - 6}" text-anchor="${i === 0 ? 'start' : 'middle'}">${datoKort(tilDato(g.dage[i]))}</text>`;
   svg += `<text x="${x(n - 1)}" y="${H - 6}" text-anchor="end">${datoKort(tilDato(g.dage[n - 1]))}</text>`;
-  if (g.forrige) svg += `<path d="${sti(g.forrige)}" fill="none" stroke="var(--mut)" stroke-width="1.5" stroke-dasharray="4 4" opacity=".7"/>`;
+  g.serier.forEach(s => { if (s.f) svg += `<path d="${sti(s.f)}" fill="none" stroke="${s.farve}" stroke-width="1.5" stroke-dasharray="4 4" opacity=".6"/>`; });
   if (!flere && g.serier[0]) {
     // Flade under linjen -- kun naar der er én serie, og kun hvor der er sammenhaengende tal
     const v = g.serier[0].v; let a = '', start = -1;
@@ -435,8 +440,8 @@ function tegnGraf() {
     visPunkt(i);
   });
 
-  $('#grafTabel').innerHTML = `<thead><tr><th>Dato</th>${g.serier.map(s => `<th>${esc(s.navn)}</th>`).join('')}${flere ? '<th>I alt</th>' : ''}${g.forrige ? '<th>Forrige periode</th>' : ''}</tr></thead><tbody>` +
-    g.dage.map((d, i) => `<tr><td>${datoKort(tilDato(d))}</td>${g.serier.map(s => `<td>${tal(s.v[i])}</td>`).join('')}${flere ? `<td>${tal(g.total[i])}</td>` : ''}${g.forrige ? `<td>${tal(g.forrige[i])}</td>` : ''}</tr>`).join('') + '</tbody>';
+  $('#grafTabel').innerHTML = `<thead><tr><th>Dato</th>${g.serier.map(s => `<th>${esc(s.navn)}</th>${s.f ? `<th>${esc(s.navn)}, forrige periode</th>` : ''}`).join('')}${flere ? '<th>I alt</th>' + (g.forrige ? '<th>I alt, forrige periode</th>' : '') : ''}</tr></thead><tbody>` +
+    g.dage.map((d, i) => `<tr><td>${datoKort(tilDato(d))}</td>${g.serier.map(s => `<td>${tal(s.v[i])}</td>${s.f ? `<td>${tal(s.f[i])}</td>` : ''}`).join('')}${flere ? `<td>${tal(g.total[i])}</td>` + (g.forrige ? `<td>${tal(g.forrige[i])}</td>` : '') : ''}</tr>`).join('') + '</tbody>';
 }
 function visPunkt(i, musY) {
   const t = grafTilstand; if (!t) return;
@@ -452,9 +457,15 @@ function visPunkt(i, musY) {
   const dato = tilDato(t.g.dage[i]);
   visTip(r.left + px * r.width / t.B, musY ?? r.top + r.height / 2, n => {
     n.appendChild(el('div', 't-titel', datoLang(dato)));
-    t.g.serier.forEach(s => n.appendChild(tipLinje(s.farve, s.navn, tal(s.v[i]))));
-    if (t.g.serier.length > 1) { const l = tipLinje(null, 'I alt', tal(t.g.total[i])); l.classList.add('t-sum'); n.appendChild(l); }
-    if (t.g.forrige) n.appendChild(tipLinje('x', datoKort(tilDato(plusDage(t.g.dage[i], t.g.forskyd))), tal(t.g.forrige[i]), true));
+    const foerDato = datoKort(tilDato(plusDage(t.g.dage[i], t.g.forskyd)));
+    t.g.serier.forEach(s => {
+      n.appendChild(tipLinje(s.farve, s.navn, tal(s.v[i])));
+      if (s.f) n.appendChild(tipLinje(s.farve, s.navn + ' ' + foerDato, tal(s.f[i]), true));
+    });
+    if (t.g.serier.length > 1) {
+      const l = tipLinje(null, 'I alt', tal(t.g.total[i])); l.classList.add('t-sum'); n.appendChild(l);
+      if (t.g.forrige) n.appendChild(tipLinje(null, 'I alt ' + foerDato, tal(t.g.forrige[i])));
+    }
   });
 }
 function skjulPunkt() {
