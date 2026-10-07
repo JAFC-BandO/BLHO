@@ -471,7 +471,8 @@ function tegn() {
   }
 
   const s = data.sidste_sync;
-  if (s && s.ok === false) besked(LINK ? 'De nyeste tal kunne ikke hentes. Tallene nedenfor er fra sidste vellykkede indsamling.'
+  // Hvad der gik galt, er kun noget for den SoMe-ansvarlige (som ogsaa faar alarmen oeverst paa admin-siden)
+  if (s && s.ok === false) besked(LINK || !kanStyre ? 'De nyeste tal kunne ikke hentes. Tallene nedenfor er fra sidste vellykkede indsamling.'
     : 'Den seneste indsamling fejlede: ' + ((data.sync_fejl && data.sync_fejl[0]) || 'ukendt fejl') + ' Tallene nedenfor er fra sidste vellykkede indsamling.', true);
   else if (!data.konti.length) besked(LINK ? 'Der er ikke koblet nogen Facebook- eller Instagram-konti til butikken endnu.'
     : 'Der er ikke hentet nogen tal endnu. Tryk "Opdater nu" for at hente dem – ellers hentes de automatisk hver morgen.');
@@ -1293,7 +1294,7 @@ async function opdater() {
   const { data: r, error } = await client.functions.invoke('some-sync', { body: { tving: true } });
   k.disabled = false; k.textContent = 'Opdater nu';
   opdaterer = false;
-  if (error || !r || r.fejl) { besked((r && r.fejl) || 'De nye tal kunne ikke hentes lige nu. Prøv igen om lidt.', true); return; }
+  if (error || !r || r.fejl) { besked((kanStyre && r && r.fejl) || 'De nye tal kunne ikke hentes lige nu. Prøv igen om lidt.', true); return; }
   await hent();
 }
 const synlig = () => !document.hidden && innerWidth > 0; // 0 = iframen er skjult bag en anden fane
