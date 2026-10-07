@@ -73,7 +73,10 @@ select,input[type=date]{padding:7px 10px;border:1px solid var(--felt);border-rad
 #graf text{font-size:11px;fill:var(--mut);font-variant-numeric:tabular-nums}
 #tip{position:fixed;z-index:50;pointer-events:none;background:var(--card);border:1px solid var(--bd);border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.18);padding:10px 12px;font-size:12px;min-width:150px;max-width:260px}
 #tip .t-titel{font-weight:600;margin-bottom:6px}
-#tip>div{line-height:1.5}
+#tip{max-width:360px}
+#tip .t-tekst{color:var(--mut);line-height:1.4;margin-bottom:6px}
+#tip .t-linje+.t-tekst{margin:6px 0 0}
+#tip .t-linje span.n{white-space:nowrap}
 [data-tip]{cursor:help}th[data-tip]{cursor:pointer}
 #tip .t-linje{display:flex;align-items:center;gap:8px;line-height:1.7}
 #tip .t-linje b{font-size:13px;font-variant-numeric:tabular-nums;margin-left:auto;padding-left:12px}
@@ -260,6 +263,7 @@ let visning = 'butik';
 let sortering = { felt: 'samlede_visninger', ned: true };
 let opslagSort = 'visninger';   // top-opslag: 'visninger' | 'likes' | 'kommentarer'
 let tabelRaekker = [];      // det tabellen viser lige nu (til CSV)
+let nuTekst = '';           // "9. sep. – 6. okt." -- perioden, der vises
 let forrigeTekst = '';      // "12. aug. – 8. sep." -- perioden, pilene sammenligner med
 let sidstLaest = 0;         // hvornaar tallene sidst blev laest fra databasen
 
@@ -391,8 +395,9 @@ function tegn() {
   // er det samme tal i perioden lige foer)
   const p = periode(), iAar = new Date().getFullYear();
   const dato = d => { const t = tilDato(d); return t.toLocaleDateString('da-DK', { day: 'numeric', month: 'short', year: t.getFullYear() === iAar ? undefined : 'numeric' }); };
+  nuTekst = dato(p.fra) + ' – ' + dato(p.til);
   forrigeTekst = harForrige() ? dato(p.foerFra) + ' – ' + dato(plusDage(p.fra, -1)) : '';
-  $('#periodeTekst').textContent = 'Viser ' + dato(p.fra) + ' – ' + dato(p.til) +
+  $('#periodeTekst').textContent = 'Viser ' + nuTekst +
     (forrigeTekst ? '  ·  Pilene og "fra"-tallene sammenligner med perioden lige før: ' + forrigeTekst : '');
 
   tegnSektioner();
@@ -485,7 +490,11 @@ const skjulTip = () => { tip.hidden = true; };
 function visForklaring(e) {
   const t = e.target.closest && e.target.closest('[data-tip]'); if (!t) return;
   const r = t.getBoundingClientRect();
-  visTip(r.right - 6, r.top + r.height / 2, n => t.dataset.tip.split('\n').forEach((l, i) => n.appendChild(el('div', i ? '' : 't-titel', l))));
+  visTip(r.right - 6, r.top + r.height / 2, n => t.dataset.tip.split('\n').forEach((l, i) => {
+    if (!i) { n.appendChild(el('div', 't-titel', l)); return; }
+    const [navn, vaerdi] = l.split('\t');
+    n.appendChild(vaerdi != null ? tipLinje(null, navn, vaerdi) : el('div', 't-tekst', l));
+  }));
 }
 document.addEventListener('pointerover', visForklaring);
 document.addEventListener('focusin', visForklaring);
@@ -612,12 +621,15 @@ const KOL = [
   ['Nye følgere', 'nye_foelgere', 'Nye følgere i perioden'],
 ];
 // Teksten i forklaringsboksen (data-tip): hvad tallet er, og hvad pilen sammenligner med
+// Format: foerste linje er overskriften; en linje med tabulator er "navn <tab> tal" (tallet
+// stilles til hoejre); alt andet er forklarende tekst.
 function tipTekst(navn, hjaelp, nu, c) {
-  const linjer = [navn, hjaelp, 'Denne periode: ' + tal(nu)];
+  const linjer = [navn, hjaelp, 'Denne periode (' + nuTekst + ')\t' + tal(nu)];
   if (c) {
-    linjer.push('Perioden før (' + forrigeTekst + '): ' + tal(c.foer));
-    linjer.push('Ændring: ' + c.pct.toLocaleString('da-DK', { maximumFractionDigits: 1, signDisplay: 'exceptZero' }) + ' %' + (c.uden ? ' – regnet uden ' + c.uden + ', som ikke har tal for perioden før' : ''));
-  } else if (forrigeTekst) linjer.push('Ingen tal at sammenligne med for perioden før (' + forrigeTekst + ')');
+    linjer.push('Perioden før (' + forrigeTekst + ')\t' + tal(c.foer));
+    linjer.push('Ændring\t' + c.pct.toLocaleString('da-DK', { maximumFractionDigits: 1, signDisplay: 'exceptZero' }) + ' %');
+    if (c.uden) linjer.push('Ændringen er regnet uden ' + c.uden + ', som ikke har tal for perioden før.');
+  } else if (forrigeTekst) linjer.push('Der er ingen tal for perioden før (' + forrigeTekst + ') at sammenligne med.');
   return linjer.filter(Boolean).join('\n');
 }
 function tegnKonti() {
