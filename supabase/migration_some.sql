@@ -402,23 +402,25 @@ revoke execute on function public.some_overblik(date, date, uuid) from public, a
 grant execute on function public.some_overblik(date, date, uuid) to authenticated;
 
 -- Butikslinket (uden login): butikkens egne tal ('egen') eller kaedens samlede tal ('faelles')
+-- plus de bedste opslag pr. platform (egne, eller paa tvaers af alle butikker i 'faelles')
 create or replace function public.some_rapport(p_noegle text, p_fra date, p_til date, p_omfang text default 'egen', p_sort text default 'visninger')
 returns jsonb language plpgsql stable security definer set search_path = public as $$
-declare v_butik uuid := public.some_link_butik(p_noegle);
+declare
+  v_butik uuid := public.some_link_butik(p_noegle);
+  v_faelles boolean := p_omfang = 'faelles';
 begin
   if v_butik is null then return null; end if;
   if p_til < p_fra or p_til - p_fra > 400 then raise exception 'Ugyldig periode'; end if;
-  if p_omfang = 'faelles' then
-    return public.some_oversigt_kerne(p_fra, p_til, null, true) || jsonb_build_object('butik', (select navn from butikker where id = v_butik), 'opslag', '[]'::jsonb);
-  end if;
-  return public.some_oversigt_kerne(p_fra, p_til, v_butik, false) || jsonb_build_object(
+  -- 'faelles': tallene er lagt sammen pr. platform (ingen enkelt butiks tal), men top-opslagene
+  -- vises paa tvaers af butikkerne, saa man kan se, hvad der virker hos de andre.
+  return public.some_oversigt_kerne(p_fra, p_til, case when v_faelles then null else v_butik end, v_faelles) || jsonb_build_object(
     'butik', (select navn from butikker where id = v_butik),
     'opslag', coalesce((select jsonb_agg(to_jsonb(t) - 'nr' order by t.nr) from (
       select o.ekstern_id, o.oprettet_at, o.tekst, o.permalink, o.billede_url, o.likes, o.kommentarer, o.delinger, o.visninger,
         jsonb_build_object('navn', k.navn, 'platform', k.platform) some_konti,
         row_number() over (partition by k.platform
           order by case p_sort when 'kommentarer' then o.kommentarer when 'likes' then o.likes else o.visninger end desc nulls last) nr
-      from some_opslag o join some_konti k on k.id = o.konto_id and k.aktiv and k.butik_id = v_butik
+      from some_opslag o join some_konti k on k.id = o.konto_id and k.aktiv and (v_faelles or k.butik_id = v_butik)
       where o.oprettet_at >= (p_fra::timestamp at time zone 'Europe/Copenhagen')
         and o.oprettet_at < ((p_til + 1)::timestamp at time zone 'Europe/Copenhagen')
         and (o.type is null or o.type not in ('STORY', 'created_event'))) t where t.nr <= 5), '[]'::jsonb));

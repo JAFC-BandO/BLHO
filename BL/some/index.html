@@ -35,9 +35,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .laeser{text-align:center;color:var(--mut);padding:20vh 20px}
 .hoved{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-bottom:16px}
 .hoved h1{font-size:20px;margin:0;color:var(--brand-tekst)}
+.hoved #periodeTekst{flex-basis:100%;font-size:12px;margin-top:-4px}
+/* Butik og periode foelger med ned, naar man ruller (ikke paa telefon, hvor det fylder for meget) */
+@media (min-width:761px){.hoved{position:sticky;top:0;z-index:20;background:var(--bg);margin:-16px -20px 16px;padding:12px 20px 10px;border-bottom:1px solid var(--bd)}}
+.datoer{display:inline-flex;align-items:center;gap:6px;color:var(--mut)}
 .luft{flex:1}
-select,button{font-family:inherit;font-size:13px}
-select{padding:7px 10px;border:1px solid var(--felt);border-radius:8px;background:var(--card);color:var(--fg)}
+select,button,input{font-family:inherit;font-size:13px}
+select,input[type=date]{padding:7px 10px;border:1px solid var(--felt);border-radius:8px;background:var(--card);color:var(--fg)}
 .knap{padding:7px 14px;border:none;border-radius:8px;background:var(--brand);color:#fff;font-weight:600;cursor:pointer}
 .knap:disabled{opacity:.5;cursor:default}
 .knap.stille{background:var(--badge);color:var(--brand-tekst)}
@@ -69,6 +73,8 @@ select{padding:7px 10px;border:1px solid var(--felt);border-radius:8px;backgroun
 #graf text{font-size:11px;fill:var(--mut);font-variant-numeric:tabular-nums}
 #tip{position:fixed;z-index:50;pointer-events:none;background:var(--card);border:1px solid var(--bd);border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.18);padding:10px 12px;font-size:12px;min-width:150px;max-width:260px}
 #tip .t-titel{font-weight:600;margin-bottom:6px}
+#tip>div{line-height:1.5}
+[data-tip]{cursor:help}th[data-tip]{cursor:pointer}
 #tip .t-linje{display:flex;align-items:center;gap:8px;line-height:1.7}
 #tip .t-linje b{font-size:13px;font-variant-numeric:tabular-nums;margin-left:auto;padding-left:12px}
 #tip .t-linje span.n{color:var(--mut)}
@@ -155,14 +161,18 @@ td .lille.op,td .lille.ned{font-weight:600}
       <option value="maaned">Sidste måned</option>
       <option value="denne">Denne måned</option>
       <option value="aar">I år</option>
+      <option value="valgfri">Vælg datoer …</option>
     </select>
+    <span class="datoer" id="datoer" hidden>
+      <input type="date" id="fraDato" aria-label="Fra dato"><span>–</span><input type="date" id="tilDato" aria-label="Til dato">
+    </span>
     <span class="luft"></span>
     <span class="status" id="status"></span>
     <button class="knap" id="opdater" title="Hent de nyeste tal fra Facebook og Instagram nu">Opdater nu</button>
+    <div class="lille" id="periodeTekst"></div>
   </div>
 
   <div id="besked" class="besked" hidden></div>
-  <div class="lille" id="periodeTekst" style="font-size:12px;margin:-6px 0 4px"></div>
   <div id="sektioner"></div>
 
   <div class="kort">
@@ -250,7 +260,16 @@ function periode() {
   if (v === 'maaned') { fra = new Date(idag.getFullYear(), idag.getMonth() - 1, 1); til = new Date(idag.getFullYear(), idag.getMonth(), 0); }
   else if (v === 'denne') fra = new Date(til.getFullYear(), til.getMonth(), 1);
   else if (v === 'aar') fra = new Date(til.getFullYear(), 0, 1);
-  else fra = new Date(til.getFullYear(), til.getMonth(), til.getDate() - (Number(v) - 1));
+  else if (v === 'valgfri' && $('#fraDato').value && $('#tilDato').value) {
+    // Egne datoer: aldrig senere end i gaar, og hoejst 400 dage (serverens graense)
+    let a = tilDato($('#fraDato').value), b = tilDato($('#tilDato').value);
+    if (a > b) [a, b] = [b, a];
+    if (b > til) b = til;
+    if (a > b) a = b;
+    if (Math.round((b - a) / 864e5) > 400) a = new Date(b.getFullYear(), b.getMonth(), b.getDate() - 400);
+    fra = a; til = b;
+  }
+  else fra = new Date(til.getFullYear(), til.getMonth(), til.getDate() - ((Number(v) || 28) - 1));
   const dage = Math.round((til - fra) / 864e5) + 1;
   const helMaaned = fra.getDate() === 1 && fra.getMonth() === til.getMonth() && fra.getFullYear() === til.getFullYear()
     && new Date(til.getFullYear(), til.getMonth(), til.getDate() + 1).getDate() === 1;
@@ -397,13 +416,13 @@ const SEKTION = {
 };
 function kortHtml(konti, [navn, felt, hjaelp, hint]) {
   const nu = sum(konti, 'nu', felt) ?? (FRA_OPSLAG.includes(felt) && konti.length ? 0 : null), s = sammenlign(konti, felt);
-  return `<div class="tal" title="${esc(hjaelp)}"><div class="navn">${esc(navn)}</div><div class="vaerdi">${nu != null && nu >= 1e6 ? kortTal(nu) : tal(nu)}</div>` +
-    `<div class="aendring"${s ? ` title="${esc(tal(s.foer) + ' var tallet i perioden lige før (' + forrigeTekst + ')')}"` : ''}>${s ? pctHtml(s.pct) + ' fra ' + tal(s.foer) + (s.uden ? `<br><span title="Ændringen er regnet uden ${esc(s.uden)}, fordi der ikke findes tal for forrige periode.">Ændring uden ${esc(s.uden)}</span>` : '') : '&nbsp;'}</div>` +
+  return `<div class="tal" data-tip="${esc(tipTekst(navn, hjaelp, nu, s))}"><div class="navn">${esc(navn)}</div><div class="vaerdi">${nu != null && nu >= 1e6 ? kortTal(nu) : tal(nu)}</div>` +
+    `<div class="aendring">${s ? pctHtml(s.pct) + ' fra ' + tal(s.foer) + (s.uden ? `<br><span>Ændring uden ${esc(s.uden)}</span>` : '') : '&nbsp;'}</div>` +
     (hint ? `<div class="hint">${esc(hint)}</div>` : '') + '</div>';
 }
 function tegnSektioner() {
-  // Butikslinkets "Alle butikker" viser kun samlede tal -- ingen enkelte opslag fra andre butikker
-  const visOpslag = !(LINK && omfang === 'faelles');
+  // Top-opslag vises ogsaa i butikslinkets "Alle butikker" (paa tvaers af butikkerne, til inspiration)
+  const visOpslag = true;
   const sortValg = '<select class="opslagSort" aria-label="Sortér top-opslag">' + [['visninger', 'Flest visninger'], ['likes', 'Flest likes'], ['kommentarer', 'Flest kommentarer']]
     .map(([v, n]) => `<option value="${v}"${v === opslagSort ? ' selected' : ''}>${n}</option>`).join('') + '</select>';
   $('#sektioner').innerHTML = RAEKKEFOELGE.filter(p => SEKTION[p] && data.konti.some(k => k.platform === p)).map(p => {
@@ -446,6 +465,15 @@ function visTip(x, y, byg) {
   tip.style.top = Math.max(8, Math.min(innerHeight - r.height - 8, t)) + 'px';
 }
 const skjulTip = () => { tip.hidden = true; };
+// Alt med data-tip viser sin forklaring i samme boks: foerste linje er overskriften
+function visForklaring(e) {
+  const t = e.target.closest && e.target.closest('[data-tip]'); if (!t) return;
+  const r = t.getBoundingClientRect();
+  visTip(r.right - 6, r.top + r.height / 2, n => t.dataset.tip.split('\n').forEach((l, i) => n.appendChild(el('div', i ? '' : 't-titel', l))));
+}
+document.addEventListener('pointerover', visForklaring);
+document.addEventListener('focusin', visForklaring);
+document.addEventListener('pointerout', e => { const t = e.target.closest && e.target.closest('[data-tip]'); if (t && !t.contains(e.relatedTarget)) skjulTip(); });
 // Navne kommer udefra (Meta) -- derfor textContent og aldrig innerHTML i tooltippet
 function el(tag, klasse, tekst) { const e = document.createElement(tag); if (klasse) e.className = klasse; if (tekst != null) e.textContent = tekst; return e; }
 function tipLinje(farve, navn, vaerdi, stiplet) {
@@ -558,7 +586,24 @@ function skjulPunkt() {
 }
 
 // ---------- Butikker og konti ----------
-const KOL = [['Opslag', 'opslag'], ['Reels', 'reels'], ['Stories', 'stories'], ['Samlede visninger', 'samlede_visninger'], ['Interaktioner', 'interaktioner'], ['Følgere', 'foelgere'], ['Nye følgere', 'nye_foelgere']];
+const KOL = [
+  ['Opslag', 'opslag', 'Opslag slået op i perioden – uden reels, stories og begivenheder'],
+  ['Reels', 'reels', 'Reels slået op på Instagram i perioden'],
+  ['Stories', 'stories', 'Stories slået op på Instagram i perioden'],
+  ['Samlede visninger', 'samlede_visninger', 'Visninger af det, der er slået op i perioden: opslag, reels og stories lagt sammen'],
+  ['Interaktioner', 'interaktioner', 'Reaktioner, kommentarer, delinger og klik på kontoen i perioden'],
+  ['Følgere', 'foelgere', 'Antal følgere ved periodens slutning'],
+  ['Nye følgere', 'nye_foelgere', 'Nye følgere i perioden'],
+];
+// Teksten i forklaringsboksen (data-tip): hvad tallet er, og hvad pilen sammenligner med
+function tipTekst(navn, hjaelp, nu, c) {
+  const linjer = [navn, hjaelp, 'Denne periode: ' + tal(nu)];
+  if (c) {
+    linjer.push('Perioden før (' + forrigeTekst + '): ' + tal(c.foer));
+    linjer.push('Ændring: ' + c.pct.toLocaleString('da-DK', { maximumFractionDigits: 1, signDisplay: 'exceptZero' }) + ' %' + (c.uden ? ' – regnet uden ' + c.uden + ', som ikke har tal for perioden før' : ''));
+  } else if (forrigeTekst) linjer.push('Ingen tal at sammenligne med for perioden før (' + forrigeTekst + ')');
+  return linjer.filter(Boolean).join('\n');
+}
 function tegnKonti() {
   const k = valgte();
   let r;
@@ -581,9 +626,9 @@ function tegnKonti() {
   r.sort((a, b) => s.felt === 'navn' ? a.navn.localeCompare(b.navn, 'da') * (s.ned ? -1 : 1) : ((b.nu[s.felt] ?? -1) - (a.nu[s.felt] ?? -1)) * (s.ned ? 1 : -1));
   tabelRaekker = r;
   $('#kontiAntal').textContent = r.length ? r.length + (visning === 'butik' ? (r.length === 1 ? ' butik' : ' butikker') : ' konti') : '';
-  const celle = (x, f) => { const c = sammenlign(x.konti, f); return `<td>${tal(x.nu[f])}${!c ? '' : `<div class="lille"${c.uden ? ` title="Uden ${c.uden}, som ikke har tal for forrige periode"` : ''}>${pctHtml(c.pct)}${c.uden ? '*' : ''}</div>`}</td>`; };
-  $('#konti').innerHTML = `<thead><tr><th data-felt="navn" class="${s.felt === 'navn' ? 'sorteret' : ''}">${visning === 'butik' ? 'Butik' : 'Konto'}${s.felt === 'navn' ? (s.ned ? ' ↓' : ' ↑') : ''}</th>${KOL.map(([n, f]) => `<th data-felt="${f}" class="${s.felt === f ? 'sorteret' : ''}">${n}${s.felt === f ? (s.ned ? ' ↓' : ' ↑') : ''}</th>`).join('')}</tr></thead><tbody>${
-    r.map(x => `<tr><td><div class="konto">${x.platforme.map(p => `<span class="prik ${p}" title="${PLATFORM[p]}"></span>`).join('')}<span>${esc(x.navn)}${x.brugernavn ? ` <span class="lille">@${esc(x.brugernavn)}</span>` : ''}</span></div></td>${KOL.map(([, f]) => celle(x, f)).join('')}</tr>`).join('')
+  const celle = (x, [navn, f, hjaelp]) => { const c = sammenlign(x.konti, f); return `<td data-tip="${esc(tipTekst(x.navn + ' – ' + navn.toLowerCase(), hjaelp, x.nu[f], c))}">${tal(x.nu[f])}${!c ? '' : `<div class="lille">${pctHtml(c.pct)}${c.uden ? '*' : ''}</div>`}</td>`; };
+  $('#konti').innerHTML = `<thead><tr><th data-felt="navn" class="${s.felt === 'navn' ? 'sorteret' : ''}">${visning === 'butik' ? 'Butik' : 'Konto'}${s.felt === 'navn' ? (s.ned ? ' ↓' : ' ↑') : ''}</th>${KOL.map(([n, f, hjaelp]) => `<th data-felt="${f}" data-tip="${esc(n + '\n' + hjaelp + '\nKlik for at sortere')}" class="${s.felt === f ? 'sorteret' : ''}">${n}${s.felt === f ? (s.ned ? ' ↓' : ' ↑') : ''}</th>`).join('')}</tr></thead><tbody>${
+    r.map(x => `<tr><td><div class="konto">${x.platforme.map(p => `<span class="prik ${p}" title="${PLATFORM[p]}"></span>`).join('')}<span>${esc(x.navn)}${x.brugernavn ? ` <span class="lille">@${esc(x.brugernavn)}</span>` : ''}</span></div></td>${KOL.map(kol => celle(x, kol)).join('')}</tr>`).join('')
     || `<tr><td colspan="${KOL.length + 1}" class="lille">Ingen konti endnu.</td></tr>`}</tbody>`;
 }
 function hentCsv() {
@@ -679,7 +724,24 @@ function tegnTider() {
 }
 
 // ---------- Betjening ----------
-$('#periode').addEventListener('change', hent);
+// "Vaelg datoer" viser to datofelter, der starter paa den periode, man kom fra
+function visDatoer() {
+  const egne = $('#periode').value === 'valgfri';
+  $('#datoer').hidden = !egne;
+  const iGaar = new Date(); iGaar.setDate(iGaar.getDate() - 1);
+  $('#fraDato').max = $('#tilDato').max = tilStreng(iGaar);
+}
+let sidstePeriode = null;
+$('#periode').addEventListener('focus', () => { if ($('#periode').value !== 'valgfri') sidstePeriode = periode(); });
+$('#periode').addEventListener('change', () => {
+  if ($('#periode').value === 'valgfri' && !($('#fraDato').value && $('#tilDato').value)) {
+    const p = sidstePeriode || periode();
+    $('#fraDato').value = p.fra; $('#tilDato').value = p.til;
+  }
+  visDatoer();
+  hent();
+});
+['#fraDato', '#tilDato'].forEach(id => $(id).addEventListener('change', () => { if ($('#fraDato').value && $('#tilDato').value) hent(); }));
 $('#metrikker').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; metrik = b.dataset.m; $('#metrikker').querySelectorAll('.chip').forEach(c => c.classList.toggle('aktiv', c === b)); tegnGraf(); });
 $('#visninger').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; visning = b.dataset.v; $('#visninger').querySelectorAll('.chip').forEach(c => c.classList.toggle('aktiv', c === b)); tegnKonti(); });
 $('#konti').addEventListener('click', e => {
@@ -736,7 +798,13 @@ async function start() {
   opdater(false);
 }
 // Maanedsmailen linker med &periode=maaned, saa butikken lander paa sidste maaneds tal
-{ const v = new URLSearchParams(location.search).get('periode'); if (v && [...$('#periode').options].some(o => o.value === v)) $('#periode').value = v; }
+// ... eller med faste datoer (&fra=2026-09-01&til=2026-09-30), saa linket bliver ved med at vise den maaned
+{
+  const q = new URLSearchParams(location.search), v = q.get('periode'), dato = /^\d{4}-\d{2}-\d{2}$/;
+  if (dato.test(q.get('fra') || '') && dato.test(q.get('til') || '')) { $('#periode').value = 'valgfri'; $('#fraDato').value = q.get('fra'); $('#tilDato').value = q.get('til'); }
+  else if (v && v !== 'valgfri' && [...$('#periode').options].some(o => o.value === v)) $('#periode').value = v;
+  visDatoer();
+}
 if (window.top !== window || LINK) start().catch(() => vis(LINK ? 'ugyldigtLinkVis' : 'ingenAdgangVis'));
 </script>
 </body></html>
