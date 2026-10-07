@@ -564,3 +564,81 @@ $cron$);
 --   insert into public.some_adgang (bruger_id) select id from auth.users where email = '...';
 insert into public.some_adgang (bruger_id)
 select bruger_id from public.vagtplan_adgang on conflict do nothing;
+
+-- ---------- Rapporter: tekst fra den SoMe-ansvarlige til butikkerne ----------
+-- En rapport er en tekst (med emojis og linjeskift) laast til en periode. Den vises oeverst paa
+-- butikkens side og bestemmer, hvilken periode butikslinket aabner paa -- modtageren kan stadig
+-- vaelge en anden periode. butik_id null = faelles tekst til alle butikker. Én rapport pr.
+-- butik og periode. Kun den, der styrer SoMe-adgangen (kan_styre), kan skrive og slette.
+-- "Slet" skjuler kun rapporten (slettet_at), saa en fortrudt sletning kan hentes frem igen med SQL;
+-- gemmes der en ny rapport for samme butik og periode, tager den raekkens plads.
+create table if not exists public.some_rapporter (
+  id uuid primary key default gen_random_uuid(),
+  butik_id uuid references public.butikker(id) on delete cascade,
+  fra date not null,
+  til date not null,
+  titel text,
+  tekst text not null,
+  oprettet_at timestamptz not null default now(),
+  opdateret_at timestamptz not null default now(),
+  opdateret_af uuid,
+  slettet_at timestamptz,
+  check (til >= fra)
+);
+create unique index if not exists some_rapporter_unik
+  on public.some_rapporter (coalesce(butik_id, '00000000-0000-0000-0000-000000000000'::uuid), fra, til);
+alter table public.some_rapporter enable row level security;
+revoke all on public.some_rapporter from anon, authenticated;
+
+-- SoMe-fanen: alle rapporter (alle butikker + faelles), nyeste periode foerst
+create or replace function public.some_rapporter_hent()
+returns jsonb language sql stable security definer set search_path = public as $$
+  select case when public.har_some_adgang() then coalesce((
+    select jsonb_agg(jsonb_build_object('id', r.id, 'butik_id', r.butik_id, 'fra', r.fra, 'til', r.til, 'titel', r.titel,
+      'tekst', r.tekst, 'opdateret_at', r.opdateret_at) order by r.til desc, r.fra desc, r.opdateret_at desc)
+    from some_rapporter r where r.slettet_at is null), '[]'::jsonb) end;
+$$;
+revoke execute on function public.some_rapporter_hent() from public, anon;
+grant execute on function public.some_rapporter_hent() to authenticated;
+
+-- Butikslinket (uden login): butikkens egne rapporter + de faelles. Ugyldigt link giver null.
+create or replace function public.some_rapporter_link(p_noegle text)
+returns jsonb language sql stable security definer set search_path = public as $$
+  select coalesce((
+    select jsonb_agg(jsonb_build_object('id', r.id, 'butik_id', r.butik_id, 'fra', r.fra, 'til', r.til, 'titel', r.titel,
+      'tekst', r.tekst, 'opdateret_at', r.opdateret_at) order by r.til desc, r.fra desc, r.opdateret_at desc)
+    from some_rapporter r where r.slettet_at is null and (r.butik_id is null or r.butik_id = l.butik)), '[]'::jsonb)
+  from (select public.some_link_butik(p_noegle) as butik) l where l.butik is not null;
+$$;
+revoke execute on function public.some_rapporter_link(text) from public;
+grant execute on function public.some_rapporter_link(text) to anon, authenticated;
+
+create or replace function public.some_rapporter_gem(p_butik uuid, p_fra date, p_til date, p_titel text, p_tekst text)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare v_id uuid;
+begin
+  if not public.kan_styre_some() then raise exception 'Ingen adgang'; end if;
+  if p_fra is null or p_til is null or p_til < p_fra then raise exception 'Ugyldig periode'; end if;
+  if coalesce(btrim(p_tekst), '') = '' then raise exception 'Rapporten mangler tekst'; end if;
+  if length(p_tekst) > 8000 then raise exception 'Teksten er for lang (hoejst 8000 tegn)'; end if;
+  select id into v_id from some_rapporter where butik_id is not distinct from p_butik and fra = p_fra and til = p_til;
+  if v_id is null then
+    insert into some_rapporter (butik_id, fra, til, titel, tekst, opdateret_af)
+    values (p_butik, p_fra, p_til, nullif(btrim(p_titel), ''), p_tekst, auth.uid()) returning id into v_id;
+  else
+    update some_rapporter set titel = nullif(btrim(p_titel), ''), tekst = p_tekst, opdateret_at = now(), opdateret_af = auth.uid(), slettet_at = null
+    where id = v_id;
+  end if;
+  return v_id;
+end $$;
+revoke execute on function public.some_rapporter_gem(uuid, date, date, text, text) from public, anon;
+grant execute on function public.some_rapporter_gem(uuid, date, date, text, text) to authenticated;
+
+create or replace function public.some_rapporter_slet(p_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.kan_styre_some() then raise exception 'Ingen adgang'; end if;
+  update some_rapporter set slettet_at = now() where id = p_id;
+end $$;
+revoke execute on function public.some_rapporter_slet(uuid) from public, anon;
+grant execute on function public.some_rapporter_slet(uuid) to authenticated;
