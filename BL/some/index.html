@@ -121,6 +121,14 @@ td .lille.op,td .lille.ned{font-weight:600}
 .to.en{grid-template-columns:minmax(0,1fr)}
 .foelgerTal{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:0}
 .celle.tom{color:var(--felt)}
+/* De tre bedste tidspunkter: samme farve i feltet og i listen under kortet (tallet 1-3 staar
+   der ogsaa, saa det ikke kun er farven, der baerer det). Felter med faerre end 3 opslag er graa. */
+.celle.r1,.rang.r1{background:#15803d;color:#fff}
+.celle.r2,.rang.r2{background:#4ade80;color:#062b14}
+.celle.r3,.rang.r3{background:#bbf7d0;color:#062b14}
+.celle.r1,.celle.r2,.celle.r3{font-weight:700}
+.celle.faa{background:var(--gitter);color:var(--mut)}
+.rang{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;font-size:11px;font-weight:700;margin-right:8px;vertical-align:1px}
 .besked{background:var(--badge);color:var(--brand-tekst);border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:14px}
 .besked.fejl{background:var(--fejl-bg);color:var(--fejl)}
 @media (max-width:900px){.to{grid-template-columns:minmax(0,1fr)}}
@@ -410,7 +418,7 @@ function tegnSektioner() {
           <div class="kort-hoved"><h2>Bedste tidspunkter at poste <small>interaktioner pr. opslag i snit</small></h2></div>
           <div class="varmekort" data-p="${p}"></div>
           <ol class="bedst" data-p="${p}"></ol>
-          <div class="lille" style="margin-top:8px">– betyder, at der ikke er slået noget op i det tidsrum i perioden.</div>
+          <div class="lille" style="margin-top:8px">Grøn = de tre bedste tidspunkter. Grå tal = færre end 3 opslag, så de tæller ikke med. – = ingen opslag i perioden.</div>
         </div>
       </div>
     </section>`;
@@ -632,16 +640,24 @@ function tegnTider() {
       if (c) { c.antal += t.antal; c.inter += Number(t.interaktioner || 0); }
     });
     const snit = c => c.antal ? c.inter / c.antal : 0;
-    const maks = Math.max(1, ...celler.flat().map(snit));
+    // Et enkelt opslag der gik godt er ikke et moenster -- de tre bedste kraever mindst 3 opslag,
+    // og felter med faerre taeller hverken med i farveskalaen eller i top 3.
+    const NOK = 3;
+    const top = celler.flatMap((raekke, d) => raekke.map((c, b) => ({ d, b, c }))).filter(x => x.c.antal >= NOK).sort((a, z) => snit(z.c) - snit(a.c)).slice(0, 3);
+    const rang = (d, b) => top.findIndex(x => x.d === d && x.b === b) + 1;   // 1-3, eller 0
+    const maks = Math.max(1, ...celler.flat().filter(c => c.antal >= NOK).map(snit));
     let h = '<div></div>' + BLOKKE.map(b => `<div class="akse top">${blokNavn(b)}</div>`).join('');
     celler.forEach((raekke, d) => {
       h += `<div class="akse">${UGEDAGE[d].slice(0, 3)}</div>`;
       raekke.forEach((c, b) => {
         // Et tomt felt er ikke manglende data: der er bare ikke slaaet noget op i det tidsrum
         if (!c.antal) { h += `<div class="celle tom" title="${UGEDAGE[d]} kl. ${blokNavn(BLOKKE[b])}: ingen opslag i perioden">–</div>`; return; }
-        // Én farve fra lys til moerk: jo flere interaktioner pr. opslag, jo kraftigere
-        const styrke = Math.round(12 + 88 * snit(c) / maks);
-        h += `<button type="button" class="celle har" data-d="${d}" data-b="${b}" style="background:color-mix(in srgb, var(--varme) ${styrke}%, var(--card));color:${styrke > 55 ? 'var(--card)' : 'var(--fg)'}" aria-label="${UGEDAGE[d]} ${blokNavn(BLOKKE[b])}: ${tal(snit(c))} interaktioner pr. opslag, ${c.antal} opslag">${kortTal(Math.round(snit(c)))}</button>`;
+        const r = rang(d, b), tekst = `${UGEDAGE[d]} ${blokNavn(BLOKKE[b])}: ${tal(snit(c))} interaktioner pr. opslag, ${c.antal} opslag`;
+        if (r) { h += `<button type="button" class="celle har r${r}" data-d="${d}" data-b="${b}" aria-label="Nr. ${r}. ${tekst}">${kortTal(Math.round(snit(c)))}</button>`; return; }
+        if (c.antal < NOK) { h += `<button type="button" class="celle har faa" data-d="${d}" data-b="${b}" aria-label="${tekst} (for få til at tælle med)">${kortTal(Math.round(snit(c)))}</button>`; return; }
+        // Resten: én farve fra lys til moerk -- jo flere interaktioner pr. opslag, jo kraftigere
+        const styrke = Math.round(10 + 60 * Math.min(1, snit(c) / maks));
+        h += `<button type="button" class="celle har" data-d="${d}" data-b="${b}" style="background:color-mix(in srgb, var(--varme) ${styrke}%, var(--card));color:${styrke > 55 ? 'var(--card)' : 'var(--fg)'}" aria-label="${tekst}">${kortTal(Math.round(snit(c)))}</button>`;
       });
     });
     kort.innerHTML = h;
@@ -652,13 +668,12 @@ function tegnTider() {
         n.appendChild(el('div', 't-titel', UGEDAGE[k.dataset.d] + ' kl. ' + blokNavn(BLOKKE[k.dataset.b])));
         n.appendChild(tipLinje(null, 'Interaktioner pr. opslag', tal(snit(c))));
         n.appendChild(tipLinje(null, 'Opslag', tal(c.antal)));
+        if (c.antal < NOK) n.appendChild(el('div', 'lille', 'For få opslag til at tælle med i top 3'));
       });
     };
     kort.onpointerover = visCelle; kort.onfocusin = visCelle;
     kort.onpointerleave = skjulTip; kort.onfocusout = skjulTip;
-    // Et enkelt opslag der gik godt er ikke et moenster -- top 3 kraever mindst 3 opslag
-    const top = celler.flatMap((raekke, d) => raekke.map((c, b) => ({ d, b, c }))).filter(x => x.c.antal >= 3).sort((a, z) => snit(z.c) - snit(a.c)).slice(0, 3);
-    document.querySelector(`.bedst[data-p="${pf}"]`).innerHTML = top.map(x => `<li>${UGEDAGE[x.d]} kl. ${blokNavn(BLOKKE[x.b])}: <b>${tal(snit(x.c))}</b> interaktioner pr. opslag <span class="lille">(${x.c.antal} opslag)</span></li>`).join('')
+    document.querySelector(`.bedst[data-p="${pf}"]`).innerHTML = top.map((x, i) => `<li><span class="rang r${i + 1}">${i + 1}</span>${UGEDAGE[x.d]} kl. ${blokNavn(BLOKKE[x.b])}: <b>${tal(snit(x.c))}</b> interaktioner pr. opslag <span class="lille">(${x.c.antal} opslag)</span></li>`).join('')
       || '<li class="lille">Der er for få opslag i perioden til at pege på et bedste tidspunkt.</li>';
   });
 }
