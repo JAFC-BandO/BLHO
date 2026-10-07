@@ -396,7 +396,11 @@ async function hent() {
   // mens de findes for denne, kan de to ikke sammenlignes. Facebook har kun opslag at laegge
   // sammen (det ville give samme tal som "Visninger paa opslag"), saa dér er det sidens samlede
   // visninger fra Facebook selv -- ogsaa video, stories og aeldre opslag.
-  data.konti.forEach(k => {
+  beregnSamlede(data.konti);
+  tegn();
+}
+function beregnSamlede(konti) {
+  konti.forEach(k => {
     ['nu', 'foer'].forEach(t => {
       const dele = [k[t].opslag_visninger, k[t].reel_visninger, k[t].story_visninger];
       k[t].samlede_visninger = k.platform === 'facebook' ? k[t].visninger
@@ -404,7 +408,6 @@ async function hent() {
     });
     if (k.platform !== 'facebook' && k.nu.story_visninger != null && k.foer.story_visninger == null) k.foer.samlede_visninger = null;
   });
-  tegn();
 }
 
 function besked(tekst, fejl) {
@@ -631,36 +634,109 @@ function tegnEditorPeriode(status) {
 function tegnUdkastNote(besked) {
   const note = $('#udkastNote'); if (!note) return;
   const fortryd = !!foerUdkast && foerUdkast.noegle === rapNoegle();
-  note.innerHTML = esc(besked || (fortryd ? 'Udkastet er sat ind – læs det igennem, og ret det til, før du gemmer.' : 'AI-udkast skriver et forslag ud fra periodens tal og top-opslag, som du kan rette til.'))
+  note.innerHTML = esc(besked || (fortryd ? 'Udkastet er sat ind – læs det igennem, og ret det til, før du gemmer.' : 'AI-udkast læser alle periodens tal og opslag – og kædens tal til sammenligning – og skriver et forslag med ros og forbedringsforslag, som du kan rette til.'))
     + (fortryd ? ' <button type="button" class="linkknap" data-r="fortryd">Fortryd udkastet</button>' : '');
 }
-// Det, AI'en faar at skrive ud fra: de samme tal, som siden viser for perioden, og de mest sete opslag
+// Det, AI'en faar at skrive ud fra -- alt, hvad siden ved om butikken i perioden: noegletallene med
+// sammenligning, butikkens placering blandt kaedens butikker (og om kaeden har samme udvikling),
+// hvilke formater, tidspunkter og ugedage der virker, og alle periodens opslag med tal og tekst,
+// saa den kan se, hvilke emner der rammer. Til "alle butikker": kaedens tal og mest sete opslag.
 async function udkastKontekst(p) {
-  const linjer = [
-    'Modtager: ' + (butik ? butikNavnAf(butik) : 'alle butikker i kæden (tallene er for hele kæden lagt sammen)'),
-    'Periode: ' + periodeNavn(p.fra, p.til) + ' (' + nuTekst + ')',
-    forrigeTekst ? 'Der sammenlignes med ' + foerNavn().toLowerCase() + ' (' + forrigeTekst + ')' : 'Der er ingen tal at sammenligne med',
-  ];
   const pct = v => v.toLocaleString('da-DK', { maximumFractionDigits: 1, signDisplay: 'exceptZero' }) + ' %';
+  const hel = v => v == null ? '–' : Math.round(v).toLocaleString('da-DK');
+  const snit = (liste, f) => liste.length ? liste.reduce((a, x) => a + f(x), 0) / liste.length : null;
+  const median = v => { const t = v.slice().sort((a, b) => a - b), m = t.length >> 1; return !t.length ? null : t.length % 2 ? t[m] : (t[m - 1] + t[m]) / 2; };
+  const inter = x => (x.likes || 0) + (x.kommentarer || 0) + (x.delinger || 0);
+  const FORMAT = { added_photos: 'Billede', added_video: 'Video', FEED: 'Billede/karrusel', REELS: 'Reel' };
+  const formatAf = x => FORMAT[x.type] || 'Tekst/andet';
+  const blokNavn = ([a, z]) => 'kl. ' + String(a).padStart(2, '0') + '–' + String(z).padStart(2, '0');
+  const linjer = [
+    'MODTAGER: ' + (butik ? butikNavnAf(butik) : 'alle butikker i kæden (tallene er for hele kæden lagt sammen)'),
+    'PERIODE: ' + periodeNavn(p.fra, p.til) + ' (' + nuTekst + '), ' + p.dage + ' dage',
+    forrigeTekst ? 'SAMMENLIGNES MED ("før"): ' + foerNavn().toLowerCase() + ' (' + forrigeTekst + ')' : 'Der er ingen tal at sammenligne med.',
+  ];
+  // Hele kaeden i samme periode -- til at se, om butikkens udvikling er dens egen eller alles
+  let kaede = null;
+  if (butik) {
+    const { data: k } = await client.rpc('some_overblik2', { p_fra: p.fra, p_til: p.til, p_butik: null, p_f_fra: p.foerFra, p_f_til: p.foerTil });
+    if (k && Array.isArray(k.konti)) { beregnSamlede(k.konti); kaede = k.konti; }
+  }
   for (const pf of RAEKKEFOELGE) {
     const k = data.konti.filter(x => x.platform === pf);
     if (!k.length || !SEKTION[pf]) continue;
-    linjer.push('', PLATFORM[pf].toUpperCase());
-    [...SEKTION[pf].indsats, ...SEKTION[pf].resultat, ['Følgere', 'foelgere'], ['Nye følgere', 'nye_foelgere']].forEach(([navn, felt]) => {
+    const ord = pf === 'instagram' ? 'opslag og reels' : 'opslag';
+    linjer.push('', '=== ' + PLATFORM[pf].toUpperCase() + ' ===', 'Nøgletal (denne periode | før | ændring):');
+    [...SEKTION[pf].indsats, ...SEKTION[pf].resultat, ['Interaktioner på kontoen (reaktioner, kommentarer, delinger og klik)', 'interaktioner'], ['Følgere', 'foelgere'], ['Nye følgere', 'nye_foelgere']].forEach(([navn, felt]) => {
       const nu = sum(k, 'nu', felt) ?? (FRA_OPSLAG.includes(felt) ? 0 : null), c = sammenlign(k, felt);
-      linjer.push(navn + ': ' + tal(nu) + (c ? ' (før ' + tal(c.foer) + ', ændring ' + pct(c.pct) + ')' : ''));
+      linjer.push(`- ${navn}: ${tal(nu)} | ${c ? tal(c.foer) : '–'} | ${c ? pct(c.pct) : '–'}`);
     });
-    if (bedsteTider[pf] && bedsteTider[pf].length) linjer.push('Bedste tidspunkter at poste: ' + bedsteTider[pf].join('; '));
+    const st = sum(k, 'nu', 'stories'), stv = sum(k, 'nu', 'story_visninger'), fst = sum(k, 'foer', 'stories'), fstv = sum(k, 'foer', 'story_visninger');
+    if (st && stv != null) linjer.push(`- Visninger pr. story: ${hel(stv / st)} | ${fst && fstv != null ? hel(fstv / fst) : '–'}`);
+
+    // Butikkens placering blandt kaedens butikker, og udviklingen i butikken mod hele kaeden
+    const pr = new Map();
+    (kaede || []).filter(x => x.platform === pf && x.butik_id).forEach(x => { if (!pr.has(x.butik_id)) pr.set(x.butik_id, []); pr.get(x.butik_id).push(x); });
+    if (pr.size > 2 && pr.has(butik)) {
+      const prStk = (taeller, naevner) => kk => { const a = sum(kk, 'nu', naevner), v = sum(kk, 'nu', taeller); return a && v != null ? v / a : null; };
+      const maal = [
+        ['Antal opslag', kk => sum(kk, 'nu', 'opslag') ?? 0],
+        ['Visninger pr. opslag', prStk('opslag_visninger', 'opslag')],
+        ['Samlede visninger', kk => sum(kk, 'nu', 'samlede_visninger')],
+        ['Interaktioner på kontoen', kk => sum(kk, 'nu', 'interaktioner')],
+        ['Følgere', kk => sum(kk, 'nu', 'foelgere')],
+        ['Nye følgere', kk => sum(kk, 'nu', 'nye_foelgere')],
+        ...(pf === 'instagram' ? [['Antal reels', kk => sum(kk, 'nu', 'reels') ?? 0], ['Visninger pr. reel', prStk('reel_visninger', 'reels')],
+          ['Antal stories', kk => sum(kk, 'nu', 'stories')], ['Visninger pr. story', prStk('story_visninger', 'stories')]] : []),
+      ];
+      linjer.push(`Butikkens placering blandt kædens ${pr.size} butikker i samme periode (nr. 1 = højest):`);
+      maal.forEach(([navn, f]) => {
+        const v = [...pr.entries()].map(([b, kk]) => [b, f(kk)]).filter(x => x[1] != null), egen = v.find(x => x[0] === butik);
+        if (!egen || v.length < 3) return;
+        linjer.push(`- ${navn}: ${hel(egen[1])} – nr. ${v.filter(x => x[1] > egen[1]).length + 1} af ${v.length} (kædens median: ${hel(median(v.map(x => x[1])))})`);
+      });
+      const kaedeKonti = kaede.filter(x => x.platform === pf);
+      [['antal opslag', 'opslag'], ['visninger på opslag', 'opslag_visninger'], ['samlede visninger', 'samlede_visninger'], ['følgere', 'foelgere']].forEach(([navn, felt]) => {
+        const a = sammenlign(k, felt), b = sammenlign(kaedeKonti, felt);
+        if (a && b) linjer.push(`- Udvikling i ${navn}: butikken ${pct(a.pct)}, hele kæden ${pct(b.pct)}`);
+      });
+    }
+
+    // Periodens opslag (uden stories og begivenheder), mest sete foerst
     let q = client.from('some_opslag')
       .select('oprettet_at,type,tekst,likes,kommentarer,delinger,visninger,some_konti!inner(navn,platform,aktiv,butik_id)')
       .eq('some_konti.aktiv', true).eq('some_konti.platform', pf)
       .or('type.is.null,type.not.in.(STORY,created_event)')
       .gte('oprettet_at', tilDato(p.fra).toISOString()).lt('oprettet_at', tilDato(plusDage(p.til, 1)).toISOString())
-      .order('visninger', { ascending: false, nullsFirst: false }).limit(6);
+      .order('visninger', { ascending: false, nullsFirst: false }).limit(butik ? 1000 : 60);
     if (butik) q = q.eq('some_konti.butik_id', butik);
     const o = (await q).data || [];
-    if (o.length) linjer.push('De mest sete opslag (flest visninger først):');
-    o.forEach((x, i) => linjer.push(`${i + 1}. ${x.type === 'REELS' ? 'Reel' : 'Opslag'}${butik ? '' : ' fra ' + x.some_konti.navn}, ${new Date(x.oprettet_at).toLocaleString('da-DK', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}: ${tal(x.visninger)} visninger, ${tal(x.likes)} likes, ${tal(x.kommentarer)} kommentarer, ${tal(x.delinger)} delinger. Tekst: "${String(x.tekst || '(uden tekst)').replace(/\s+/g, ' ').slice(0, 320)}"`));
+    if (!o.length) { linjer.push('Ingen ' + ord + ' i perioden.'); continue; }
+    if (butik) {
+      // Moenstre: hvad et typisk opslag faar, hvor tit der slaas op, og hvilke formater og tidspunkter der klarer sig bedst
+      const medVis = o.filter(x => x.visninger != null), dage = new Map();
+      o.forEach(x => { const d = tilStreng(new Date(x.oprettet_at)); dage.set(d, (dage.get(d) || 0) + 1); });
+      linjer.push(`Et typisk opslag: ${hel(snit(medVis, x => Number(x.visninger)))} visninger i snit (median ${hel(median(medVis.map(x => Number(x.visninger))))}), ${tal(snit(o, inter))} likes+kommentarer+delinger i snit` + (o.length === 1000 ? ' (kun de 1.000 mest sete er med)' : ''));
+      linjer.push(`Rytme: ${tal(o.length / p.dage * 7)} ${ord} pr. uge; ${p.dage - dage.size} af periodens ${p.dage} dage uden ${ord}; flest på én dag: ${Math.max(...dage.values())}`);
+      const gruppe = (titel, noegle, orden) => {
+        const m = new Map();
+        o.forEach(x => { const n = noegle(x); if (!m.has(n)) m.set(n, []); m.get(n).push(x); });
+        linjer.push(titel + ' (antal · visninger pr. stk. i snit · likes+kommentarer+delinger pr. stk. i snit):');
+        [...m.entries()].sort((a, b) => orden ? orden.indexOf(a[0]) - orden.indexOf(b[0]) : b[1].length - a[1].length)
+          .forEach(([n, l]) => linjer.push(`- ${n}: ${l.length} · ${hel(snit(l.filter(x => x.visninger != null), x => Number(x.visninger)))} · ${tal(snit(l, inter))}`));
+      };
+      gruppe('Format', formatAf);
+      gruppe('Tidspunkt på dagen', x => { const t = new Date(x.oprettet_at).getHours(); return blokNavn(BLOKKE.find(([a, z]) => t >= a && t < z)); }, BLOKKE.map(blokNavn));
+      gruppe('Ugedag', x => UGEDAGE[(new Date(x.oprettet_at).getDay() + 6) % 7], UGEDAGE);
+    } else if (bedsteTider[pf] && bedsteTider[pf].length) linjer.push('Bedste tidspunkter at slå op på i kæden: ' + bedsteTider[pf].join('; '));
+    // Selve opslagene. Er der rigtig mange, vises de mest og de mindst sete (moenstrene ovenfor daekker dem alle)
+    const numre = o.length > 150 ? [...Array(120).keys(), ...Array.from({ length: 30 }, (_, i) => o.length - 30 + i)] : [...o.keys()];
+    const tegn = numre.length > 100 ? 130 : 200;
+    linjer.push((!butik ? `Kædens ${o.length} mest sete ${ord}` : numre.length < o.length ? `De 120 mest sete og de 30 mindst sete af periodens ${o.length} ${ord}` : `Alle periodens ${o.length} ${ord}, mest sete først`)
+      + ` (nr. · ${butik ? '' : 'butik · '}format · tidspunkt · visninger · likes · kommentarer · delinger · tekst):`);
+    numre.forEach(i => {
+      const x = o[i];
+      linjer.push(`${i + 1}. ${butik ? '' : x.some_konti.navn + ' · '}${formatAf(x)} · ${new Date(x.oprettet_at).toLocaleString('da-DK', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${hel(x.visninger)} · ${x.likes || 0} · ${x.kommentarer || 0} · ${x.delinger || 0} · "${String(x.tekst || '(uden tekst)').replace(/\s+/g, ' ').slice(0, tegn)}"`);
+    });
   }
   return linjer.join('\n');
 }
@@ -747,12 +823,12 @@ $('#rapportBoks').addEventListener('click', async e => {
     setTimeout(() => { if (k.isConnected) k.textContent = 'Kopiér link til butikken'; }, 2500);
   }
   else if (h === 'udkast') {
-    // AI'en (edge-funktionen some-udkast) skriver et forslag ud fra periodens tal og top-opslag.
+    // AI'en (edge-funktionen some-udkast) skriver et forslag ud fra alt, siden ved om perioden.
     // Det saettes ind i skrivefeltet -- intet gemmes, foer der trykkes "Gem rapport".
     if (n !== rapNoegle() || !data) return;
     const p = periode(), mislykket = 'Udkastet kunne ikke laves lige nu. Prøv igen om lidt.';
     k.disabled = true; k.textContent = '✨ Skriver udkast …';
-    tegnUdkastNote('Det tager typisk 10–30 sekunder …');
+    tegnUdkastNote('Læser periodens tal og opslag – det tager typisk 20–40 sekunder …');
     let ud = null, fejl = '';
     try {
       const { data: r, error } = await client.functions.invoke('some-udkast', { body: { kontekst: await udkastKontekst(p) } });
