@@ -154,6 +154,7 @@ td .lille.op,td .lille.ned{font-weight:600}
   </div>
 
   <div id="besked" class="besked" hidden></div>
+  <div class="lille" id="periodeTekst" style="font-size:12px;margin:-6px 0 4px"></div>
   <div id="sektioner"></div>
 
   <div class="kort">
@@ -227,6 +228,7 @@ let visning = 'butik';
 let sortering = { felt: 'samlede_visninger', ned: true };
 let opslagSort = 'visninger';   // top-opslag: 'visninger' | 'likes' | 'kommentarer'
 let tabelRaekker = [];      // det tabellen viser lige nu (til CSV)
+let forrigeTekst = '';      // "12. aug. – 8. sep." -- perioden, pilene sammenligner med
 
 function vis(id) { ['laeserVis', 'ingenAdgangVis', 'ugyldigtLinkVis', 'app'].forEach(x => { $('#' + x).hidden = x != id; }); }
 
@@ -342,6 +344,14 @@ function tegn() {
   $('#status').textContent = s && s.afsluttet_at ? 'Opdateret ' + new Date(s.afsluttet_at).toLocaleString('da-DK', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
   $('#status').classList.toggle('bad', !!s && s.ok === false);
 
+  // Sig lige ud, hvilke datoer der vises, og hvad pilene sammenligner med ("▼ 10 % fra 817.110"
+  // er det samme tal i perioden lige foer)
+  const p = periode(), iAar = new Date().getFullYear();
+  const dato = d => { const t = tilDato(d); return t.toLocaleDateString('da-DK', { day: 'numeric', month: 'short', year: t.getFullYear() === iAar ? undefined : 'numeric' }); };
+  forrigeTekst = harForrige() ? dato(p.foerFra) + ' – ' + dato(plusDage(p.fra, -1)) : '';
+  $('#periodeTekst').textContent = 'Viser ' + dato(p.fra) + ' – ' + dato(p.til) + '.' +
+    (forrigeTekst ? ' Pilene og "fra"-tallene sammenligner med perioden lige før: ' + forrigeTekst + '.' : '');
+
   tegnSektioner();
   tegnFoelgere();
   tegnGraf();
@@ -380,7 +390,7 @@ const SEKTION = {
 function kortHtml(konti, [navn, felt, hjaelp, hint]) {
   const nu = sum(konti, 'nu', felt) ?? (FRA_OPSLAG.includes(felt) && konti.length ? 0 : null), s = sammenlign(konti, felt);
   return `<div class="tal" title="${esc(hjaelp)}"><div class="navn">${esc(navn)}</div><div class="vaerdi">${nu != null && nu >= 1e6 ? kortTal(nu) : tal(nu)}</div>` +
-    `<div class="aendring">${s ? pctHtml(s.pct) + ' fra ' + tal(s.foer) + (s.uden ? `<br><span title="Ændringen er regnet uden ${esc(s.uden)}, fordi der ikke findes tal for forrige periode.">Ændring uden ${esc(s.uden)}</span>` : '') : '&nbsp;'}</div>` +
+    `<div class="aendring"${s ? ` title="${esc(tal(s.foer) + ' var tallet i perioden lige før (' + forrigeTekst + ')')}"` : ''}>${s ? pctHtml(s.pct) + ' fra ' + tal(s.foer) + (s.uden ? `<br><span title="Ændringen er regnet uden ${esc(s.uden)}, fordi der ikke findes tal for forrige periode.">Ændring uden ${esc(s.uden)}</span>` : '') : '&nbsp;'}</div>` +
     (hint ? `<div class="hint">${esc(hint)}</div>` : '') + '</div>';
 }
 function tegnSektioner() {
