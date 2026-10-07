@@ -108,10 +108,23 @@ td .lille.op,td .lille.ned{font-weight:600}
 .celle.har:hover,.celle.har:focus-visible{outline:2px solid var(--fg);outline-offset:0}
 .bedst{margin:12px 0 0;padding:0;list-style:none;font-size:13px}
 .bedst li{padding:2px 0}.bedst b{font-variant-numeric:tabular-nums}
+/* --- Sektion pr. platform: indsats og resultat, som i de maanedlige rapporter --- */
+.pf-titel{display:flex;align-items:center;gap:8px;font-size:17px;margin:22px 0 10px}
+.pf-titel .prik{width:12px;height:12px}
+.pf-tal{display:flex;flex-wrap:wrap;gap:12px 24px;margin-bottom:16px}
+.gruppe{min-width:0;flex:var(--n) 1 calc(var(--n) * 140px)}
+.gruppe h3{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin:0 0 6px;font-weight:700}
+.gruppe .noegletal{grid-template-columns:repeat(var(--n),minmax(0,1fr));margin-bottom:0}
+.pf[data-p="facebook"] .tal{border-top:3px solid var(--facebook)}
+.pf[data-p="instagram"] .tal{border-top:3px solid var(--instagram)}
+.tal .hint{font-size:11px;color:var(--mut);margin-top:2px}
+.to.en{grid-template-columns:minmax(0,1fr)}
+.foelgerTal{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:0}
+.celle.tom{color:var(--felt)}
 .besked{background:var(--badge);color:var(--brand-tekst);border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:14px}
 .besked.fejl{background:var(--fejl-bg);color:var(--fejl)}
 @media (max-width:900px){.to{grid-template-columns:minmax(0,1fr)}}
-@media (max-width:760px){.noegletal{grid-template-columns:repeat(2,minmax(0,1fr))}.indhold{padding:12px}.opslag{grid-template-columns:44px 1fr}.opslag img,.opslag .tom{width:44px;height:44px}.opslag .tal2{grid-column:2;text-align:left}}
+@media (max-width:760px){.noegletal,.gruppe .noegletal,.foelgerTal{grid-template-columns:repeat(2,minmax(0,1fr))}.gruppe{flex-basis:100%}.indhold{padding:12px}.opslag{grid-template-columns:44px 1fr}.opslag img,.opslag .tom{width:44px;height:44px}.opslag .tal2{grid-column:2;text-align:left}}
 @media (prefers-reduced-motion:reduce){.indhold{transition:none}}
 </style></head><body>
 
@@ -127,11 +140,12 @@ td .lille.op,td .lille.ned{font-weight:600}
       <button type="button" class="chip" data-o="faelles">Alle butikker</button>
     </span>
     <select id="butik" aria-label="Butik" hidden></select>
-    <span class="chips" id="platforme"></span>
     <select id="periode" aria-label="Periode">
       <option value="7">Seneste 7 dage</option>
       <option value="28" selected>Seneste 28 dage</option>
       <option value="90">Seneste 90 dage</option>
+      <option value="maaned">Sidste måned</option>
+      <option value="denne">Denne måned</option>
       <option value="aar">I år</option>
     </select>
     <span class="luft"></span>
@@ -140,7 +154,7 @@ td .lille.op,td .lille.ned{font-weight:600}
   </div>
 
   <div id="besked" class="besked" hidden></div>
-  <div class="noegletal" id="noegletal"></div>
+  <div id="sektioner"></div>
 
   <div class="kort">
     <div class="kort-hoved">
@@ -151,6 +165,11 @@ td .lille.op,td .lille.ned{font-weight:600}
     </div>
     <div id="graf"></div>
     <details class="tabelvisning"><summary>Vis tallene som tabel</summary><div class="rul"><table id="grafTabel"></table></div></details>
+  </div>
+
+  <div class="kort">
+    <div class="kort-hoved"><h2>Følgere</h2></div>
+    <div class="noegletal foelgerTal" id="foelgerTal"></div>
   </div>
 
   <div class="kort">
@@ -166,25 +185,6 @@ td .lille.op,td .lille.ned{font-weight:600}
     <div class="rul"><table id="konti"></table></div>
   </div>
 
-  <div class="to">
-    <div class="kort" id="opslagKort">
-      <div class="kort-hoved">
-        <h2>Top-opslag</h2>
-        <span class="luft"></span>
-        <select id="opslagSort" aria-label="Sortér top-opslag">
-          <option value="likes">Flest likes</option>
-          <option value="kommentarer">Flest kommentarer</option>
-          <option value="visninger">Flest visninger</option>
-        </select>
-      </div>
-      <div id="opslag"></div>
-    </div>
-    <div class="kort">
-      <div class="kort-hoved"><h2>Hvornår klarer opslag sig bedst? <small>interaktioner pr. opslag i snit</small></h2></div>
-      <div class="varmekort" id="varmekort"></div>
-      <ol class="bedst" id="bedst"></ol>
-    </div>
-  </div>
 </div>
 <div id="tip" hidden></div>
 
@@ -224,17 +224,28 @@ let data = null;            // svaret fra some_overblik / some_rapport
 let platform = 'alle';
 let metrik = 'visninger';
 let visning = 'butik';
-let sortering = { felt: 'foelgere', ned: true };
+let sortering = { felt: 'visninger', ned: true };
+let opslagSort = 'visninger';   // top-opslag: 'visninger' | 'likes' | 'kommentarer'
 let tabelRaekker = [];      // det tabellen viser lige nu (til CSV)
 
 function vis(id) { ['laeserVis', 'ingenAdgangVis', 'ugyldigtLinkVis', 'app'].forEach(x => { $('#' + x).hidden = x != id; }); }
 
-// Perioden slutter i gaar: dagens tal er ikke faerdige foer i morgen.
+// Perioden slutter i gaar: dagens tal er ikke faerdige foer i morgen. Forrige periode er lige
+// saa mange dage lige foer -- eller hele maaneden foer, naar perioden er en hel kalendermaaned
+// (som i de maanedlige rapporter). Serveren bruger samme regel (some_oversigt_kerne).
 function periode() {
-  const til = new Date(); til.setDate(til.getDate() - 1);
+  const idag = new Date();
+  let til = new Date(idag.getFullYear(), idag.getMonth(), idag.getDate() - 1), fra;
   const v = $('#periode').value;
-  const fra = v === 'aar' ? new Date(til.getFullYear(), 0, 1) : new Date(til.getFullYear(), til.getMonth(), til.getDate() - (Number(v) - 1));
-  return { fra: tilStreng(fra), til: tilStreng(til), dage: Math.round((til - fra) / 864e5) + 1 };
+  if (v === 'maaned') { fra = new Date(idag.getFullYear(), idag.getMonth() - 1, 1); til = new Date(idag.getFullYear(), idag.getMonth(), 0); }
+  else if (v === 'denne') fra = new Date(til.getFullYear(), til.getMonth(), 1);
+  else if (v === 'aar') fra = new Date(til.getFullYear(), 0, 1);
+  else fra = new Date(til.getFullYear(), til.getMonth(), til.getDate() - (Number(v) - 1));
+  const dage = Math.round((til - fra) / 864e5) + 1;
+  const helMaaned = fra.getDate() === 1 && fra.getMonth() === til.getMonth() && fra.getFullYear() === til.getFullYear()
+    && new Date(til.getFullYear(), til.getMonth(), til.getDate() + 1).getDate() === 1;
+  const foerFra = helMaaned ? new Date(fra.getFullYear(), fra.getMonth() - 1, 1) : new Date(fra.getFullYear(), fra.getMonth(), fra.getDate() - dage);
+  return { fra: tilStreng(fra), til: tilStreng(til), dage, foerFra: tilStreng(foerFra), forskyd: -Math.round((fra - foerFra) / 864e5) };
 }
 
 // Mens der hentes, bliver den gamle visning staaende (lidt nedtonet), saa siden ikke hopper.
@@ -242,7 +253,7 @@ async function hent() {
   const p = periode();
   $('#app').classList.add('henter');
   const { data: d, error } = LINK
-    ? await client.rpc('some_rapport', { p_noegle: LINK, p_fra: p.fra, p_til: p.til, p_omfang: omfang, p_sort: $('#opslagSort').value })
+    ? await client.rpc('some_rapport', { p_noegle: LINK, p_fra: p.fra, p_til: p.til, p_omfang: omfang, p_sort: opslagSort })
     : await client.rpc('some_overblik', { p_fra: p.fra, p_til: p.til, p_butik: butik });
   $('#app').classList.remove('henter');
   if (error) { besked('Tallene kunne ikke hentes. Prøv igen om lidt.', true); return; }
@@ -263,16 +274,14 @@ const sum = (konti, tid, felt) => { let s = null; konti.forEach(k => { const v =
 // sammenlignes en fuld periode med et par dage, og procenterne bliver meningsloese.
 function harForrige() {
   const p = periode();
-  return !!data.foerste_dato && data.foerste_dato <= plusDage(p.fra, -p.dage);
+  return !!data.foerste_dato && data.foerste_dato <= p.foerFra;
 }
 // Sammenligner kun de konti, der har tal i BEGGE perioder -- ellers ligner det en stor
 // stigning, naar en konto bare mangler historik (fx Instagrams foelgertal, som Meta kun
 // udleverer 30 dage tilbage). Tal der taelles ud fra opslag (opslag, likes, kommentarer) er
 // noget andet: ingen opslag i forrige periode er et rigtigt 0, ikke manglende historik.
-const FRA_OPSLAG = ['opslag', 'likes', 'kommentarer', 'delinger'];
-// Stories findes kun 24 timer hos Meta og kan ikke hentes bagud -- tallene begynder denne dag.
-const STORIES_FRA = '2026-10-06';
-// (stories er ikke med: foer indsamlingen af dem begyndte, betyder 'ingen' manglende historik)
+const FRA_OPSLAG = ['opslag', 'reels', 'opslag_visninger', 'reel_visninger', 'likes', 'kommentarer', 'delinger'];
+// (stories er ikke med: for en konto uden historik betyder 'ingen' manglende tal, ikke nul)
 function sammenlign(konti, felt) {
   if (!harForrige()) return null;
   const nul = FRA_OPSLAG.includes(felt);
@@ -296,10 +305,6 @@ function pctHtml(p) {
 }
 
 function tegn() {
-  const findes = RAEKKEFOELGE.filter(p => data.konti.some(k => k.platform === p));
-  if (platform !== 'alle' && !findes.includes(platform)) platform = 'alle';
-  $('#platforme').innerHTML = ['alle', ...findes].map(p => `<button type="button" class="chip${p === platform ? ' aktiv' : ''}" data-p="${p}">${p === 'alle' ? 'Alle' : PLATFORM[p]}</button>`).join('');
-  $('#platforme').hidden = findes.length < 2;
   $('#metrikker').innerHTML = Object.entries(METRIK).map(([k, n]) => `<button type="button" class="chip${k === metrik ? ' aktiv' : ''}" data-m="${k}">${n}</button>`).join('');
 
   // Overskrift og valg af butik
@@ -309,7 +314,6 @@ function tegn() {
     $('#omfang').hidden = false;
     $('#omfang').querySelector('[data-o="egen"]').textContent = butikNavn(data.butik);
     $('#opdater').hidden = true;
-    $('#opslagKort').hidden = omfang === 'faelles';
   } else {
     const valg = $('#butik'), liste = data.butikker || [];
     valg.hidden = liste.length < 2;
@@ -328,27 +332,77 @@ function tegn() {
   $('#status').textContent = s && s.afsluttet_at ? 'Opdateret ' + new Date(s.afsluttet_at).toLocaleString('da-DK', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
   $('#status').classList.toggle('bad', !!s && s.ok === false);
 
-  const k = valgte();
-  const kort = [
-    ['Følgere', 'foelgere', 'Antal følgere lige nu'], ['Nye følgere', 'nye_foelgere', 'Nye følgere i perioden'],
-    ['Opslag', 'opslag', 'Opslag slået op i perioden'], ['Visninger', 'visninger', 'Hvor mange gange indholdet er blevet vist'],
-    ['Rækkevidde', 'raekkevidde', 'Antal personer nået pr. dag, lagt sammen. Den samme person tæller med hver dag, hun ser noget.'],
-    ['Interaktioner', 'interaktioner', 'Reaktioner, kommentarer, delinger og klik'],
-    ['Reaktioner og likes', 'likes', 'På opslag slået op i perioden'], ['Kommentarer', 'kommentarer', 'På opslag slået op i perioden'],
-    ['Stories', 'stories', 'Instagram-stories slået op i perioden. Samles ind fra den dag, indsamlingen blev sat op.'],
-    ['Story-visninger', 'story_visninger', 'Visninger af de stories, der er slået op i perioden'],
-  ];
-  $('#noegletal').innerHTML = kort.map(([navn, felt, hjaelp]) => {
-    const nu = sum(k, 'nu', felt), s = sammenlign(k, felt);
-    return `<div class="tal" title="${esc(hjaelp)}"><div class="navn">${navn}</div><div class="vaerdi">${nu != null && nu >= 1e6 ? kortTal(nu) : tal(nu)}</div>` +
-      `<div class="aendring">${s ? pctHtml(s.pct) + ' fra ' + tal(s.foer) + (s.uden ? `<br><span title="Ændringen er regnet uden ${esc(s.uden)}, fordi der ikke findes tal for forrige periode. Meta udleverer kun Instagrams følgertal 30 dage tilbage, så de bygges op dag for dag fra indsamlingens start.">Ændring uden ${esc(s.uden)}: ingen tal for forrige periode</span>` : '')
-        : felt.startsWith('stor') && nu != null ? 'Siden ' + datoKort(tilDato(STORIES_FRA)) + ' – ingen forrige periode endnu' : '&nbsp;'}</div></div>`;
-  }).join('');
-
+  tegnSektioner();
+  tegnFoelgere();
   tegnGraf();
   tegnKonti();
   tegnTider();
   hentOpslag();
+}
+
+// ---------- Indsats og resultat pr. platform ----------
+// Kortene foelger de maanedlige rapporter, butikkerne plejer at faa: indsats (hvad der er slaaet
+// op) og resultat (hvad det gav). Opslag, reels og stories taelles hver for sig, og visningerne
+// er dem, indholdet fra perioden har faaet. "Samlede visninger" er hele kontoens visninger i
+// perioden (ogsaa af aeldre indhold) -- det samme tal som grafen viser dag for dag.
+const SEKTION = {
+  facebook: {
+    indsats: [['Antal opslag', 'opslag', 'Opslag slået op i perioden. Begivenheder tæller ikke med.']],
+    resultat: [
+      ['Visninger på opslag', 'opslag_visninger', 'Visninger af de opslag, der er slået op i perioden'],
+      ['Samlede visninger', 'visninger', 'Alle visninger på siden i perioden – også af ældre opslag, video og stories', 'Hele siden – også ældre opslag'],
+    ],
+  },
+  instagram: {
+    indsats: [
+      ['Antal opslag', 'opslag', 'Billeder og karruseller slået op i perioden'],
+      ['Antal reels', 'reels', 'Reels slået op i perioden'],
+      ['Antal stories', 'stories', 'Stories slået op i perioden'],
+    ],
+    resultat: [
+      ['Visninger på opslag', 'opslag_visninger', 'Visninger af de billeder og karruseller, der er slået op i perioden'],
+      ['Visninger på reels', 'reel_visninger', 'Visninger af de reels, der er slået op i perioden'],
+      ['Visninger på stories', 'story_visninger', 'Visninger af de stories, der er slået op i perioden'],
+      ['Samlede visninger', 'visninger', 'Alle visninger på kontoen i perioden – også af ældre indhold', 'Hele kontoen – også ældre indhold'],
+    ],
+  },
+};
+function kortHtml(konti, [navn, felt, hjaelp, hint]) {
+  const nu = sum(konti, 'nu', felt) ?? (FRA_OPSLAG.includes(felt) && konti.length ? 0 : null), s = sammenlign(konti, felt);
+  return `<div class="tal" title="${esc(hjaelp)}"><div class="navn">${esc(navn)}</div><div class="vaerdi">${nu != null && nu >= 1e6 ? kortTal(nu) : tal(nu)}</div>` +
+    `<div class="aendring">${s ? pctHtml(s.pct) + ' fra ' + tal(s.foer) + (s.uden ? `<br><span title="Ændringen er regnet uden ${esc(s.uden)}, fordi der ikke findes tal for forrige periode.">Ændring uden ${esc(s.uden)}</span>` : '') : '&nbsp;'}</div>` +
+    (hint ? `<div class="hint">${esc(hint)}</div>` : '') + '</div>';
+}
+function tegnSektioner() {
+  // Butikslinkets "Alle butikker" viser kun samlede tal -- ingen enkelte opslag fra andre butikker
+  const visOpslag = !(LINK && omfang === 'faelles');
+  const sortValg = '<select class="opslagSort" aria-label="Sortér top-opslag">' + [['visninger', 'Flest visninger'], ['likes', 'Flest likes'], ['kommentarer', 'Flest kommentarer']]
+    .map(([v, n]) => `<option value="${v}"${v === opslagSort ? ' selected' : ''}>${n}</option>`).join('') + '</select>';
+  $('#sektioner').innerHTML = RAEKKEFOELGE.filter(p => SEKTION[p] && data.konti.some(k => k.platform === p)).map(p => {
+    const k = data.konti.filter(x => x.platform === p), s = SEKTION[p];
+    const gruppe = (titel, liste) => `<div class="gruppe" style="--n:${liste.length}"><h3>${titel}</h3><div class="noegletal">${liste.map(x => kortHtml(k, x)).join('')}</div></div>`;
+    return `<section class="pf" data-p="${p}">
+      <h2 class="pf-titel"><span class="prik ${p}"></span>${PLATFORM[p]}</h2>
+      <div class="pf-tal">${gruppe('Indsats', s.indsats)}${gruppe('Resultat', s.resultat)}</div>
+      <div class="to${visOpslag ? '' : ' en'}">
+        ${visOpslag ? `<div class="kort"><div class="kort-hoved"><h2>Top-opslag</h2><span class="luft"></span>${sortValg}</div><div class="opslagListe" data-p="${p}"></div></div>` : ''}
+        <div class="kort">
+          <div class="kort-hoved"><h2>Bedste tidspunkter at poste <small>interaktioner pr. opslag i snit</small></h2></div>
+          <div class="varmekort" data-p="${p}"></div>
+          <ol class="bedst" data-p="${p}"></ol>
+          <div class="lille" style="margin-top:8px">– betyder, at der ikke er slået noget op i det tidsrum i perioden.</div>
+        </div>
+      </div>
+    </section>`;
+  }).join('');
+}
+// Foelgere er sekundaert og staar derfor laengere nede, pr. platform
+function tegnFoelgere() {
+  $('#foelgerTal').innerHTML = RAEKKEFOELGE.filter(p => data.konti.some(k => k.platform === p)).flatMap(p => {
+    const k = data.konti.filter(x => x.platform === p);
+    return [kortHtml(k, [PLATFORM[p] + ': følgere', 'foelgere', 'Antal følgere ved periodens slutning']),
+      kortHtml(k, [PLATFORM[p] + ': nye følgere', 'nye_foelgere', 'Nye følgere i perioden'])];
+  }).join('');
 }
 
 // ---------- Fælles tooltip (graf og varmekort) ----------
@@ -384,9 +438,9 @@ function grafData() {
   const nu = opslag(data.serie), foer = opslag(data.serie_foer);
   const har = harForrige();
   const raekke = (m, x, forskyd) => dage.map(d => { const n = m.get(x + '|' + plusDage(d, forskyd)); return n == null ? null : Number(n); });
-  const serier = pl.map(x => ({ id: x, navn: PLATFORM[x], farve: `var(--${x})`, v: raekke(nu, x, 0), f: har ? raekke(foer, x, -p.dage) : null }));
+  const serier = pl.map(x => ({ id: x, navn: PLATFORM[x], farve: `var(--${x})`, v: raekke(nu, x, 0), f: har ? raekke(foer, x, p.forskyd) : null }));
   const saml = (m, forskyd) => dage.map(d => { let s = null; pl.forEach(x => { const n = m.get(x + '|' + plusDage(d, forskyd)); if (n != null) s = (s || 0) + Number(n); }); return s; });
-  return { dage, serier, total: saml(nu, 0), forrige: har ? saml(foer, -p.dage) : null, forskyd: -p.dage };
+  return { dage, serier, total: saml(nu, 0), forrige: har ? saml(foer, p.forskyd) : null, forskyd: p.forskyd };
 }
 function paenTop(maks) {
   if (!(maks > 0)) return 4;
@@ -476,7 +530,7 @@ function skjulPunkt() {
 }
 
 // ---------- Butikker og konti ----------
-const KOL = [['Følgere', 'foelgere'], ['Nye følgere', 'nye_foelgere'], ['Opslag', 'opslag'], ['Visninger', 'visninger'], ['Interaktioner', 'interaktioner'], ['Likes', 'likes'], ['Kommentarer', 'kommentarer']];
+const KOL = [['Opslag', 'opslag'], ['Reels', 'reels'], ['Stories', 'stories'], ['Visninger', 'visninger'], ['Interaktioner', 'interaktioner'], ['Følgere', 'foelgere'], ['Nye følgere', 'nye_foelgere']];
 function tegnKonti() {
   const k = valgte();
   let r;
@@ -515,77 +569,82 @@ function hentCsv() {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-// ---------- Top-opslag ----------
+// ---------- Top-opslag (pr. platform) ----------
 async function hentOpslag() {
-  const p = periode(), felt = $('#opslagSort').value;
-  let o;
-  if (LINK) {
-    // Butikslinket faar sine top-opslag med i svaret fra serveren (det kan ikke laese tabellen selv)
-    o = (data.opslag || []).filter(x => platform === 'alle' || x.some_konti.platform === platform).slice(0, 8);
-  } else {
-    let q = client.from('some_opslag')
-      .select('ekstern_id,oprettet_at,tekst,permalink,billede_url,likes,kommentarer,delinger,visninger,some_konti!inner(navn,platform,aktiv,butik_id)')
-      .eq('some_konti.aktiv', true)
-      .or('type.is.null,type.neq.STORY')
-      .gte('oprettet_at', p.fra).lt('oprettet_at', plusDage(p.til, 1))
-      .order(felt, { ascending: false, nullsFirst: false }).limit(8);
-    if (platform !== 'alle') q = q.eq('some_konti.platform', platform);
-    if (butik) q = q.eq('some_konti.butik_id', butik);
-    o = (await q).data;
-  }
-  $('#opslag').innerHTML = (o || []).map(x => {
-    const inter = (x.likes || 0) + (x.kommentarer || 0) + (x.delinger || 0);
-    const rate = x.visninger ? ` · ${(inter / x.visninger * 100).toLocaleString('da-DK', { maximumFractionDigits: 1 })}% engagement` : '';
-    return `<div class="opslag">
-    ${x.billede_url ? `<img src="${esc(x.billede_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML='<div class=tom></div>'">` : '<div class="tom"></div>'}
-    <a href="${esc(/^https:\/\//.test(x.permalink || '') ? x.permalink : '#')}" target="_blank" rel="noopener"><div class="lille"><span class="prik ${x.some_konti.platform}"></span> ${esc(x.some_konti.navn)}, ${datoKort(new Date(x.oprettet_at))}</div><div class="tekst">${esc(x.tekst || '(uden tekst)')}</div></a>
-    <div class="tal2"><b>${tal(x.likes)}</b> likes · ${tal(x.kommentarer)} komm.<br>${x.visninger != null ? kortTal(x.visninger) + ' visninger' + rate : '&nbsp;'}</div>
-  </div>`; }).join('') || '<div class="lille">Ingen opslag i perioden endnu.</div>';
+  const p = periode();
+  await Promise.all([...document.querySelectorAll('.opslagListe')].map(async boks => {
+    const pf = boks.dataset.p;
+    let o;
+    if (LINK) {
+      // Butikslinket faar sine top-opslag med i svaret fra serveren (det kan ikke laese tabellen selv)
+      o = (data.opslag || []).filter(x => x.some_konti.platform === pf).slice(0, 5);
+    } else {
+      // Danske dage, og samme afgraensning som kortene: stories og begivenheder er ikke opslag
+      let q = client.from('some_opslag')
+        .select('ekstern_id,oprettet_at,tekst,permalink,billede_url,likes,kommentarer,delinger,visninger,some_konti!inner(navn,platform,aktiv,butik_id)')
+        .eq('some_konti.aktiv', true).eq('some_konti.platform', pf)
+        .or('type.is.null,type.not.in.(STORY,created_event)')
+        .gte('oprettet_at', tilDato(p.fra).toISOString()).lt('oprettet_at', tilDato(plusDage(p.til, 1)).toISOString())
+        .order(opslagSort, { ascending: false, nullsFirst: false }).limit(5);
+      if (butik) q = q.eq('some_konti.butik_id', butik);
+      o = (await q).data;
+    }
+    boks.innerHTML = (o || []).map(x => {
+      const inter = (x.likes || 0) + (x.kommentarer || 0) + (x.delinger || 0);
+      const rate = x.visninger ? ` · ${(inter / x.visninger * 100).toLocaleString('da-DK', { maximumFractionDigits: 1 })}% engagement` : '';
+      return `<div class="opslag">
+      ${x.billede_url ? `<img src="${esc(x.billede_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML='<div class=tom></div>'">` : '<div class="tom"></div>'}
+      <a href="${esc(/^https:\/\//.test(x.permalink || '') ? x.permalink : '#')}" target="_blank" rel="noopener"><div class="lille">${esc(x.some_konti.navn)}, ${datoKort(new Date(x.oprettet_at))}</div><div class="tekst">${esc(x.tekst || '(uden tekst)')}</div></a>
+      <div class="tal2"><b>${x.visninger != null ? kortTal(x.visninger) : '–'}</b> visninger<br>${tal(x.likes)} likes · ${tal(x.kommentarer)} komm.${rate}</div>
+    </div>`; }).join('') || '<div class="lille">Ingen opslag i perioden endnu.</div>';
+  }));
 }
 
-// ---------- Hvornår klarer opslag sig bedst? ----------
+// ---------- Bedste tidspunkter at poste (pr. platform) ----------
 function tegnTider() {
-  const celler = UGEDAGE.map(() => BLOKKE.map(() => ({ antal: 0, inter: 0 })));
-  data.tider.forEach(t => {
-    if (platform !== 'alle' && t.platform !== platform) return;
-    const b = BLOKKE.findIndex(([a, z]) => t.time >= a && t.time < z), c = celler[t.ugedag - 1] && celler[t.ugedag - 1][b];
-    if (c) { c.antal += t.antal; c.inter += Number(t.interaktioner || 0); }
-  });
-  const snit = c => c.antal ? c.inter / c.antal : 0;
-  const maks = Math.max(1, ...celler.flat().map(snit));
   const blokNavn = ([a, z]) => String(a).padStart(2, '0') + '–' + String(z).padStart(2, '0');
-  let h = '<div></div>' + BLOKKE.map(b => `<div class="akse top">${blokNavn(b)}</div>`).join('');
-  celler.forEach((raekke, d) => {
-    h += `<div class="akse">${UGEDAGE[d].slice(0, 3)}</div>`;
-    raekke.forEach((c, b) => {
-      if (!c.antal) { h += '<div class="celle"></div>'; return; }
-      // Én farve fra lys til moerk: jo flere interaktioner pr. opslag, jo kraftigere
-      const styrke = Math.round(12 + 88 * snit(c) / maks);
-      h += `<button type="button" class="celle har" data-d="${d}" data-b="${b}" style="background:color-mix(in srgb, var(--varme) ${styrke}%, var(--card));color:${styrke > 55 ? 'var(--card)' : 'var(--fg)'}" aria-label="${UGEDAGE[d]} ${blokNavn(BLOKKE[b])}: ${tal(snit(c))} interaktioner pr. opslag, ${c.antal} opslag">${kortTal(Math.round(snit(c)))}</button>`;
+  document.querySelectorAll('.varmekort[data-p]').forEach(kort => {
+    const pf = kort.dataset.p;
+    const celler = UGEDAGE.map(() => BLOKKE.map(() => ({ antal: 0, inter: 0 })));
+    data.tider.forEach(t => {
+      if (t.platform !== pf) return;
+      const b = BLOKKE.findIndex(([a, z]) => t.time >= a && t.time < z), c = celler[t.ugedag - 1] && celler[t.ugedag - 1][b];
+      if (c) { c.antal += t.antal; c.inter += Number(t.interaktioner || 0); }
     });
+    const snit = c => c.antal ? c.inter / c.antal : 0;
+    const maks = Math.max(1, ...celler.flat().map(snit));
+    let h = '<div></div>' + BLOKKE.map(b => `<div class="akse top">${blokNavn(b)}</div>`).join('');
+    celler.forEach((raekke, d) => {
+      h += `<div class="akse">${UGEDAGE[d].slice(0, 3)}</div>`;
+      raekke.forEach((c, b) => {
+        // Et tomt felt er ikke manglende data: der er bare ikke slaaet noget op i det tidsrum
+        if (!c.antal) { h += `<div class="celle tom" title="${UGEDAGE[d]} kl. ${blokNavn(BLOKKE[b])}: ingen opslag i perioden">–</div>`; return; }
+        // Én farve fra lys til moerk: jo flere interaktioner pr. opslag, jo kraftigere
+        const styrke = Math.round(12 + 88 * snit(c) / maks);
+        h += `<button type="button" class="celle har" data-d="${d}" data-b="${b}" style="background:color-mix(in srgb, var(--varme) ${styrke}%, var(--card));color:${styrke > 55 ? 'var(--card)' : 'var(--fg)'}" aria-label="${UGEDAGE[d]} ${blokNavn(BLOKKE[b])}: ${tal(snit(c))} interaktioner pr. opslag, ${c.antal} opslag">${kortTal(Math.round(snit(c)))}</button>`;
+      });
+    });
+    kort.innerHTML = h;
+    const visCelle = e => {
+      const k = e.target.closest('.celle.har'); if (!k) return;
+      const c = celler[k.dataset.d][k.dataset.b], r = k.getBoundingClientRect();
+      visTip(r.right - 6, r.top + r.height / 2, n => {
+        n.appendChild(el('div', 't-titel', UGEDAGE[k.dataset.d] + ' kl. ' + blokNavn(BLOKKE[k.dataset.b])));
+        n.appendChild(tipLinje(null, 'Interaktioner pr. opslag', tal(snit(c))));
+        n.appendChild(tipLinje(null, 'Opslag', tal(c.antal)));
+      });
+    };
+    kort.onpointerover = visCelle; kort.onfocusin = visCelle;
+    kort.onpointerleave = skjulTip; kort.onfocusout = skjulTip;
+    // Et enkelt opslag der gik godt er ikke et moenster -- top 3 kraever mindst 3 opslag
+    const top = celler.flatMap((raekke, d) => raekke.map((c, b) => ({ d, b, c }))).filter(x => x.c.antal >= 3).sort((a, z) => snit(z.c) - snit(a.c)).slice(0, 3);
+    document.querySelector(`.bedst[data-p="${pf}"]`).innerHTML = top.map(x => `<li>${UGEDAGE[x.d]} kl. ${blokNavn(BLOKKE[x.b])}: <b>${tal(snit(x.c))}</b> interaktioner pr. opslag <span class="lille">(${x.c.antal} opslag)</span></li>`).join('')
+      || '<li class="lille">Der er for få opslag i perioden til at pege på et bedste tidspunkt.</li>';
   });
-  const kort = $('#varmekort');
-  kort.innerHTML = h;
-  const visCelle = e => {
-    const k = e.target.closest('.celle.har'); if (!k) return;
-    const c = celler[k.dataset.d][k.dataset.b], r = k.getBoundingClientRect();
-    visTip(r.right - 6, r.top + r.height / 2, n => {
-      n.appendChild(el('div', 't-titel', UGEDAGE[k.dataset.d] + ' kl. ' + blokNavn(BLOKKE[k.dataset.b])));
-      n.appendChild(tipLinje(null, 'Interaktioner pr. opslag', tal(snit(c))));
-      n.appendChild(tipLinje(null, 'Opslag', tal(c.antal)));
-    });
-  };
-  kort.onpointerover = visCelle; kort.onfocusin = visCelle;
-  kort.onpointerleave = skjulTip; kort.onfocusout = skjulTip;
-  // Et enkelt opslag der gik godt er ikke et moenster -- top 3 kraever mindst 3 opslag
-  const top = celler.flatMap((raekke, d) => raekke.map((c, b) => ({ d, b, c }))).filter(x => x.c.antal >= 3).sort((a, z) => snit(z.c) - snit(a.c)).slice(0, 3);
-  $('#bedst').innerHTML = top.map(x => `<li>${UGEDAGE[x.d]} kl. ${blokNavn(BLOKKE[x.b])}: <b>${tal(snit(x.c))}</b> interaktioner pr. opslag <span class="lille">(${x.c.antal} opslag)</span></li>`).join('')
-    || '<li class="lille">Der er for få opslag i perioden til at pege på et bedste tidspunkt.</li>';
 }
 
 // ---------- Betjening ----------
 $('#periode').addEventListener('change', hent);
-$('#platforme').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; platform = b.dataset.p; tegn(); });
 $('#metrikker').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; metrik = b.dataset.m; $('#metrikker').querySelectorAll('.chip').forEach(c => c.classList.toggle('aktiv', c === b)); tegnGraf(); });
 $('#visninger').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; visning = b.dataset.v; $('#visninger').querySelectorAll('.chip').forEach(c => c.classList.toggle('aktiv', c === b)); tegnKonti(); });
 $('#konti').addEventListener('click', e => {
@@ -594,7 +653,12 @@ $('#konti').addEventListener('click', e => {
   tegnKonti();
 });
 $('#csv').addEventListener('click', hentCsv);
-$('#opslagSort').addEventListener('change', () => LINK ? hent() : hentOpslag());
+$('#sektioner').addEventListener('change', e => {
+  const v = e.target.closest('.opslagSort'); if (!v) return;
+  opslagSort = v.value;
+  document.querySelectorAll('.opslagSort').forEach(x => { x.value = opslagSort; });
+  LINK ? hent() : hentOpslag();
+});
 $('#omfang').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; omfang = b.dataset.o; $('#omfang').querySelectorAll('.chip').forEach(c => c.classList.toggle('aktiv', c === b)); hent(); });
 $('#butik').addEventListener('change', e => { butik = e.target.value || null; hent(); });
 // Friske tal: naar siden aabnes -- og hvert 5. minut mens den er aaben og synlig -- hentes nye
@@ -636,6 +700,8 @@ async function start() {
   await hent();
   opdater(false);
 }
+// Maanedsmailen linker med &periode=maaned, saa butikken lander paa sidste maaneds tal
+{ const v = new URLSearchParams(location.search).get('periode'); if (v && [...$('#periode').options].some(o => o.value === v)) $('#periode').value = v; }
 if (window.top !== window || LINK) start().catch(() => vis(LINK ? 'ugyldigtLinkVis' : 'ingenAdgangVis'));
 </script>
 </body></html>

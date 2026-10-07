@@ -74,6 +74,10 @@ create table if not exists public.some_dag (
   primary key (konto_id, dato)
 );
 create index if not exists some_dag_dato on public.some_dag (dato);
+-- Stories pr. dag fra FOER vi selv begyndte at samle dem ind (historik fra Hootsuite, se
+-- some_historik_dag nedenfor). Egne stories ligger som raekker i some_opslag (type STORY).
+alter table public.some_dag add column if not exists stories integer;
+alter table public.some_dag add column if not exists story_visninger bigint;
 
 -- ---------- Opslag ----------
 create table if not exists public.some_opslag (
@@ -143,6 +147,85 @@ update public.some_konti k set butik_id = (
   order by length(b.navn) desc limit 1)
 where k.butik_id is null;
 
+-- ---------- Historik fra Hootsuite ----------
+-- Det, Meta ikke udleverer bagud: Instagrams foelgertal (kun dagens tal), nye foelgere paa
+-- Instagram (kun 30 dage) og stories (findes kun i 24 timer). Hentet ud af Hootsuite 7/10-2026,
+-- foer abonnementet blev opsagt. Raekkerne er noeglet paa kontoens id hos Meta -- ikke paa
+-- some_konti -- saa historikken for en butik, der foerst kobles paa senere, ligger klar og
+-- flettes ind af sig selv (triggeren nedenfor). Egne tal vinder altid over historikken.
+create table if not exists public.some_historik_dag (
+  platform text not null,
+  ekstern_id text not null,
+  dato date not null,
+  foelgere integer,
+  nye_foelgere integer,
+  stories integer,
+  story_visninger bigint,
+  kilde text not null default 'hootsuite',
+  primary key (platform, ekstern_id, dato)
+);
+alter table public.some_historik_dag enable row level security;
+revoke all on public.some_historik_dag from anon, authenticated;
+
+-- Fletter historikken ind i some_dag (alle konti, eller kun p_konto). Kan koeres igen uden skade.
+-- Stories tages kun med for dage FOER kontoens foerste egen story, saa intet taelles to gange.
+create or replace function public.some_historik_flet(p_konto uuid default null)
+returns integer language plpgsql security definer set search_path = public as $$
+declare n integer;
+begin
+  insert into some_dag (konto_id, dato, foelgere, nye_foelgere, stories, story_visninger)
+  select k.id, h.dato, h.foelgere, h.nye_foelgere,
+    case when e.foerste is null or h.dato < e.foerste then h.stories end,
+    case when e.foerste is null or h.dato < e.foerste then h.story_visninger end
+  from some_historik_dag h
+  join some_konti k on k.platform = h.platform and k.ekstern_id = h.ekstern_id
+  left join (select konto_id, (min(oprettet_at) at time zone 'UTC')::date as foerste
+             from some_opslag where type = 'STORY' group by 1) e on e.konto_id = k.id
+  where p_konto is null or k.id = p_konto
+  on conflict (konto_id, dato) do update set
+    foelgere = coalesce(some_dag.foelgere, excluded.foelgere),
+    nye_foelgere = coalesce(some_dag.nye_foelgere, excluded.nye_foelgere),
+    stories = excluded.stories,
+    story_visninger = excluded.story_visninger;
+  get diagnostics n = row_count;
+  return n;
+end $$;
+revoke execute on function public.some_historik_flet(uuid) from public, anon, authenticated;
+
+create or replace function public.some_konti_historik()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  perform public.some_historik_flet(new.id);
+  return null;
+end $$;
+revoke execute on function public.some_konti_historik() from public, anon, authenticated;
+drop trigger if exists some_konti_historik on public.some_konti;
+create trigger some_konti_historik after insert on public.some_konti
+  for each row execute function public.some_konti_historik();
+
+-- Indlaesning af historik (kun den, der styrer SoMe-adgangen). p er en liste af raekker:
+-- [platform, ekstern_id, dato, foelgere, nye_foelgere, stories, story_visninger] -- null = uaendret.
+-- Efter indlaesning flettes tallene ind med: select public.some_historik_flet();
+create or replace function public.some_historik_import(p jsonb)
+returns integer language plpgsql security definer set search_path = public as $$
+declare n integer;
+begin
+  if not public.kan_styre_some() then raise exception 'Ingen adgang'; end if;
+  insert into some_historik_dag (platform, ekstern_id, dato, foelgere, nye_foelgere, stories, story_visninger)
+  select x->>0, x->>1, (x->>2)::date, (x->>3)::int, (x->>4)::int, (x->>5)::int, (x->>6)::bigint
+  from jsonb_array_elements(p) x
+  where x->>0 in ('facebook', 'instagram') and x->>1 ~ '^[0-9]+$'
+  on conflict (platform, ekstern_id, dato) do update set
+    foelgere = coalesce(excluded.foelgere, some_historik_dag.foelgere),
+    nye_foelgere = coalesce(excluded.nye_foelgere, some_historik_dag.nye_foelgere),
+    stories = coalesce(excluded.stories, some_historik_dag.stories),
+    story_visninger = coalesce(excluded.story_visninger, some_historik_dag.story_visninger);
+  get diagnostics n = row_count;
+  return n;
+end $$;
+revoke execute on function public.some_historik_import(jsonb) from public, anon;
+grant execute on function public.some_historik_import(jsonb) to authenticated;
+
 -- ---------- Butikslinks ----------
 -- Et link pr. butik (BL/some/?k=<noegle>), som kan aabnes uden login og kun viser butikkens
 -- egne tal + kaedens samlede tal. Noeglen er hemmeligheden; tabellen kan kun naas via RPC'erne.
@@ -196,24 +279,33 @@ grant execute on function public.some_link_saet(uuid, text) to authenticated;
 -- platform (grafen) og opslagenes fordeling paa ugedag/klokkeslaet (dansk tid).
 -- p_butik: kun den butiks konti (null = alle). p_saml: laeg kontiene sammen pr. platform, saa
 -- de enkelte butikkers tal ikke kan ses (bruges af butikslinkenes "Alle butikker").
--- Stories (type STORY) taelles for sig og er ikke med i opslag/likes/kommentarer.
+-- Stories (type STORY) taelles for sig og er ikke med i opslag/likes/kommentarer. Stories fra
+-- foer vi selv samlede dem ind, ligger som dagstal i some_dag (historik) og laegges til.
 -- Kernen tjekker IKKE adgang -- den kaldes kun af some_oversigt og some_rapport nedenfor.
 create or replace function public.some_oversigt_kerne(p_fra date, p_til date, p_butik uuid, p_saml boolean)
 returns jsonb language sql stable security definer set search_path = public as $$
-  with gr as (select p_fra - (p_til - p_fra + 1) as f_fra, p_fra - 1 as f_til),
+  -- Forrige periode: lige saa mange dage lige foer -- eller hele maaneden foer, naar perioden er
+  -- en hel kalendermaaned (som i de maanedlige rapporter). Siden bruger samme regel.
+  with gr as (
+    select case when p_fra = date_trunc('month', p_fra)::date and p_til = (date_trunc('month', p_fra) + interval '1 month - 1 day')::date
+        then (date_trunc('month', p_fra) - interval '1 month')::date
+        else p_fra - (p_til - p_fra + 1) end as f_fra,
+      p_fra - 1 as f_til),
   kk as (select k.* from some_konti k where k.aktiv and (p_butik is null or k.butik_id = p_butik)),
   nu as (
-    select konto_id, sum(nye_foelgere) nye, sum(visninger) vis, sum(raekkevidde) raek, sum(interaktioner) inter
+    select konto_id, sum(nye_foelgere) nye, sum(visninger) vis, sum(raekkevidde) raek, sum(interaktioner) inter,
+      sum(stories) st, sum(story_visninger) stv
     from some_dag where dato between p_fra and p_til group by 1),
   -- Forrige periode taeller kun med, naar der er tal for (naesten) alle dagene -- ellers
   -- sammenlignes en hel periode med et par dage (fx Instagrams nye foelgere, som Meta kun
   -- udleverer 30 dage tilbage), og procenten bliver meningsloes.
   foer as (
     select konto_id,
-      case when count(nye_foelgere) >= 0.9 * (p_til - p_fra + 1) then sum(nye_foelgere) end nye,
-      case when count(visninger) >= 0.9 * (p_til - p_fra + 1) then sum(visninger) end vis,
-      case when count(raekkevidde) >= 0.9 * (p_til - p_fra + 1) then sum(raekkevidde) end raek,
-      case when count(interaktioner) >= 0.9 * (p_til - p_fra + 1) then sum(interaktioner) end inter
+      case when count(nye_foelgere) >= 0.9 * min(gr.f_til - gr.f_fra + 1) then sum(nye_foelgere) end nye,
+      case when count(visninger) >= 0.9 * min(gr.f_til - gr.f_fra + 1) then sum(visninger) end vis,
+      case when count(raekkevidde) >= 0.9 * min(gr.f_til - gr.f_fra + 1) then sum(raekkevidde) end raek,
+      case when count(interaktioner) >= 0.9 * min(gr.f_til - gr.f_fra + 1) then sum(interaktioner) end inter,
+      sum(stories) st, sum(story_visninger) stv
     from some_dag, gr where dato between gr.f_fra and gr.f_til group by 1),
   -- + 1: perioden slutter i gaar, men foelgertallet er et oejebliksbillede fra i dag
   f_nu as (
@@ -222,28 +314,40 @@ returns jsonb language sql stable security definer set search_path = public as $
   f_foer as (
     select distinct on (konto_id) konto_id, foelgere from some_dag
     where dato < p_fra and foelgere is not null order by konto_id, dato desc),
+  -- Opslag taelles som i de gamle rapporter: reels og stories for sig, og begivenheder
+  -- (created_event) er ikke opslag. Dagene er danske dage, ikke UTC.
   op as (
-    select konto_id, oprettet_at >= p_fra as ny,
-      count(*) filter (where type is distinct from 'STORY') antal,
+    select konto_id, oprettet_at >= (p_fra::timestamp at time zone 'Europe/Copenhagen') as ny,
+      count(*) filter (where type is null or type not in ('STORY', 'REELS', 'created_event')) antal,
+      sum(visninger) filter (where type is null or type not in ('STORY', 'REELS', 'created_event')) ops_vis,
+      count(*) filter (where type = 'REELS') reels, sum(visninger) filter (where type = 'REELS') reel_vis,
       sum(likes) filter (where type is distinct from 'STORY') likes, sum(kommentarer) filter (where type is distinct from 'STORY') kom,
       sum(delinger) filter (where type is distinct from 'STORY') del,
       nullif(count(*) filter (where type = 'STORY'), 0) stories, sum(visninger) filter (where type = 'STORY') story_vis
-    from some_opslag, gr where oprettet_at >= gr.f_fra and oprettet_at < p_til + 1 group by 1, 2),
+    from some_opslag, gr
+    where oprettet_at >= (gr.f_fra::timestamp at time zone 'Europe/Copenhagen')
+      and oprettet_at < ((p_til + 1)::timestamp at time zone 'Europe/Copenhagen') group by 1, 2),
   pr as (
     select k.id, k.platform, k.navn, k.brugernavn, k.billede_url, k.butik_id,
-      f_nu.foelgere n_foelg, nu.nye n_nye, nu.vis n_vis, nu.raek n_raek, nu.inter n_inter, a.antal n_ops, a.likes n_likes, a.kom n_kom, a.del n_del, a.stories n_st, a.story_vis n_stv,
-      f_foer.foelgere f_foelg, foer.nye f_nye, foer.vis f_vis, foer.raek f_raek, foer.inter f_inter, b.antal f_ops, b.likes f_likes, b.kom f_kom, b.del f_del, b.stories f_st, b.story_vis f_stv
+      f_nu.foelgere n_foelg, nu.nye n_nye, nu.vis n_vis, nu.raek n_raek, nu.inter n_inter, a.antal n_ops, a.likes n_likes, a.kom n_kom, a.del n_del,
+      a.reels n_reels, a.ops_vis n_opv, a.reel_vis n_rev,
+      nullif(coalesce(a.stories, 0) + coalesce(nu.st, 0), 0) n_st,
+      case when a.story_vis is not null or nu.stv is not null then coalesce(a.story_vis, 0) + coalesce(nu.stv, 0) end n_stv,
+      f_foer.foelgere f_foelg, foer.nye f_nye, foer.vis f_vis, foer.raek f_raek, foer.inter f_inter, b.antal f_ops, b.likes f_likes, b.kom f_kom, b.del f_del,
+      b.reels f_reels, b.ops_vis f_opv, b.reel_vis f_rev,
+      nullif(coalesce(b.stories, 0) + coalesce(foer.st, 0), 0) f_st,
+      case when b.story_vis is not null or foer.stv is not null then coalesce(b.story_vis, 0) + coalesce(foer.stv, 0) end f_stv
     from kk k
     left join nu on nu.konto_id = k.id left join foer on foer.konto_id = k.id
     left join f_nu on f_nu.konto_id = k.id left join f_foer on f_foer.konto_id = k.id
     left join op a on a.konto_id = k.id and a.ny left join op b on b.konto_id = k.id and not b.ny),
   ud as (
-    select id::text, platform, navn, brugernavn, billede_url, butik_id, n_foelg, n_nye, n_vis, n_raek, n_inter, n_ops, n_likes, n_kom, n_del, n_st, n_stv,
-      f_foelg, f_nye, f_vis, f_raek, f_inter, f_ops, f_likes, f_kom, f_del, f_st, f_stv
+    select id::text, platform, navn, brugernavn, billede_url, butik_id, n_foelg, n_nye, n_vis, n_raek, n_inter, n_ops, n_likes, n_kom, n_del, n_st, n_stv, n_reels, n_opv, n_rev,
+      f_foelg, f_nye, f_vis, f_raek, f_inter, f_ops, f_likes, f_kom, f_del, f_st, f_stv, f_reels, f_opv, f_rev
     from pr where not p_saml
     union all
-    select 'alle-' || platform, platform, 'Alle butikker', null, null, null, sum(n_foelg), sum(n_nye), sum(n_vis), sum(n_raek), sum(n_inter), sum(n_ops), sum(n_likes), sum(n_kom), sum(n_del), sum(n_st), sum(n_stv),
-      sum(f_foelg), sum(f_nye), sum(f_vis), sum(f_raek), sum(f_inter), sum(f_ops), sum(f_likes), sum(f_kom), sum(f_del), sum(f_st), sum(f_stv)
+    select 'alle-' || platform, platform, 'Alle butikker', null, null, null, sum(n_foelg), sum(n_nye), sum(n_vis), sum(n_raek), sum(n_inter), sum(n_ops), sum(n_likes), sum(n_kom), sum(n_del), sum(n_st), sum(n_stv), sum(n_reels), sum(n_opv), sum(n_rev),
+      sum(f_foelg), sum(f_nye), sum(f_vis), sum(f_raek), sum(f_inter), sum(f_ops), sum(f_likes), sum(f_kom), sum(f_del), sum(f_st), sum(f_stv), sum(f_reels), sum(f_opv), sum(f_rev)
     from pr where p_saml group by platform),
   serie as (
     select d.dato, k.platform, sum(d.visninger) vis, sum(d.raekkevidde) raek, sum(d.interaktioner) inter, sum(d.nye_foelgere) nye
@@ -254,9 +358,11 @@ returns jsonb language sql stable security definer set search_path = public as $
       select jsonb_agg(jsonb_build_object(
         'id', id, 'platform', platform, 'navn', navn, 'brugernavn', brugernavn, 'billede_url', billede_url, 'butik_id', butik_id,
         'nu', jsonb_build_object('foelgere', n_foelg, 'nye_foelgere', n_nye, 'visninger', n_vis, 'raekkevidde', n_raek, 'interaktioner', n_inter,
-          'opslag', n_ops, 'likes', n_likes, 'kommentarer', n_kom, 'delinger', n_del, 'stories', n_st, 'story_visninger', n_stv),
+          'opslag', n_ops, 'likes', n_likes, 'kommentarer', n_kom, 'delinger', n_del, 'stories', n_st, 'story_visninger', n_stv,
+          'reels', n_reels, 'opslag_visninger', n_opv, 'reel_visninger', n_rev),
         'foer', jsonb_build_object('foelgere', f_foelg, 'nye_foelgere', f_nye, 'visninger', f_vis, 'raekkevidde', f_raek, 'interaktioner', f_inter,
-          'opslag', f_ops, 'likes', f_likes, 'kommentarer', f_kom, 'delinger', f_del, 'stories', f_st, 'story_visninger', f_stv)
+          'opslag', f_ops, 'likes', f_likes, 'kommentarer', f_kom, 'delinger', f_del, 'stories', f_st, 'story_visninger', f_stv,
+          'reels', f_reels, 'opslag_visninger', f_opv, 'reel_visninger', f_rev)
       ) order by n_foelg desc nulls last, navn) from ud), '[]'::jsonb),
     'serie', coalesce((
       select jsonb_agg(jsonb_build_object('dato', dato, 'platform', platform, 'visninger', vis, 'raekkevidde', raek,
@@ -271,7 +377,9 @@ returns jsonb language sql stable security definer set search_path = public as $
           extract(hour from o.oprettet_at at time zone 'Europe/Copenhagen')::int "time",
           count(*) antal, sum(coalesce(o.likes, 0) + coalesce(o.kommentarer, 0) + coalesce(o.delinger, 0)) inter
         from some_opslag o join kk k on k.id = o.konto_id
-        where o.oprettet_at >= p_fra and o.oprettet_at < p_til + 1 and o.type is distinct from 'STORY' group by 1, 2, 3) t), '[]'::jsonb),
+        where o.oprettet_at >= (p_fra::timestamp at time zone 'Europe/Copenhagen')
+          and o.oprettet_at < ((p_til + 1)::timestamp at time zone 'Europe/Copenhagen')
+          and (o.type is null or o.type not in ('STORY', 'created_event')) group by 1, 2, 3) t), '[]'::jsonb),
     'foerste_dato', (select min(d.dato) from some_dag d join kk k on k.id = d.konto_id),
     'sidste_sync', (select jsonb_build_object('startet_at', startet_at, 'afsluttet_at', afsluttet_at, 'ok', ok, 'konti', konti)
       from some_sync_log order by id desc limit 1)
@@ -294,7 +402,7 @@ revoke execute on function public.some_overblik(date, date, uuid) from public, a
 grant execute on function public.some_overblik(date, date, uuid) to authenticated;
 
 -- Butikslinket (uden login): butikkens egne tal ('egen') eller kaedens samlede tal ('faelles')
-create or replace function public.some_rapport(p_noegle text, p_fra date, p_til date, p_omfang text default 'egen', p_sort text default 'likes')
+create or replace function public.some_rapport(p_noegle text, p_fra date, p_til date, p_omfang text default 'egen', p_sort text default 'visninger')
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare v_butik uuid := public.some_link_butik(p_noegle);
 begin
@@ -305,13 +413,15 @@ begin
   end if;
   return public.some_oversigt_kerne(p_fra, p_til, v_butik, false) || jsonb_build_object(
     'butik', (select navn from butikker where id = v_butik),
-    'opslag', coalesce((select jsonb_agg(to_jsonb(t)) from (
+    'opslag', coalesce((select jsonb_agg(to_jsonb(t) - 'nr' order by t.nr) from (
       select o.ekstern_id, o.oprettet_at, o.tekst, o.permalink, o.billede_url, o.likes, o.kommentarer, o.delinger, o.visninger,
-        jsonb_build_object('navn', k.navn, 'platform', k.platform) some_konti
+        jsonb_build_object('navn', k.navn, 'platform', k.platform) some_konti,
+        row_number() over (partition by k.platform
+          order by case p_sort when 'kommentarer' then o.kommentarer when 'likes' then o.likes else o.visninger end desc nulls last) nr
       from some_opslag o join some_konti k on k.id = o.konto_id and k.aktiv and k.butik_id = v_butik
-      where o.oprettet_at >= p_fra and o.oprettet_at < p_til + 1 and o.type is distinct from 'STORY'
-      order by case p_sort when 'kommentarer' then o.kommentarer when 'visninger' then o.visninger else o.likes end desc nulls last
-      limit 24) t), '[]'::jsonb));
+      where o.oprettet_at >= (p_fra::timestamp at time zone 'Europe/Copenhagen')
+        and o.oprettet_at < ((p_til + 1)::timestamp at time zone 'Europe/Copenhagen')
+        and (o.type is null or o.type not in ('STORY', 'created_event'))) t where t.nr <= 5), '[]'::jsonb));
 end $$;
 revoke execute on function public.some_rapport(text, date, date, text, text) from public;
 grant execute on function public.some_rapport(text, date, date, text, text) to anon, authenticated;
