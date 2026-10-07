@@ -354,15 +354,18 @@ async function hent() {
   if (!d) { vis(LINK ? 'ugyldigtLinkVis' : 'ingenAdgangVis'); return; }
   data = d;
   sidstLaest = Date.now();
-  // "Samlede visninger" som i de gamle rapporter: visningerne paa det indhold, der er slaaet op
-  // i perioden (opslag + reels + stories). Mangler stories for forrige periode, mens de findes
-  // for denne, kan de to perioder ikke sammenlignes.
+  // "Samlede visninger". Instagram som i de gamle rapporter: visningerne paa det indhold, der er
+  // slaaet op i perioden (opslag + reels + stories); mangler stories for sammenligningsperioden,
+  // mens de findes for denne, kan de to ikke sammenlignes. Facebook har kun opslag at laegge
+  // sammen (det ville give samme tal som "Visninger paa opslag"), saa dér er det sidens samlede
+  // visninger fra Facebook selv -- ogsaa video, stories og aeldre opslag.
   data.konti.forEach(k => {
     ['nu', 'foer'].forEach(t => {
       const dele = [k[t].opslag_visninger, k[t].reel_visninger, k[t].story_visninger];
-      k[t].samlede_visninger = dele.every(v => v == null) ? null : dele.reduce((a, v) => a + Number(v || 0), 0);
+      k[t].samlede_visninger = k.platform === 'facebook' ? k[t].visninger
+        : dele.every(v => v == null) ? null : dele.reduce((a, v) => a + Number(v || 0), 0);
     });
-    if (k.nu.story_visninger != null && k.foer.story_visninger == null) k.foer.samlede_visninger = null;
+    if (k.platform !== 'facebook' && k.nu.story_visninger != null && k.foer.story_visninger == null) k.foer.samlede_visninger = null;
   });
   tegn();
 }
@@ -584,14 +587,14 @@ $('#rapportBoks').addEventListener('change', e => {
 // ---------- Indsats og resultat pr. platform ----------
 // Kortene foelger de maanedlige rapporter, butikkerne plejer at faa: indsats (hvad der er slaaet
 // op) og resultat (hvad det gav). Opslag, reels og stories taelles hver for sig, og visningerne
-// er dem, indholdet fra perioden har faaet. "Samlede visninger" er summen af dem (som "Samlet
-// views" i rapporterne) -- ikke kontoens visninger dag for dag, som grafen laengere nede viser.
+// er dem, indholdet fra perioden har faaet. "Samlede visninger" er paa Instagram summen af dem
+// (som "Samlet views" i rapporterne) og paa Facebook sidens samlede visninger (se hent()).
 const SEKTION = {
   facebook: {
     indsats: [['Antal opslag', 'opslag', 'Opslag slået op i perioden. Begivenheder tæller ikke med.']],
     resultat: [
       ['Visninger på opslag', 'opslag_visninger', 'Visninger af de opslag, der er slået op i perioden'],
-      ['Samlede visninger', 'samlede_visninger', 'Visninger af alt det, der er slået op på siden i perioden'],
+      ['Samlede visninger', 'samlede_visninger', 'Alle visninger af sidens indhold i perioden – også video, stories og ældre opslag. Tallet kommer fra Facebook selv.'],
     ],
   },
   instagram: {
@@ -604,7 +607,7 @@ const SEKTION = {
       ['Visninger på opslag', 'opslag_visninger', 'Visninger af de billeder og karruseller, der er slået op i perioden'],
       ['Visninger på reels', 'reel_visninger', 'Visninger af de reels, der er slået op i perioden'],
       ['Visninger på stories', 'story_visninger', 'Visninger af de stories, der er slået op i perioden'],
-      ['Samlede visninger', 'samlede_visninger', 'Opslag, reels og stories lagt sammen'],
+      ['Samlede visninger', 'samlede_visninger', 'Visninger på opslag, reels og stories lagt sammen'],
     ],
   },
 };
@@ -793,7 +796,7 @@ const KOL = [
   ['Opslag', 'opslag', 'Opslag slået op i perioden – uden reels, stories og begivenheder'],
   ['Reels', 'reels', 'Reels slået op på Instagram i perioden'],
   ['Stories', 'stories', 'Stories slået op på Instagram i perioden'],
-  ['Samlede visninger', 'samlede_visninger', 'Visninger af det, der er slået op i perioden: opslag, reels og stories lagt sammen'],
+  ['Samlede visninger', 'samlede_visninger', 'Facebook: alle visninger af sidens indhold i perioden. Instagram: opslag, reels og stories lagt sammen.'],
   ['Interaktioner', 'interaktioner', 'Reaktioner, kommentarer, delinger og klik på kontoen i perioden'],
   ['Følgere', 'foelgere', 'Antal følgere ved periodens slutning'],
   ['Nye følgere', 'nye_foelgere', 'Nye følgere i perioden'],
