@@ -205,8 +205,15 @@ returns jsonb language sql stable security definer set search_path = public as $
   nu as (
     select konto_id, sum(nye_foelgere) nye, sum(visninger) vis, sum(raekkevidde) raek, sum(interaktioner) inter
     from some_dag where dato between p_fra and p_til group by 1),
+  -- Forrige periode taeller kun med, naar der er tal for (naesten) alle dagene -- ellers
+  -- sammenlignes en hel periode med et par dage (fx Instagrams nye foelgere, som Meta kun
+  -- udleverer 30 dage tilbage), og procenten bliver meningsloes.
   foer as (
-    select konto_id, sum(nye_foelgere) nye, sum(visninger) vis, sum(raekkevidde) raek, sum(interaktioner) inter
+    select konto_id,
+      case when count(nye_foelgere) >= 0.9 * (p_til - p_fra + 1) then sum(nye_foelgere) end nye,
+      case when count(visninger) >= 0.9 * (p_til - p_fra + 1) then sum(visninger) end vis,
+      case when count(raekkevidde) >= 0.9 * (p_til - p_fra + 1) then sum(raekkevidde) end raek,
+      case when count(interaktioner) >= 0.9 * (p_til - p_fra + 1) then sum(interaktioner) end inter
     from some_dag, gr where dato between gr.f_fra and gr.f_til group by 1),
   -- + 1: perioden slutter i gaar, men foelgertallet er et oejebliksbillede fra i dag
   f_nu as (
