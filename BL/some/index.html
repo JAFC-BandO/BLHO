@@ -156,10 +156,8 @@ td .lille.op,td .lille.ned{font-weight:600}
 .rapport-knapper{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-top:12px}
 .rapport-knapper .rapport-note{margin:0}
 .knap.fare{color:var(--bad)}
+.knap.stille.aktiv{background:var(--brand);color:#fff}
 .linkknap{background:none;border:0;padding:0;color:var(--brand-tekst);font:inherit;font-weight:600;text-decoration:underline;cursor:pointer}
-.butikchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.butikchip{border:1px solid var(--bd);background:var(--card);color:var(--fg);border-radius:20px;padding:4px 11px;font-size:12px;cursor:pointer}
-.butikchip.har{border-color:color-mix(in srgb,var(--ok) 55%,var(--bd));color:var(--ok);font-weight:600}
 /* --- Opslagene bag et felt i "Bedste tidspunkter" --- */
 dialog.tid{border:1px solid var(--bd);border-radius:14px;background:var(--card);color:var(--fg);padding:0;width:min(760px,calc(100vw - 24px));max-height:min(82vh,820px);overflow:auto}
 dialog.tid::backdrop{background:rgba(0,0,0,.5)}
@@ -203,6 +201,7 @@ dialog.tid::backdrop{background:rgba(0,0,0,.5)}
     </select>
     <span class="luft"></span>
     <span class="status" id="status" data-tip="Automatisk indsamling&#10;Tallene hentes fra Facebook og Instagram én gang i timen.&#10;Opdater nu henter dem med det samme."></span>
+    <button class="knap stille" id="rapportKnap" type="button" hidden>Skriv rapport</button>
     <button class="knap" id="opdater" title="Tallene hentes automatisk én gang i timen. Tryk for at hente de nyeste fra Facebook og Instagram nu.">Opdater nu</button>
     <div class="lille" id="periodeTekst"></div>
   </div>
@@ -301,7 +300,8 @@ let sidstLaest = 0;         // hvornaar tallene sidst blev laest fra databasen
 let rapporter = [];         // rapporterne (tekst + periode): alle i fanen, butikkens egne + faelles via link
 let kanStyre = false;       // maa skrive rapporter (den SoMe-ansvarlige)
 let aktivRapport = null;    // id paa den rapport, linket aabnede paa, eller som man selv har valgt
-let redigerer = null;       // { id, titel, tekst } mens der skrives
+let rapportRediger = false; // den SoMe-ansvarlige har slaaet redigering til (knappen i toppen)
+const kladder = new Map();  // ikke-gemte tekster pr. butik og periode, saa man kan skifte butik uden at miste noget
 let periodeFraUrl = false;  // adressen bad selv om en bestemt periode
 let sammenligning = 'aar';  // 'aar' = samme periode sidste aar, 'foer' = perioden lige foer
 const foerNavn = () => sammenligning === 'aar' ? 'Samme periode sidste år' : 'Perioden lige før';
@@ -487,84 +487,94 @@ function vaelgStandardRapport() {
   aktivRapport = valgt.id;
   saetPeriode(valgt.fra, valgt.til);
 }
+// Normalt ser alle det samme: rapporten for den valgte periode, hvis der er én -- ellers intet.
+// Den SoMe-ansvarlige har en knap i toppen, der slaar redigering til; saa bliver feltet til et
+// skrivefelt for den butik og periode, der er valgt.
+const kladdeNoegle = p => (butik || 'alle') + '|' + p.fra + '|' + p.til;
+// Gemmer det, der staar i skrivefeltet, som kladde -- hvis det afviger fra den gemte rapport
+function gemKladde() {
+  const boks = document.querySelector('#rapportBoks [data-noegle]'); if (!boks) return;
+  const [b, fra, til] = boks.dataset.noegle.split('|');
+  const gemt = rapporter.find(r => (r.butik_id || 'alle') === b && r.fra === fra && r.til === til);
+  const titel = $('#rapTitel').value, tekst = $('#rapTekst').value;
+  if (titel === (gemt ? gemt.titel || '' : '') && tekst === (gemt ? gemt.tekst : '')) kladder.delete(boks.dataset.noegle);
+  else kladder.set(boks.dataset.noegle, { titel, tekst });
+}
 function tegnRapport() {
   const p = periode(), liste = rapportListe();
   const match = liste.find(r => r.fra === p.fra && r.til === p.til);
-  if (redigerer) {
-    // Der skrives: behold teksten, men foelg med, hvis butik eller periode skifter undervejs
-    if ($('#rapTekst')) { redigerer.titel = $('#rapTitel').value; redigerer.tekst = $('#rapTekst').value; }
-    redigerer.id = match ? match.id : null;
-    tegnEditor();
-    return;
-  }
+  const maaSkrive = kanStyre && !LINK, knap = $('#rapportKnap');
+  knap.hidden = !maaSkrive;
+  knap.textContent = rapportRediger ? 'Luk redigering' : match ? 'Ret rapport' : 'Skriv rapport';
+  knap.classList.toggle('aktiv', rapportRediger);
+  knap.title = rapportRediger ? 'Tilbage til det, butikken ser' : 'Skriv en tekst til ' + (butik ? butikNavnAf(butik) : 'alle butikker') + ' for den valgte periode';
+  gemKladde();
+  if (maaSkrive && rapportRediger) { tegnEditor(p, match); return; }
   // Modtageren (link) ser altid sin rapport -- ogsaa naar hun har valgt en anden periode
   const vist = match || (LINK ? liste.find(r => r.id === aktivRapport) || liste[0] : null);
+  if (!vist) { $('#rapportBoks').innerHTML = ''; return; }
   // Den faelles tekst for samme periode vises under butikkens egen
-  const faelles = vist && vist.butik_id ? rapporter.find(r => !r.butik_id && r.fra === vist.fra && r.til === vist.til) : null;
-  const maaSkrive = kanStyre && !LINK;
-  const andre = liste.filter(r => !vist || r.id !== vist.id);
-  const valg = andre.length ? `<select class="rapportValg" aria-label="Vælg en anden rapport"><option value="">${vist ? 'Andre rapporter' : 'Tidligere rapporter'} …</option>${andre.map(r => `<option value="${r.id}">${esc(r.titel ? r.titel + ' (' + periodeNavn(r.fra, r.til) + ')' : periodeNavn(r.fra, r.til))}</option>`).join('')}</select>` : '';
-  let h = '';
-  if (vist) {
-    h = `<div class="rapport">
-      <div class="rapport-hoved"><span class="rapport-maerke">Rapport · ${esc(periodeNavn(vist.fra, vist.til))}</span><span class="luft"></span>${valg}
-        ${maaSkrive && butik ? '<button class="knap stille" data-r="link">Kopiér link til butikken</button>' : ''}${maaSkrive ? '<button class="knap stille" data-r="rediger">Ret rapport</button>' : ''}</div>
-      ${vist.titel ? `<h2>${esc(vist.titel)}</h2>` : ''}
-      <div class="rapport-tekst">${esc(vist.tekst)}</div>
-      ${faelles ? `<div class="rapport-faelles"><span class="rapport-maerke">Til alle butikker</span>${faelles.titel ? `<h2>${esc(faelles.titel)}</h2>` : ''}<div class="rapport-tekst">${esc(faelles.tekst)}</div></div>` : ''}
-      ${match ? '' : `<div class="rapport-note">Rapporten handler om ${esc(periodeNavn(vist.fra, vist.til))}, men du kigger lige nu på en anden periode. <button class="linkknap" data-r="periode" data-id="${vist.id}">Vis rapportens periode</button></div>`}
-    </div>`;
-  } else if (maaSkrive) {
-    h = `<div class="rapport rapport-tom"><div class="rapport-hoved"><span class="rapport-maerke">Rapport</span><span>Der er ingen rapport til ${butik ? esc(butikNavnAf(butik)) : 'alle butikker'} for ${esc(periodeNavn(p.fra, p.til))} endnu.</span><span class="luft"></span>${valg}<button class="knap" data-r="skriv">Skriv rapport</button></div></div>`;
-  } else if (valg) {
-    h = `<div class="rapport rapport-tom"><div class="rapport-hoved"><span class="rapport-maerke">Rapport</span><span>Der er ingen rapport for den valgte periode.</span><span class="luft"></span>${valg}</div></div>`;
-  }
-  // Overblik til den, der skriver: hvilke butikker har faaet en rapport for perioden?
-  if (maaSkrive && !butik && (data.butikker || []).length) {
-    h += `<div class="rapport rapport-tom"><span class="rapport-maerke">Rapporter til butikkerne for ${esc(periodeNavn(p.fra, p.til))}</span><div class="butikchips">${data.butikker.map(b => {
-      const har = rapporter.some(r => r.butik_id === b.id && r.fra === p.fra && r.til === p.til);
-      return `<button type="button" class="butikchip${har ? ' har' : ''}" data-butik="${b.id}" data-tip="${esc(butikNavnAf(b.id))}&#10;${har ? 'Rapporten er skrevet. Klik for at se eller rette den.' : 'Mangler en rapport for perioden. Klik for at skrive den.'}">${har ? '✓' : '+'} ${esc(String(b.navn).replace(/^Butik\s+/, ''))}</button>`;
-    }).join('')}</div></div>`;
-  }
-  $('#rapportBoks').innerHTML = h;
-}
-function tegnEditor() {
-  const p = periode(), r = redigerer;
+  const faelles = vist.butik_id ? rapporter.find(r => !r.butik_id && r.fra === vist.fra && r.til === vist.til) : null;
+  const andre = liste.filter(r => r.id !== vist.id);
+  const valg = andre.length ? `<select class="rapportValg" aria-label="Vælg en anden rapport"><option value="">Andre rapporter …</option>${andre.map(r => `<option value="${r.id}">${esc(r.titel ? r.titel + ' (' + periodeNavn(r.fra, r.til) + ')' : periodeNavn(r.fra, r.til))}</option>`).join('')}</select>` : '';
   $('#rapportBoks').innerHTML = `<div class="rapport">
-    <div class="rapport-hoved"><span class="rapport-maerke">${r.id ? 'Ret rapport' : 'Ny rapport'} · ${butik ? esc(butikNavnAf(butik)) : 'alle butikker'} · ${esc(periodeNavn(p.fra, p.til))}</span></div>
-    <input type="text" id="rapTitel" maxlength="120" aria-label="Overskrift" placeholder="Overskrift (valgfri)" value="${esc(r.titel || '')}">
-    <textarea id="rapTekst" maxlength="8000" aria-label="Rapportens tekst" placeholder="⭐ Det her gik rigtig godt i perioden …&#10;⭐ …&#10;🫶 En idé til næste gang …">${esc(r.tekst || '')}</textarea>
-    <div class="rapport-note">Rapporten låses til <b>${esc(nuTekst)}</b> – perioden valgt øverst. Det er den, butikken ser, når den åbner sit link; den kan selv vælge en anden bagefter. Emojis: Windows-tast + punktum.</div>
-    <div class="rapport-knapper"><button class="knap" data-r="gem">Gem rapport</button><button class="knap stille" data-r="annuller">Annullér</button><span class="rapport-note" id="rapStatus"></span><span class="luft"></span>${r.id ? '<button class="knap stille fare" data-r="slet">Slet rapport</button>' : ''}</div>
+    <div class="rapport-hoved"><span class="rapport-maerke">Rapport · ${esc(periodeNavn(vist.fra, vist.til))}</span><span class="luft"></span>${valg}</div>
+    ${vist.titel ? `<h2>${esc(vist.titel)}</h2>` : ''}
+    <div class="rapport-tekst">${esc(vist.tekst)}</div>
+    ${faelles ? `<div class="rapport-faelles"><span class="rapport-maerke">Til alle butikker</span>${faelles.titel ? `<h2>${esc(faelles.titel)}</h2>` : ''}<div class="rapport-tekst">${esc(faelles.tekst)}</div></div>` : ''}
+    ${match ? '' : `<div class="rapport-note">Rapporten handler om ${esc(periodeNavn(vist.fra, vist.til))}, men du kigger lige nu på en anden periode. <button class="linkknap" data-r="periode" data-id="${vist.id}">Vis rapportens periode</button></div>`}
   </div>`;
 }
+function tegnEditor(p, match, status) {
+  const noegle = kladdeNoegle(p), k = kladder.get(noegle);
+  const titel = k ? k.titel : match ? match.titel || '' : '', tekst = k ? k.tekst : match ? match.tekst : '';
+  let h = `<div class="rapport" data-noegle="${esc(noegle)}">
+    <div class="rapport-hoved"><span class="rapport-maerke">${match ? 'Ret rapport' : 'Ny rapport'} · ${butik ? esc(butikNavnAf(butik)) : 'alle butikker (fælles tekst)'} · ${esc(periodeNavn(p.fra, p.til))}</span><span class="luft"></span>
+      ${match && butik ? '<button class="knap stille" data-r="link">Kopiér link til butikken</button>' : ''}</div>
+    <input type="text" id="rapTitel" maxlength="120" aria-label="Overskrift" placeholder="Overskrift (valgfri)" value="${esc(titel)}">
+    <textarea id="rapTekst" maxlength="8000" aria-label="Rapportens tekst" placeholder="⭐ Det her gik rigtig godt i perioden …&#10;⭐ …&#10;🫶 En idé til næste gang …">${esc(tekst)}</textarea>
+    <div class="rapport-note">Rapporten låses til <b>${esc(nuTekst)}</b> – perioden valgt øverst. Det er den, butikken ser, når den åbner sit link; den kan selv vælge en anden bagefter. Skift butik eller periode øverst for at skrive til en anden. Emojis: Windows-tast + punktum.</div>
+    <div class="rapport-knapper"><button class="knap" data-r="gem">Gem rapport</button><span class="rapport-note" id="rapStatus">${esc(status || (k ? 'Ændringerne er ikke gemt endnu.' : ''))}</span><span class="luft"></span>${match ? '<button class="knap stille fare" data-r="slet">Slet rapport</button>' : ''}</div>
+  </div>`;
+  $('#rapportBoks').innerHTML = h;
+}
+$('#rapportKnap').addEventListener('click', () => {
+  rapportRediger = !rapportRediger;
+  tegnRapport();
+  if (rapportRediger && $('#rapTekst')) { $('#rapportBoks').scrollIntoView({ block: 'nearest' }); $('#rapTekst').focus(); }
+});
+// Kladden foelger med, mens der skrives (saa den overlever et skift af butik eller periode)
+$('#rapportBoks').addEventListener('input', e => {
+  if (!e.target.closest('#rapTitel, #rapTekst')) return;
+  gemKladde();
+  $('#rapStatus').textContent = kladder.has(kladdeNoegle(periode())) ? 'Ændringerne er ikke gemt endnu.' : '';
+});
 $('#rapportBoks').addEventListener('click', async e => {
-  const chip = e.target.closest('.butikchip');
-  if (chip) { skjulTip(); butik = chip.dataset.butik; $('#butik').value = butik; hent(); return; }
   const k = e.target.closest('[data-r]'); if (!k) return;
   const p = periode(), nu = rapportListe().find(r => r.fra === p.fra && r.til === p.til), h = k.dataset.r;
-  if (h === 'skriv') { redigerer = { id: null, titel: '', tekst: '' }; tegnEditor(); $('#rapTekst').focus(); }
-  else if (h === 'rediger' && nu) { redigerer = { id: nu.id, titel: nu.titel, tekst: nu.tekst }; tegnEditor(); $('#rapTekst').focus(); }
-  else if (h === 'annuller') { redigerer = null; tegnRapport(); }
-  else if (h === 'gem') {
+  if (h === 'gem') {
     const tekst = $('#rapTekst').value, titel = $('#rapTitel').value;
     if (!tekst.trim()) { $('#rapStatus').textContent = 'Skriv en tekst først.'; return; }
     k.disabled = true; $('#rapStatus').textContent = 'Gemmer …';
     const { data: id, error } = await client.rpc('some_rapporter_gem', { p_butik: butik, p_fra: p.fra, p_til: p.til, p_titel: titel, p_tekst: tekst });
     if (error) { k.disabled = false; $('#rapStatus').textContent = 'Rapporten kunne ikke gemmes: ' + error.message; return; }
-    aktivRapport = id; redigerer = null;
-    await hentRapporter(); tegnRapport();
+    aktivRapport = id; kladder.delete(kladdeNoegle(p));
+    await hentRapporter();
+    document.querySelector('#rapportBoks [data-noegle]')?.removeAttribute('data-noegle');   // det gemte skal ikke blive til en kladde igen
+    tegnEditor(p, rapportListe().find(r => r.fra === p.fra && r.til === p.til), 'Gemt ✓ kl. ' + new Date().toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' }));
   }
   else if (h === 'slet') {
     // To tryk, saa en rapport ikke forsvinder ved et uheld
     k.dataset.r = 'slet2'; k.textContent = 'Tryk igen for at slette';
     setTimeout(() => { if (k.isConnected) { k.dataset.r = 'slet'; k.textContent = 'Slet rapport'; } }, 4000);
   }
-  else if (h === 'slet2' && redigerer && redigerer.id) {
-    const { error } = await client.rpc('some_rapporter_slet', { p_id: redigerer.id });
+  else if (h === 'slet2' && nu) {
+    const { error } = await client.rpc('some_rapporter_slet', { p_id: nu.id });
     if (error) { $('#rapStatus').textContent = 'Rapporten kunne ikke slettes: ' + error.message; return; }
-    redigerer = null;
-    await hentRapporter(); tegnRapport();
+    kladder.delete(kladdeNoegle(p));
+    await hentRapporter();
+    document.querySelector('#rapportBoks [data-noegle]')?.removeAttribute('data-noegle');
+    tegnEditor(p, null, 'Rapporten er slettet.');
   }
   else if (h === 'periode') { const r = rapporter.find(x => x.id === k.dataset.id); if (r) { aktivRapport = r.id; saetPeriode(r.fra, r.til); hent(); } }
   else if (h === 'link' && nu) {
