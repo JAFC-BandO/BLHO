@@ -27,9 +27,11 @@ const CORS = {
 const svar = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
-const MODELLER = (Deno.env.get('GEMINI_MODELLER') ?? 'gemini-flash-latest,gemini-2.5-flash,gemini-flash-lite-latest')
+// gemini-2.5-flash foerst: den svarer paa faa sekunder, mens gemini-flash-latest ofte ikke svarer
+// paa en hel maaneds opslag inden for tidsgraensen (maalt 7/10-2026).
+const MODELLER = (Deno.env.get('GEMINI_MODELLER') ?? 'gemini-2.5-flash,gemini-flash-lite-latest,gemini-flash-latest')
   .split(',').map((s) => s.trim()).filter(Boolean);
-const TIDSGRAENSE_MS = 45000;   // pr. kald til en model (den laeser alle periodens opslag)
+const TIDSGRAENSE_MS = 30000;   // pr. kald til en model (den laeser alle periodens opslag)
 const I_ALT_MS = 110000;        // derefter gives der op (funktionen maa hoejst koere i 150 sekunder)
 const TAENK_LOFT = 2048;        // tokens, modellen hoejst maa "taenke" foer svaret
 // Staar sidst i beskeden, efter alle opslagene, saa formen ikke drukner i dem

@@ -666,7 +666,7 @@ async function udkastKontekst(p) {
     if (!k.length || !SEKTION[pf]) continue;
     const ord = pf === 'instagram' ? 'opslag og reels' : 'opslag';
     linjer.push('', '=== ' + PLATFORM[pf].toUpperCase() + ' ===', 'Nøgletal (denne periode | før | ændring):');
-    [...SEKTION[pf].indsats, ...SEKTION[pf].resultat, ['Interaktioner på kontoen (reaktioner, kommentarer, delinger og klik)', 'interaktioner'], ['Følgere', 'foelgere'], ['Nye følgere', 'nye_foelgere']].forEach(([navn, felt]) => {
+    [...SEKTION[pf].indsats, ...SEKTION[pf].resultat, ['Interaktioner på kontoen (reaktioner, kommentarer, delinger og klik)', 'interaktioner'], ['Følgere i alt ved periodens slutning', 'foelgere'], ['Nye følgere i løbet af perioden', 'nye_foelgere']].forEach(([navn, felt]) => {
       const nu = sum(k, 'nu', felt) ?? (FRA_OPSLAG.includes(felt) ? 0 : null), c = sammenlign(k, felt);
       linjer.push(`- ${navn}: ${tal(nu)} | ${c ? tal(c.foer) : '–'} | ${c ? pct(c.pct) : '–'}`);
     });
@@ -683,8 +683,8 @@ async function udkastKontekst(p) {
         ['Visninger pr. opslag', prStk('opslag_visninger', 'opslag')],
         ['Samlede visninger', kk => sum(kk, 'nu', 'samlede_visninger')],
         ['Interaktioner på kontoen', kk => sum(kk, 'nu', 'interaktioner')],
-        ['Følgere', kk => sum(kk, 'nu', 'foelgere')],
-        ['Nye følgere', kk => sum(kk, 'nu', 'nye_foelgere')],
+        ['Følgere i alt', kk => sum(kk, 'nu', 'foelgere')],
+        ['Nye følgere i løbet af perioden', kk => sum(kk, 'nu', 'nye_foelgere')],
         ...(pf === 'instagram' ? [['Antal reels', kk => sum(kk, 'nu', 'reels') ?? 0], ['Visninger pr. reel', prStk('reel_visninger', 'reels')],
           ['Antal stories', kk => sum(kk, 'nu', 'stories')], ['Visninger pr. story', prStk('story_visninger', 'stories')]] : []),
       ];
@@ -695,7 +695,7 @@ async function udkastKontekst(p) {
         linjer.push(`- ${navn}: ${hel(egen[1])} – nr. ${v.filter(x => x[1] > egen[1]).length + 1} af ${v.length} (kædens median: ${hel(median(v.map(x => x[1])))})`);
       });
       const kaedeKonti = kaede.filter(x => x.platform === pf);
-      [['antal opslag', 'opslag'], ['visninger på opslag', 'opslag_visninger'], ['samlede visninger', 'samlede_visninger'], ['følgere', 'foelgere']].forEach(([navn, felt]) => {
+      [['antal opslag', 'opslag'], ['visninger på opslag', 'opslag_visninger'], ['samlede visninger', 'samlede_visninger'], ['følgere i alt', 'foelgere'], ['nye følgere i løbet af perioden', 'nye_foelgere']].forEach(([navn, felt]) => {
         const a = sammenlign(k, felt), b = sammenlign(kaedeKonti, felt);
         if (a && b) linjer.push(`- Udvikling i ${navn}: butikken ${pct(a.pct)}, hele kæden ${pct(b.pct)}`);
       });
@@ -828,7 +828,7 @@ $('#rapportBoks').addEventListener('click', async e => {
     if (n !== rapNoegle() || !data) return;
     const p = periode(), mislykket = 'Udkastet kunne ikke laves lige nu. Prøv igen om lidt.';
     k.disabled = true; k.textContent = '✨ Skriver udkast …';
-    tegnUdkastNote('Læser periodens tal og opslag – det tager typisk 20–40 sekunder …');
+    tegnUdkastNote('Læser periodens tal og opslag – det tager typisk 5–20 sekunder …');
     let ud = null, fejl = '';
     try {
       const { data: r, error } = await client.functions.invoke('some-udkast', { body: { kontekst: await udkastKontekst(p) } });
