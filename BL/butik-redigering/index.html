@@ -753,6 +753,12 @@
       </div>
       <input id="someAdgangSoeg" type="search" placeholder="Søg på navn, mail eller butik" style="width:100%; padding:8px; margin-bottom:12px;">
       <div id="someAdgangListe" style="display:flex; flex-direction:column; gap:2px;"></div>
+
+      <h2 style="margin:24px 0 6px;">Butikslinks</h2>
+      <div style="font-size:12px; color:var(--ui-tekst-888); margin-bottom:12px;">
+        Et link pr. butik, som kan åbnes uden login. Det viser kun butikkens egne tal og kædens samlede tal. Send linket til butikken på mail. "Nyt link" gør det gamle ugyldigt.
+      </div>
+      <div id="someLinksListe" style="display:flex; flex-direction:column; gap:2px;"></div>
     </div>
   </div>
 
@@ -1604,7 +1610,7 @@
         const ramme = document.createElement('iframe');
         ramme.title = 'SoMe-performance';
         // ?v= skal bumpes naar some/index.html aendres (samme grund som for vagtplanen nedenfor)
-        ramme.src = '../some/?indlejret=1&v=2026-10-06-7';
+        ramme.src = '../some/?indlejret=1&v=2026-10-07-1';
         vis.appendChild(ramme);
       }
       updateSlideOverlay();
@@ -1669,7 +1675,48 @@
     if (error) { document.getElementById('someAdgangListe').textContent = 'Listen kunne ikke hentes. Prøv igen om lidt.'; return; }
     someAdgangBrugere = data || [];
     tegnSomeAdgang();
+    hentSomeLinks();
   });
+  // Butikslinks: BL/some/?k=<noegle>. Noeglen er hele adgangen, saa den vises kun her.
+  async function hentSomeLinks() {
+    const liste = document.getElementById('someLinksListe');
+    const { data, error } = await client.rpc('some_links_liste');
+    liste.textContent = '';
+    if (error) { liste.textContent = 'Linkene kunne ikke hentes. Prøv igen om lidt.'; return; }
+    (data || []).forEach(b => {
+      const raekke = document.createElement('div');
+      raekke.style.cssText = 'display:flex; align-items:center; gap:8px; padding:6px 8px; font-size:13px;';
+      const navn = document.createElement('span');
+      navn.style.flex = '1';
+      navn.textContent = b.butik;
+      const info = document.createElement('span');
+      info.style.cssText = 'font-size:11px; color:var(--ui-tekst-888);';
+      info.textContent = b.konti ? b.konti + (b.konti === 1 ? ' konto' : ' konti') : 'ingen konti endnu';
+      raekke.append(navn, info);
+      const knap = (tekst, handling) => {
+        const k = document.createElement('button');
+        k.type = 'button'; k.textContent = tekst;
+        k.style.cssText = 'padding:4px 10px; font-size:12px;';
+        k.addEventListener('click', handling);
+        raekke.appendChild(k);
+        return k;
+      };
+      const saet = async (handling) => { await client.rpc('some_link_saet', { p_butik: b.butik_id, p_handling: handling }); hentSomeLinks(); };
+      if (b.noegle && b.aktiv) {
+        const kopier = knap('Kopiér link', async () => {
+          const url = location.origin + '/BL/some/?k=' + b.noegle;
+          try { await navigator.clipboard.writeText(url); kopier.textContent = 'Kopieret ✓'; }
+          catch (e) { prompt('Kopiér linket:', url); }
+          setTimeout(() => { kopier.textContent = 'Kopiér link'; }, 1500);
+        });
+        knap('Nyt link', () => { if (confirm('Det gamle link til ' + b.butik + ' holder op med at virke. Fortsæt?')) saet('ny'); });
+        knap('Slå fra', () => saet('sluk'));
+      } else {
+        knap(b.noegle ? 'Slå til' : 'Opret link', () => saet('opret'));
+      }
+      liste.appendChild(raekke);
+    });
+  }
   document.getElementById('someAdgangSoeg').addEventListener('input', tegnSomeAdgang);
   document.getElementById('someAdgangCloseBtn').addEventListener('click', () => {
     document.getElementById('someAdgangOverlay').style.display = 'none';

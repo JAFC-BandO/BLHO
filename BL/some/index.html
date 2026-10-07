@@ -6,8 +6,9 @@
 <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=4">
 <script>
 // SoMe-siden vises inde i butik-redigerings "SoMe"-fane (en iframe under samme topbar, ligesom
-// vagtplanen). Aabnes den direkte, sendes man derhen i stedet.
-if (window.top === window) location.replace('../butik-redigering/#some');
+// vagtplanen). Aabnes den direkte, sendes man derhen i stedet -- medmindre adressen er et
+// butikslink (?k=...), som vises uden login og kun med den butiks tal + kaedens samlede tal.
+if (window.top === window && !new URLSearchParams(location.search).get('k')) location.replace('../butik-redigering/#some');
 // Tema (system/lys/moerk) deles med butik-redigering via localStorage 'blho-tema'.
 const systemMoerk = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
 function saetTema() {
@@ -51,7 +52,8 @@ select{padding:7px 10px;border:1px solid var(--felt);border-radius:8px;backgroun
 .kort h2 small{font-weight:400;color:var(--mut);margin-left:6px}
 .to{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:16px}
 .to>.kort{margin-bottom:16px}
-.noegletal{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.noegletal{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:16px}
+@media (max-width:1100px){.noegletal{grid-template-columns:repeat(4,minmax(0,1fr))}}
 .tal{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px 14px}
 .tal .navn{font-size:12px;font-weight:600;color:var(--mut)}
 .tal .vaerdi{font-size:23px;font-weight:700;margin:2px 0;font-variant-numeric:tabular-nums}
@@ -115,10 +117,16 @@ td .lille.op,td .lille.ned{font-weight:600}
 
 <div class="laeser" id="laeserVis">Indlæser…</div>
 <div class="laeser" id="ingenAdgangVis" hidden>Din konto har ikke adgang til SoMe-tallene.</div>
+<div class="laeser" id="ugyldigtLinkVis" hidden>Linket virker ikke længere. Bed om et nyt link til din butiks SoMe-tal.</div>
 
 <div class="indhold" id="app" hidden>
   <div class="hoved">
-    <h1>SoMe-performance</h1>
+    <h1 id="titel">SoMe-performance</h1>
+    <span class="chips" id="omfang" hidden>
+      <button type="button" class="chip aktiv" data-o="egen">Min butik</button>
+      <button type="button" class="chip" data-o="faelles">Alle butikker</button>
+    </span>
+    <select id="butik" aria-label="Butik" hidden></select>
     <span class="chips" id="platforme"></span>
     <select id="periode" aria-label="Periode">
       <option value="7">Seneste 7 dage</option>
@@ -159,7 +167,7 @@ td .lille.op,td .lille.ned{font-weight:600}
   </div>
 
   <div class="to">
-    <div class="kort">
+    <div class="kort" id="opslagKort">
       <div class="kort-hoved">
         <h2>Top-opslag</h2>
         <span class="luft"></span>
@@ -205,14 +213,21 @@ const METRIK = { visninger: 'Visninger', raekkevidde: 'Rækkevidde', interaktion
 const UGEDAGE = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
 const BLOKKE = [[0, 6], [6, 9], [9, 12], [12, 15], [15, 18], [18, 21], [21, 24]];
 
-let data = null;            // svaret fra some_oversigt
+// To maader at se siden paa:
+//  - SoMe-fanen (logget ind, some_adgang): alle butikker, og man kan grave ned i én butik.
+//  - Butikslink (?k=noegle, uden login): kun den butiks tal ('egen') eller kaedens samlede tal
+//    ('faelles'). Serveren afgoer hvad linket maa se -- siden kan ikke bede om andre butikker.
+const LINK = new URLSearchParams(location.search).get('k');
+let omfang = 'egen';        // butikslink: 'egen' | 'faelles'
+let butik = null;           // SoMe-fanen: valgt butik (null = alle)
+let data = null;            // svaret fra some_overblik / some_rapport
 let platform = 'alle';
 let metrik = 'visninger';
 let visning = 'butik';
 let sortering = { felt: 'foelgere', ned: true };
 let tabelRaekker = [];      // det tabellen viser lige nu (til CSV)
 
-function vis(id) { ['laeserVis', 'ingenAdgangVis', 'app'].forEach(x => { $('#' + x).hidden = x != id; }); }
+function vis(id) { ['laeserVis', 'ingenAdgangVis', 'ugyldigtLinkVis', 'app'].forEach(x => { $('#' + x).hidden = x != id; }); }
 
 // Perioden slutter i gaar: dagens tal er ikke faerdige foer i morgen.
 function periode() {
@@ -226,9 +241,12 @@ function periode() {
 async function hent() {
   const p = periode();
   $('#app').classList.add('henter');
-  const { data: d, error } = await client.rpc('some_oversigt', { p_fra: p.fra, p_til: p.til });
+  const { data: d, error } = LINK
+    ? await client.rpc('some_rapport', { p_noegle: LINK, p_fra: p.fra, p_til: p.til, p_omfang: omfang, p_sort: $('#opslagSort').value })
+    : await client.rpc('some_overblik', { p_fra: p.fra, p_til: p.til, p_butik: butik });
   $('#app').classList.remove('henter');
   if (error) { besked('Tallene kunne ikke hentes. Prøv igen om lidt.', true); return; }
+  if (!d) { vis(LINK ? 'ugyldigtLinkVis' : 'ingenAdgangVis'); return; }
   data = d;
   tegn();
 }
@@ -252,6 +270,7 @@ function harForrige() {
 // udleverer 30 dage tilbage). Tal der taelles ud fra opslag (opslag, likes, kommentarer) er
 // noget andet: ingen opslag i forrige periode er et rigtigt 0, ikke manglende historik.
 const FRA_OPSLAG = ['opslag', 'likes', 'kommentarer', 'delinger'];
+// (stories er ikke med: foer indsamlingen af dem begyndte, betyder 'ingen' manglende historik)
 function sammenlign(konti, felt) {
   if (!harForrige()) return null;
   const nul = FRA_OPSLAG.includes(felt);
@@ -281,9 +300,27 @@ function tegn() {
   $('#platforme').hidden = findes.length < 2;
   $('#metrikker').innerHTML = Object.entries(METRIK).map(([k, n]) => `<button type="button" class="chip${k === metrik ? ' aktiv' : ''}" data-m="${k}">${n}</button>`).join('');
 
+  // Overskrift og valg af butik
+  const butikNavn = n => String(n || '').replace(/^Butik\s+/, 'Børneloppen ');
+  if (LINK) {
+    $('#titel').textContent = omfang === 'faelles' ? 'Alle butikker' : butikNavn(data.butik);
+    $('#omfang').hidden = false;
+    $('#omfang').querySelector('[data-o="egen"]').textContent = butikNavn(data.butik);
+    $('#opdater').hidden = true;
+    $('#opslagKort').hidden = omfang === 'faelles';
+  } else {
+    const valg = $('#butik'), liste = data.butikker || [];
+    valg.hidden = liste.length < 2;
+    valg.textContent = '';
+    [{ id: '', navn: 'Alle butikker' }, ...liste].forEach(b => { const o = el('option', '', butikNavn(b.navn)); o.value = b.id; valg.appendChild(o); });
+    valg.value = butik || '';
+  }
+
   const s = data.sidste_sync;
-  if (s && s.ok === false) besked('Den seneste indsamling fejlede: ' + ((s.fejl && s.fejl[0]) || 'ukendt fejl') + ' Tallene nedenfor er fra sidste vellykkede indsamling.', true);
-  else if (!data.konti.length) besked('Der er ikke hentet nogen tal endnu. Tryk "Opdater nu" for at hente dem – ellers hentes de automatisk hver morgen.');
+  if (s && s.ok === false) besked(LINK ? 'De nyeste tal kunne ikke hentes. Tallene nedenfor er fra sidste vellykkede indsamling.'
+    : 'Den seneste indsamling fejlede: ' + ((data.sync_fejl && data.sync_fejl[0]) || 'ukendt fejl') + ' Tallene nedenfor er fra sidste vellykkede indsamling.', true);
+  else if (!data.konti.length) besked(LINK ? 'Der er ikke koblet nogen Facebook- eller Instagram-konti til butikken endnu.'
+    : 'Der er ikke hentet nogen tal endnu. Tryk "Opdater nu" for at hente dem – ellers hentes de automatisk hver morgen.');
   else if (!harForrige()) besked('Sammenligning med forrige periode vises, når der er samlet tal ind for en hel periode mere. Prøv en kortere periode for at se den tidligere.');
   else besked('');
   $('#status').textContent = s && s.afsluttet_at ? 'Opdateret ' + new Date(s.afsluttet_at).toLocaleString('da-DK', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
@@ -296,6 +333,8 @@ function tegn() {
     ['Rækkevidde', 'raekkevidde', 'Antal personer nået pr. dag, lagt sammen. Den samme person tæller med hver dag, hun ser noget.'],
     ['Interaktioner', 'interaktioner', 'Reaktioner, kommentarer, delinger og klik'],
     ['Reaktioner og likes', 'likes', 'På opslag slået op i perioden'], ['Kommentarer', 'kommentarer', 'På opslag slået op i perioden'],
+    ['Stories', 'stories', 'Instagram-stories slået op i perioden. Samles ind fra den dag, indsamlingen blev sat op.'],
+    ['Story-visninger', 'story_visninger', 'Visninger af de stories, der er slået op i perioden'],
   ];
   $('#noegletal').innerHTML = kort.map(([navn, felt, hjaelp]) => {
     const nu = sum(k, 'nu', felt), s = sammenlign(k, felt);
@@ -464,13 +503,21 @@ function hentCsv() {
 // ---------- Top-opslag ----------
 async function hentOpslag() {
   const p = periode(), felt = $('#opslagSort').value;
-  let q = client.from('some_opslag')
-    .select('ekstern_id,oprettet_at,tekst,permalink,billede_url,likes,kommentarer,delinger,visninger,some_konti!inner(navn,platform,aktiv)')
-    .eq('some_konti.aktiv', true)
-    .gte('oprettet_at', p.fra).lt('oprettet_at', plusDage(p.til, 1))
-    .order(felt, { ascending: false, nullsFirst: false }).limit(8);
-  if (platform !== 'alle') q = q.eq('some_konti.platform', platform);
-  const { data: o } = await q;
+  let o;
+  if (LINK) {
+    // Butikslinket faar sine top-opslag med i svaret fra serveren (det kan ikke laese tabellen selv)
+    o = (data.opslag || []).filter(x => platform === 'alle' || x.some_konti.platform === platform).slice(0, 8);
+  } else {
+    let q = client.from('some_opslag')
+      .select('ekstern_id,oprettet_at,tekst,permalink,billede_url,likes,kommentarer,delinger,visninger,some_konti!inner(navn,platform,aktiv,butik_id)')
+      .eq('some_konti.aktiv', true)
+      .or('type.is.null,type.neq.STORY')
+      .gte('oprettet_at', p.fra).lt('oprettet_at', plusDage(p.til, 1))
+      .order(felt, { ascending: false, nullsFirst: false }).limit(8);
+    if (platform !== 'alle') q = q.eq('some_konti.platform', platform);
+    if (butik) q = q.eq('some_konti.butik_id', butik);
+    o = (await q).data;
+  }
   $('#opslag').innerHTML = (o || []).map(x => {
     const inter = (x.likes || 0) + (x.kommentarer || 0) + (x.delinger || 0);
     const rate = x.visninger ? ` · ${(inter / x.visninger * 100).toLocaleString('da-DK', { maximumFractionDigits: 1 })}% engagement` : '';
@@ -532,7 +579,9 @@ $('#konti').addEventListener('click', e => {
   tegnKonti();
 });
 $('#csv').addEventListener('click', hentCsv);
-$('#opslagSort').addEventListener('change', hentOpslag);
+$('#opslagSort').addEventListener('change', () => LINK ? hent() : hentOpslag());
+$('#omfang').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; omfang = b.dataset.o; $('#omfang').querySelectorAll('.chip').forEach(c => c.classList.toggle('aktiv', c === b)); hent(); });
+$('#butik').addEventListener('change', e => { butik = e.target.value || null; hent(); });
 // Friske tal: naar siden aabnes -- og hvert 5. minut mens den er aaben og synlig -- hentes nye
 // tal fra Meta, hvis den seneste indsamling er mere end 5 minutter gammel. Tidsstemplet ligger
 // i databasen og deles af alle, saa flere aabne faner ikke starter hver sin indsamling. Der
@@ -546,7 +595,7 @@ async function opdater(manuel) {
   opdaterer = true;
   const k = $('#opdater');
   k.disabled = true; k.textContent = 'Henter…';
-  const { data: r, error } = await client.functions.invoke('some-sync', { body: {} });
+  const { data: r, error } = await client.functions.invoke('some-sync', { body: LINK ? { k: LINK } : manuel ? { tving: true } : {} });
   k.disabled = false; k.textContent = 'Opdater nu';
   opdaterer = false;
   if (manuel && (error || !r || r.fejl)) { besked((r && r.fejl) || 'De nye tal kunne ikke hentes lige nu. Prøv igen om lidt.', true); return; }
@@ -562,6 +611,7 @@ new ResizeObserver(() => { const b = $('#graf').clientWidth; if (data && b && Ma
 window.addEventListener('scroll', skjulTip, true);
 
 async function start() {
+  if (LINK) { vis('app'); await hent(); if (data) opdater(false); return; }
   const { data: { user } } = await client.auth.getUser();
   if (!user) { vis('ingenAdgangVis'); return; }
   // RLS paa some_adgang viser kun brugerens egen raekke -- findes den ikke, er der ingen adgang.
@@ -571,6 +621,6 @@ async function start() {
   await hent();
   opdater(false);
 }
-if (window.top !== window) start().catch(() => vis('ingenAdgangVis'));
+if (window.top !== window || LINK) start().catch(() => vis(LINK ? 'ugyldigtLinkVis' : 'ingenAdgangVis'));
 </script>
 </body></html>

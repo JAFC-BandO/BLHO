@@ -3,7 +3,8 @@
 // kun fra databasen -- den taler aldrig selv med Meta.
 //
 // Koeres én gang i doegnet af cron-jobbet 'daglig-some-sync' (se supabase/migration_some.sql)
-// og kan startes fra siden med "Opdater nu" af brugere i some_adgang.
+// og startes desuden fra siden: af brugere i some_adgang, og af butikslinks (body.k). Uden
+// "tving" starter der hoejst én indsamling hvert 5. minut, uanset hvor mange der har siden aaben.
 //
 // Noegler: ligger krypteret i Supabase Vault og hentes med RPC'en some_noegler, som kun
 // service_role maa kalde. 'meta_system_token' er tokenet fra Meta (en systembruger i Business
@@ -180,6 +181,31 @@ async function hentInstagram(ig: Json, navn: string, tok: string, kontoId: strin
   }
   if (!slut && ig.followers_count != null) ud.saet(kontoId, iDag(), 'foelgere', ig.followers_count);
 
+  // Stories kan kun hentes mens de er live (24 timer) -- derfor gemmes de ved hver indsamling,
+  // og visningstallet opdateres, indtil storyen udloeber.
+  if (!slut) {
+    const sf = 'id,media_type,permalink,timestamp,thumbnail_url,media_url';
+    let st: Json[] = [];
+    try { st = await grafAlle(ig.id + '/stories', { fields: sf + ',insights.metric(views,reach){name,values}', limit: 100 }, tok, 3); }
+    catch {
+      try { st = await grafAlle(ig.id + '/stories', { fields: sf, limit: 100 }, tok, 3); }
+      catch (e) { fejl.push(`${navn} (Instagram) stories: ${(e as Error).message}`); }
+    }
+    for (const o of st) {
+      const r: Raekke = {
+        konto_id: kontoId, ekstern_id: o.id, oprettet_at: o.timestamp, type: 'STORY', tekst: '', permalink: o.permalink ?? null,
+        billede_url: o.thumbnail_url ?? (o.media_type === 'VIDEO' ? null : o.media_url ?? null), opdateret_at: new Date().toISOString(),
+      };
+      for (const m of o.insights?.data ?? []) {
+        const v = Number(m.values?.[0]?.value);
+        if (!Number.isFinite(v)) continue;
+        if (m.name === 'views') r.visninger = v;
+        if (m.name === 'reach') r.raekkevidde = v;
+      }
+      opslag.push(r);
+    }
+  }
+
   const felter = 'id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,like_count,comments_count';
   const p = { since: midnat - (slut ? dage : Math.max(dage, 30)) * DAG, until: midnat, limit: 50 };
   let liste: Json[];
@@ -248,9 +274,15 @@ Deno.serve(async (req) => {
   const noegler = await db('rpc/some_noegler', { method: 'POST', body: '{}' }).catch(() => null);
   if (!noegler) return svar({ fejl: 'Kunne ikke laese noeglerne fra Vault.' }, 500);
 
-  // ---------- Adgang: cron-noeglen, eller en bruger i some_adgang ----------
+  // ---------- Adgang: cron-noeglen, et gyldigt butikslink, eller en bruger i some_adgang ----------
+  const body = await req.json().catch(() => ({}));
   const cron = req.headers.get('x-some-cron');
-  if (!(cron && noegler.some_cron_noegle && cron === noegler.some_cron_noegle)) {
+  const erCron = !!(cron && noegler.some_cron_noegle && cron === noegler.some_cron_noegle);
+  const viaLink = !erCron && typeof body?.k === 'string';
+  if (viaLink) {
+    const butik = await db('rpc/some_link_butik', { method: 'POST', body: JSON.stringify({ p_noegle: body.k }) }).catch(() => null);
+    if (!butik) return svar({ fejl: 'Linket er ikke gyldigt.' }, 403);
+  } else if (!erCron) {
     const adg = await fetch(SB + '/rest/v1/rpc/har_some_adgang', {
       method: 'POST',
       headers: {
@@ -267,10 +299,14 @@ Deno.serve(async (req) => {
   const token = noegler.meta_system_token;
   if (!token && !noegler.meta_side_tokens) return svar({ fejl: 'Meta-adgangen er ikke sat op endnu (meta_system_token mangler i Supabase Vault).', kode: 'ingen_noegle' });
 
-  const body = await req.json().catch(() => ({}));
+  if (!erCron && (viaLink || !body?.tving)) {
+    const sidst = await db('some_sync_log?select=startet_at&order=id.desc&limit=1').catch(() => null);
+    if (sidst?.[0] && Date.now() - new Date(sidst[0].startet_at).getTime() < 5 * 60 * 1000) return svar({ ok: true, sprunget: true });
+  }
   const foerste = ((await db('some_dag?select=dato&limit=1')) ?? []).length === 0;
-  const dage = Math.max(1, Math.min(90, Number(body?.dage) || (foerste ? 90 : 3)));
-  const slut = Math.max(0, Math.min(730, Math.floor(Number(body?.slut) || 0)));
+  // Et butikslink maa kun starte den almindelige, korte indsamling
+  const dage = viaLink ? 3 : Math.max(1, Math.min(90, Number(body?.dage) || (foerste ? 90 : 3)));
+  const slut = viaLink ? 0 : Math.max(0, Math.min(730, Math.floor(Number(body?.slut) || 0)));
 
   const [log] = await db('some_sync_log', { method: 'POST', headers: { Prefer: 'return=representation' }, body: '{}' });
   const fejl: string[] = [];
