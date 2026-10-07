@@ -2,7 +2,7 @@
 // fra Meta og gemmer dem i Supabase (some_konti, some_dag, some_opslag). Siden BL/some/ laeser
 // kun fra databasen -- den taler aldrig selv med Meta.
 //
-// Koeres én gang i doegnet af cron-jobbet 'daglig-some-sync' (se supabase/migration_some.sql)
+// Koeres hver 3. time af cron-jobbet 'daglig-some-sync' (se supabase/migration_some.sql)
 // og startes desuden fra siden: af brugere i some_adgang, og af butikslinks (body.k). Uden
 // "tving" starter der hoejst én indsamling hvert 5. minut, uanset hvor mange der har siden aaben.
 //
@@ -16,6 +16,11 @@
 // Body (valgfri): { "dage": N } -- hvor mange dage tilbage der hentes (standard 3, foerste
 // gang 90). Meta retter tallene lidt de foerste doegn, derfor hentes de seneste dage igen.
 // { "dage": 30, "slut": 60 } henter historik: de 30 dage der sluttede for 60 dage siden.
+// { "sider": ["<side-id>", ...] } henter kun de Facebook-sider (og deres Instagram) -- bruges
+// til at hente historik for nye butikker uden at hente alle de andre igen.
+//
+// Hele koerslen skal vaere faerdig paa under 150 sekunder (graensen for en edge-funktion), og
+// intet gemmes foer til sidst. Derfor hentes siderne samtidig, og hver sides kald ligesaa.
 //
 // Ingen hemmeligheder eller persondata i denne fil (repoet er offentligt).
 
@@ -123,7 +128,7 @@ async function hentSide(side: Json, kontoId: string, dage: number, slut: number,
   const tok = side.access_token;
   const nu = Math.floor(Date.now() / 1000) - slut * DAG;
   const fra = nu - Math.min(dage, 90) * DAG;
-  for (const [felt, navne] of SIDE_MAAL) {
+  await Promise.all(SIDE_MAAL.map(async ([felt, navne]) => {
     let sidst = '';
     let fundet = false;
     for (const maal of navne) {
@@ -135,7 +140,7 @@ async function hentSide(side: Json, kontoId: string, dage: number, slut: number,
       } catch (e) { sidst = (e as Error).message; }
     }
     if (!fundet) fejl.push(`${side.name} (Facebook) ${felt}: ${sidst}`);
-  }
+  }));
   if (!slut && side.followers_count != null) ud.saet(kontoId, iDag(), 'foelgere', side.followers_count);
 
   const felter = 'id,created_time,message,permalink_url,full_picture,status_type,shares,reactions.summary(total_count).limit(0),comments.summary(total_count).limit(0)';
@@ -169,16 +174,21 @@ async function hentInstagram(ig: Json, navn: string, tok: string, kontoId: strin
       for (const v of d.data?.[0]?.values ?? []) ud.saet(kontoId, datoFor(v.end_time), felt, v.value);
     } catch (e) { fejl.push(`${navn} (Instagram) ${felt}: ${(e as Error).message}`); }
   }
-  // Visninger og interaktioner findes kun som en sum for et tidsrum -- derfor ét kald pr. dag.
-  for (let i = 1; i <= Math.min(dage, slut ? 30 : 7); i++) {
+  // Visninger og interaktioner findes kun som en sum for et tidsrum -- derfor ét kald pr. dag
+  // (et par ad gangen; fejler ét, opgives resten, og fejlen meldes én gang).
+  const dagNr = Array.from({ length: Math.min(dage, slut ? 30 : 7) }, (_, i) => i + 1);
+  let dagFejl = '';
+  await iHold(dagNr, 6, async (i) => {
+    if (dagFejl) return;
     const start = midnat - i * DAG;
     try {
       const d = await graf(ig.id + '/insights', { metric: 'views,total_interactions', metric_type: 'total_value', period: 'day', since: start, until: start + DAG }, tok);
       for (const m of d.data ?? []) {
         ud.saet(kontoId, iso(new Date(start * 1000)), m.name === 'views' ? 'visninger' : 'interaktioner', m.total_value?.value);
       }
-    } catch (e) { fejl.push(`${navn} (Instagram) visninger: ${(e as Error).message}`); break; }
-  }
+    } catch (e) { dagFejl = (e as Error).message; }
+  });
+  if (dagFejl) fejl.push(`${navn} (Instagram) visninger: ${dagFejl}`);
   if (!slut && ig.followers_count != null) ud.saet(kontoId, iDag(), 'foelgere', ig.followers_count);
 
   // Stories kan kun hentes mens de er live (24 timer) -- derfor gemmes de ved hver indsamling,
@@ -258,7 +268,7 @@ async function findSider(token: string | undefined, gemteTekst: string | undefin
   return sider;
 }
 
-// Koerer opgaverne et par stykker ad gangen, saa Meta ikke faar 30 samtidige kald
+// Koerer opgaverne et par stykker ad gangen, saa Meta ikke faar alle kald paa én gang
 async function iHold<T>(ting: T[], samtidig: number, f: (t: T) => Promise<void>) {
   let i = 0;
   await Promise.all(Array.from({ length: samtidig }, async () => {
@@ -307,6 +317,7 @@ Deno.serve(async (req) => {
   // Et butikslink maa kun starte den almindelige, korte indsamling
   const dage = viaLink ? 3 : Math.max(1, Math.min(90, Number(body?.dage) || (foerste ? 90 : 3)));
   const slut = viaLink ? 0 : Math.max(0, Math.min(730, Math.floor(Number(body?.slut) || 0)));
+  const kunSider = !viaLink && Array.isArray(body?.sider) && body.sider.length ? new Set<string>(body.sider.map(String)) : null;
 
   const [log] = await db('some_sync_log', { method: 'POST', headers: { Prefer: 'return=representation' }, body: '{}' });
   const fejl: string[] = [];
@@ -327,12 +338,15 @@ Deno.serve(async (req) => {
     // ---------- Hent tallene ----------
     const ud = new Dage();
     const opslag: Raekke[] = [];
-    await iHold(sider, 4, async (s) => {
+    // Hver side har sin egen noegle og sin egen kvote hos Meta, saa siderne kan hentes samtidig
+    await iHold(sider.filter((s) => !kunSider || kunSider.has(String(s.id))), 9, async (s) => {
       const fb = id.get('facebook:' + s.id);
-      if (fb?.aktiv) await hentSide(s, fb.id, dage, slut, ud, opslag, fejl);
       const ig = s.instagram_business_account;
       const igK = ig && id.get('instagram:' + ig.id);
-      if (igK?.aktiv) await hentInstagram(ig, igK.navn, s.access_token, igK.id, dage, slut, ud, opslag, fejl);
+      await Promise.all([
+        fb?.aktiv ? hentSide(s, fb.id, dage, slut, ud, opslag, fejl) : null,
+        igK?.aktiv ? hentInstagram(ig, igK.navn, s.access_token, igK.id, dage, slut, ud, opslag, fejl) : null,
+      ]);
     });
     await upsert('some_dag', 'konto_id,dato', ud.alle());
     await upsert('some_opslag', 'konto_id,ekstern_id', opslag);
