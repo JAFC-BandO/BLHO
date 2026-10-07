@@ -616,10 +616,11 @@ select bruger_id from public.vagtplan_adgang on conflict do nothing;
 -- En rapport er en tekst (med emojis og linjeskift) laast til en periode. Den vises oeverst paa
 -- butikkens side og bestemmer, hvilken periode butikslinket aabner paa -- modtageren kan stadig
 -- vaelge en anden periode. butik_id null = faelles tekst til alle butikker. Hver butik har hoejst
--- én aktiv rapport (og der er hoejst én faelles): gemmes den med en ny periode, arkiveres den
--- gamle raekke (slettet_at), saa de tidligere perioders tekster bliver liggende. "Slet" arkiverer
--- paa samme maade, saa en fortrudt sletning kan hentes frem igen med SQL. Kun den, der styrer
--- SoMe-adgangen (kan_styre), kan skrive og slette.
+-- én aktiv rapport (og der er hoejst én faelles): gemmes den med en ny periode, bliver den gamle
+-- raekke til en "tidligere rapport" (arkiveret_at), som stadig kan ses paa siden. "Slet" skjuler
+-- en rapport helt (slettet_at) -- aktiv eller tidligere -- men raekken bliver liggende, saa en
+-- fortrudt sletning kan hentes frem igen med SQL. Kun den, der styrer SoMe-adgangen (kan_styre),
+-- kan skrive og slette.
 create table if not exists public.some_rapporter (
   id uuid primary key default gen_random_uuid(),
   butik_id uuid references public.butikker(id) on delete cascade,
@@ -633,36 +634,41 @@ create table if not exists public.some_rapporter (
   slettet_at timestamptz,
   check (til >= fra)
 );
+alter table public.some_rapporter add column if not exists arkiveret_at timestamptz;
 -- Foerst var der én rapport pr. butik OG periode (indekset some_rapporter_unik): af flere aktive
--- for samme butik beholdes den senest gemte, resten arkiveres.
-update public.some_rapporter r set slettet_at = now()
-where r.slettet_at is null and exists (
-  select 1 from public.some_rapporter n
-  where n.slettet_at is null and n.butik_id is not distinct from r.butik_id
-    and (n.opdateret_at, n.id) > (r.opdateret_at, r.id));
+-- for samme butik er den senest gemte den aktive, resten bliver til tidligere rapporter.
 drop index if exists public.some_rapporter_unik;
-create unique index if not exists some_rapporter_aktiv
-  on public.some_rapporter (coalesce(butik_id, '00000000-0000-0000-0000-000000000000'::uuid)) where slettet_at is null;
+drop index if exists public.some_rapporter_aktiv;
+update public.some_rapporter r set arkiveret_at = now()
+where r.slettet_at is null and r.arkiveret_at is null and exists (
+  select 1 from public.some_rapporter n
+  where n.slettet_at is null and n.arkiveret_at is null and n.butik_id is not distinct from r.butik_id
+    and (n.opdateret_at, n.id) > (r.opdateret_at, r.id));
+create unique index if not exists some_rapporter_en_aktiv
+  on public.some_rapporter (coalesce(butik_id, '00000000-0000-0000-0000-000000000000'::uuid))
+  where slettet_at is null and arkiveret_at is null;
 alter table public.some_rapporter enable row level security;
 revoke all on public.some_rapporter from anon, authenticated;
 
--- SoMe-fanen: de aktive rapporter (én pr. butik + den faelles), nyeste periode foerst
+-- SoMe-fanen: alle butikkers rapporter + de faelles -- den aktive foerst, saa de tidligere
 create or replace function public.some_rapporter_hent()
 returns jsonb language sql stable security definer set search_path = public as $$
   select case when public.har_some_adgang() then coalesce((
     select jsonb_agg(jsonb_build_object('id', r.id, 'butik_id', r.butik_id, 'fra', r.fra, 'til', r.til, 'titel', r.titel,
-      'tekst', r.tekst, 'opdateret_at', r.opdateret_at) order by r.til desc, r.fra desc, r.opdateret_at desc)
+      'tekst', r.tekst, 'opdateret_at', r.opdateret_at, 'arkiveret_at', r.arkiveret_at)
+      order by (r.arkiveret_at is not null), r.til desc, r.fra desc, r.opdateret_at desc)
     from some_rapporter r where r.slettet_at is null), '[]'::jsonb) end;
 $$;
 revoke execute on function public.some_rapporter_hent() from public, anon;
 grant execute on function public.some_rapporter_hent() to authenticated;
 
--- Butikslinket (uden login): butikkens egen rapport + den faelles. Ugyldigt link giver null.
+-- Butikslinket (uden login): butikkens egne rapporter + de faelles. Ugyldigt link giver null.
 create or replace function public.some_rapporter_link(p_noegle text)
 returns jsonb language sql stable security definer set search_path = public as $$
   select coalesce((
     select jsonb_agg(jsonb_build_object('id', r.id, 'butik_id', r.butik_id, 'fra', r.fra, 'til', r.til, 'titel', r.titel,
-      'tekst', r.tekst, 'opdateret_at', r.opdateret_at) order by r.til desc, r.fra desc, r.opdateret_at desc)
+      'tekst', r.tekst, 'opdateret_at', r.opdateret_at, 'arkiveret_at', r.arkiveret_at)
+      order by (r.arkiveret_at is not null), r.til desc, r.fra desc, r.opdateret_at desc)
     from some_rapporter r where r.slettet_at is null and (r.butik_id is null or r.butik_id = l.butik)), '[]'::jsonb)
   from (select public.some_link_butik(p_noegle) as butik) l where l.butik is not null;
 $$;
@@ -670,7 +676,7 @@ revoke execute on function public.some_rapporter_link(text) from public;
 grant execute on function public.some_rapporter_link(text) to anon, authenticated;
 
 -- Gemmer butikkens rapport for perioden. Er perioden den samme som den aktive rapports, rettes
--- teksten; ellers arkiveres den gamle raekke, og teksten faar en ny.
+-- teksten; ellers bliver den gamle raekke til en tidligere rapport, og teksten faar en ny raekke.
 create or replace function public.some_rapporter_gem(p_butik uuid, p_fra date, p_til date, p_titel text, p_tekst text)
 returns uuid language plpgsql security definer set search_path = public as $$
 declare v_id uuid; v_fra date; v_til date;
@@ -680,14 +686,14 @@ begin
   if coalesce(btrim(p_tekst), '') = '' then raise exception 'Rapporten mangler tekst'; end if;
   if length(p_tekst) > 8000 then raise exception 'Teksten er for lang (hoejst 8000 tegn)'; end if;
   select id, fra, til into v_id, v_fra, v_til from some_rapporter
-    where butik_id is not distinct from p_butik and slettet_at is null for update;
+    where butik_id is not distinct from p_butik and slettet_at is null and arkiveret_at is null for update;
   if v_id is not null and v_fra = p_fra and v_til = p_til then
     update some_rapporter set titel = nullif(btrim(p_titel), ''), tekst = p_tekst, opdateret_at = now(), opdateret_af = auth.uid()
     where id = v_id;
     return v_id;
   end if;
   if v_id is not null then
-    update some_rapporter set slettet_at = now() where id = v_id;
+    update some_rapporter set arkiveret_at = now() where id = v_id;
   end if;
   insert into some_rapporter (butik_id, fra, til, titel, tekst, opdateret_af)
   values (p_butik, p_fra, p_til, nullif(btrim(p_titel), ''), p_tekst, auth.uid()) returning id into v_id;
