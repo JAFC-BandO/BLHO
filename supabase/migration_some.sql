@@ -615,10 +615,11 @@ select bruger_id from public.vagtplan_adgang on conflict do nothing;
 -- ---------- Rapporter: tekst fra den SoMe-ansvarlige til butikkerne ----------
 -- En rapport er en tekst (med emojis og linjeskift) laast til en periode. Den vises oeverst paa
 -- butikkens side og bestemmer, hvilken periode butikslinket aabner paa -- modtageren kan stadig
--- vaelge en anden periode. butik_id null = faelles tekst til alle butikker. Én rapport pr.
--- butik og periode. Kun den, der styrer SoMe-adgangen (kan_styre), kan skrive og slette.
--- "Slet" skjuler kun rapporten (slettet_at), saa en fortrudt sletning kan hentes frem igen med SQL;
--- gemmes der en ny rapport for samme butik og periode, tager den raekkens plads.
+-- vaelge en anden periode. butik_id null = faelles tekst til alle butikker. Hver butik har hoejst
+-- én aktiv rapport (og der er hoejst én faelles): gemmes den med en ny periode, arkiveres den
+-- gamle raekke (slettet_at), saa de tidligere perioders tekster bliver liggende. "Slet" arkiverer
+-- paa samme maade, saa en fortrudt sletning kan hentes frem igen med SQL. Kun den, der styrer
+-- SoMe-adgangen (kan_styre), kan skrive og slette.
 create table if not exists public.some_rapporter (
   id uuid primary key default gen_random_uuid(),
   butik_id uuid references public.butikker(id) on delete cascade,
@@ -632,12 +633,20 @@ create table if not exists public.some_rapporter (
   slettet_at timestamptz,
   check (til >= fra)
 );
-create unique index if not exists some_rapporter_unik
-  on public.some_rapporter (coalesce(butik_id, '00000000-0000-0000-0000-000000000000'::uuid), fra, til);
+-- Foerst var der én rapport pr. butik OG periode (indekset some_rapporter_unik): af flere aktive
+-- for samme butik beholdes den senest gemte, resten arkiveres.
+update public.some_rapporter r set slettet_at = now()
+where r.slettet_at is null and exists (
+  select 1 from public.some_rapporter n
+  where n.slettet_at is null and n.butik_id is not distinct from r.butik_id
+    and (n.opdateret_at, n.id) > (r.opdateret_at, r.id));
+drop index if exists public.some_rapporter_unik;
+create unique index if not exists some_rapporter_aktiv
+  on public.some_rapporter (coalesce(butik_id, '00000000-0000-0000-0000-000000000000'::uuid)) where slettet_at is null;
 alter table public.some_rapporter enable row level security;
 revoke all on public.some_rapporter from anon, authenticated;
 
--- SoMe-fanen: alle rapporter (alle butikker + faelles), nyeste periode foerst
+-- SoMe-fanen: de aktive rapporter (én pr. butik + den faelles), nyeste periode foerst
 create or replace function public.some_rapporter_hent()
 returns jsonb language sql stable security definer set search_path = public as $$
   select case when public.har_some_adgang() then coalesce((
@@ -648,7 +657,7 @@ $$;
 revoke execute on function public.some_rapporter_hent() from public, anon;
 grant execute on function public.some_rapporter_hent() to authenticated;
 
--- Butikslinket (uden login): butikkens egne rapporter + de faelles. Ugyldigt link giver null.
+-- Butikslinket (uden login): butikkens egen rapport + den faelles. Ugyldigt link giver null.
 create or replace function public.some_rapporter_link(p_noegle text)
 returns jsonb language sql stable security definer set search_path = public as $$
   select coalesce((
@@ -660,22 +669,28 @@ $$;
 revoke execute on function public.some_rapporter_link(text) from public;
 grant execute on function public.some_rapporter_link(text) to anon, authenticated;
 
+-- Gemmer butikkens rapport for perioden. Er perioden den samme som den aktive rapports, rettes
+-- teksten; ellers arkiveres den gamle raekke, og teksten faar en ny.
 create or replace function public.some_rapporter_gem(p_butik uuid, p_fra date, p_til date, p_titel text, p_tekst text)
 returns uuid language plpgsql security definer set search_path = public as $$
-declare v_id uuid;
+declare v_id uuid; v_fra date; v_til date;
 begin
   if not public.kan_styre_some() then raise exception 'Ingen adgang'; end if;
   if p_fra is null or p_til is null or p_til < p_fra then raise exception 'Ugyldig periode'; end if;
   if coalesce(btrim(p_tekst), '') = '' then raise exception 'Rapporten mangler tekst'; end if;
   if length(p_tekst) > 8000 then raise exception 'Teksten er for lang (hoejst 8000 tegn)'; end if;
-  select id into v_id from some_rapporter where butik_id is not distinct from p_butik and fra = p_fra and til = p_til;
-  if v_id is null then
-    insert into some_rapporter (butik_id, fra, til, titel, tekst, opdateret_af)
-    values (p_butik, p_fra, p_til, nullif(btrim(p_titel), ''), p_tekst, auth.uid()) returning id into v_id;
-  else
-    update some_rapporter set titel = nullif(btrim(p_titel), ''), tekst = p_tekst, opdateret_at = now(), opdateret_af = auth.uid(), slettet_at = null
+  select id, fra, til into v_id, v_fra, v_til from some_rapporter
+    where butik_id is not distinct from p_butik and slettet_at is null for update;
+  if v_id is not null and v_fra = p_fra and v_til = p_til then
+    update some_rapporter set titel = nullif(btrim(p_titel), ''), tekst = p_tekst, opdateret_at = now(), opdateret_af = auth.uid()
     where id = v_id;
+    return v_id;
   end if;
+  if v_id is not null then
+    update some_rapporter set slettet_at = now() where id = v_id;
+  end if;
+  insert into some_rapporter (butik_id, fra, til, titel, tekst, opdateret_af)
+  values (p_butik, p_fra, p_til, nullif(btrim(p_titel), ''), p_tekst, auth.uid()) returning id into v_id;
   return v_id;
 end $$;
 revoke execute on function public.some_rapporter_gem(uuid, date, date, text, text) from public, anon;

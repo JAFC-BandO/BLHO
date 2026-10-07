@@ -164,6 +164,8 @@ td .lille.op,td .lille.ned{font-weight:600}
 .emoji{border:0;background:none;font-size:20px;line-height:1;padding:5px;border-radius:6px;cursor:pointer;font-family:inherit}
 .emoji:hover,.emoji:focus-visible{background:var(--badge)}
 .knap.stille.aktiv{background:var(--brand);color:#fff}
+.rapport-note b{color:var(--fg)}
+.emoji-panel .rapport-note{margin:0 0 4px}
 .linkknap{background:none;border:0;padding:0;color:var(--brand-tekst);font:inherit;font-weight:600;text-decoration:underline;cursor:pointer}
 /* --- Opslagene bag et felt i "Bedste tidspunkter" --- */
 dialog.tid{border:1px solid var(--bd);border-radius:14px;background:var(--card);color:var(--fg);padding:0;width:min(760px,calc(100vw - 24px));max-height:min(82vh,820px);overflow:auto}
@@ -307,11 +309,12 @@ let tabelRaekker = [];      // det tabellen viser lige nu (til CSV)
 let nuTekst = '';           // "9. sep. – 6. okt." -- perioden, der vises
 let forrigeTekst = '';      // "12. aug. – 8. sep." -- perioden, pilene sammenligner med
 let sidstLaest = 0;         // hvornaar tallene sidst blev laest fra databasen
-let rapporter = [];         // rapporterne (tekst + periode): alle i fanen, butikkens egne + faelles via link
+let rapporter = [];         // rapporterne (tekst + periode), hoejst én pr. butik: alle i fanen, butikkens egen + den faelles via link
 let kanStyre = false;       // maa skrive rapporter (den SoMe-ansvarlige)
-let aktivRapport = null;    // id paa den rapport, linket aabnede paa, eller som man selv har valgt
 let rapportRediger = false; // den SoMe-ansvarlige har slaaet redigering til (knappen i toppen)
-const kladder = new Map();  // ikke-gemte tekster pr. butik og periode, saa man kan skifte butik uden at miste noget
+const kladder = new Map();  // ikke-gemte tekster pr. butik ('alle' = den faelles), saa man kan skifte butik og periode uden at miste noget
+let foerUdkast = null;      // det, der stod i skrivefeltet, foer AI-udkastet blev sat ind (til "Fortryd")
+const bedsteTider = {};     // de bedste tidspunkter pr. platform, som tekst (til AI-udkastet)
 let periodeFraUrl = false;  // adressen bad selv om en bestemt periode
 let sammenligning = 'aar';  // 'aar' = samme periode sidste aar, 'foer' = perioden lige foer
 const foerNavn = () => sammenligning === 'aar' ? 'Samme periode sidste år' : 'Perioden lige før';
@@ -480,9 +483,9 @@ function tegn() {
 }
 
 // ---------- Rapporten: tekst fra den SoMe-ansvarlige, laast til en periode ----------
-// En rapport hoerer til én butik (eller er faelles) og én periode. Butikslinket aabner paa den
-// nyeste rapports periode -- eller den, adressen peger paa (&r=<id>) -- og modtageren kan
-// derefter selv vaelge en anden periode. I fanen kan den SoMe-ansvarlige skrive og rette.
+// Hver butik har hoejst én rapport (og der er hoejst én faelles til alle butikker). Rapporten
+// husker den periode, den blev gemt med: butikslinket aabner paa den, og modtageren kan derefter
+// selv vaelge en anden. I fanen kan den SoMe-ansvarlige skrive og rette.
 const datoTekst = d => datoKort(tilDato(d));
 // "september 2026" for en hel kalendermaaned, "3. kvartal 2026" for et helt kvartal, ellers datoerne
 function periodeNavn(fra, til) {
@@ -497,24 +500,27 @@ async function hentRapporter() {
   const { data: r } = LINK ? await client.rpc('some_rapporter_link', { p_noegle: LINK }) : await client.rpc('some_rapporter_hent');
   rapporter = Array.isArray(r) ? r : [];
 }
-// De rapporter, der hoerer til det, man kigger paa: butikkens egne -- eller de faelles i "Alle butikker"
-function rapportListe() {
-  if (LINK) return rapporter.filter(r => omfang === 'faelles' ? !r.butik_id : !!r.butik_id);
-  return rapporter.filter(r => butik ? r.butik_id === butik : !r.butik_id);
+// Rapporten for det, man kigger paa: butikkens egen, og den faelles til alle butikker
+const faellesRapport = () => rapporter.find(r => !r.butik_id) || null;
+const egenRapport = () => (LINK ? (omfang === 'faelles' ? null : rapporter.find(r => r.butik_id)) : butik ? rapporter.find(r => r.butik_id === butik) : null) || null;
+// Saetter periodevaelgeren til bestemte datoer -- som et af de faste valg ("Sidste måned",
+// "3. kvartal 2026" ...), naar datoerne svarer til ét, ellers som egne datoer
+function saetPeriode(fra, til) {
+  const v = $('#periode');
+  const fast = [...v.options].map(o => o.value).filter(x => x !== 'valgfri').find(x => { v.value = x; const p = periode(); return p.fra === fra && p.til === til; });
+  if (!fast) { v.value = 'valgfri'; $('#fraDato').value = fra; $('#tilDato').value = til; }
+  visDatoer();
 }
-function saetPeriode(fra, til) { $('#periode').value = 'valgfri'; $('#fraDato').value = fra; $('#tilDato').value = til; visDatoer(); }
-// Butikslinket: start paa rapportens periode (den, adressen peger paa -- ellers butikkens nyeste)
+// Butikslinket: start paa rapportens periode -- medmindre adressen selv beder om en bestemt periode
 function vaelgStandardRapport() {
-  const r = new URLSearchParams(location.search).get('r');
-  const valgt = rapporter.find(x => x.id === r) || (periodeFraUrl ? null : rapporter.find(x => x.butik_id) || rapporter[0]);
-  if (!valgt) return;
-  aktivRapport = valgt.id;
-  saetPeriode(valgt.fra, valgt.til);
+  const r = egenRapport() || faellesRapport();
+  if (r && !periodeFraUrl) saetPeriode(r.fra, r.til);
 }
-// Normalt ser alle det samme: rapporten for den valgte periode, hvis der er én -- ellers intet.
-// Den SoMe-ansvarlige har en knap i toppen, der slaar redigering til; saa bliver feltet til et
-// skrivefelt for den butik og periode, der er valgt.
-const kladdeNoegle = p => (butik || 'alle') + '|' + p.fra + '|' + p.til;
+// Skrivefeltet hoerer til en butik ('alle' = den faelles tekst) -- ikke til en periode. Skifter
+// man periode, mens man skriver, bliver teksten staaende; perioden er den, der er valgt oeverst,
+// i det oejeblik der trykkes "Gem".
+const rapNoegle = () => butik || 'alle';
+const gemtRapport = n => rapporter.find(r => (r.butik_id || 'alle') === n) || null;
 // Emojis, der saettes ind, hvor markoeren staar (alle andre: Windows-tast + punktum)
 const EMOJIS = [
   ['Ros', '⭐ 🌟 👏 🙌 💪 🏆 🥇 🎉 🥳 ✨ 🔥 💯'],
@@ -530,51 +536,96 @@ let sidstFelt = 'rapTekst';   // feltet, markoeren sidst stod i (overskrift elle
 // Gemmer det, der staar i skrivefeltet, som kladde -- hvis det afviger fra den gemte rapport
 function gemKladde() {
   const boks = document.querySelector('#rapportBoks [data-noegle]'); if (!boks) return;
-  const [b, fra, til] = boks.dataset.noegle.split('|');
-  const gemt = rapporter.find(r => (r.butik_id || 'alle') === b && r.fra === fra && r.til === til);
+  const n = boks.dataset.noegle, gemt = gemtRapport(n);
   const titel = $('#rapTitel').value, tekst = $('#rapTekst').value;
-  if (titel === (gemt ? gemt.titel || '' : '') && tekst === (gemt ? gemt.tekst : '')) kladder.delete(boks.dataset.noegle);
-  else kladder.set(boks.dataset.noegle, { titel, tekst });
+  if (titel === (gemt ? gemt.titel || '' : '') && tekst === (gemt ? gemt.tekst : '')) kladder.delete(n);
+  else kladder.set(n, { titel, tekst });
 }
-function tegnRapport() {
-  const p = periode(), liste = rapportListe();
-  const match = liste.find(r => r.fra === p.fra && r.til === p.til);
-  const maaSkrive = kanStyre && !LINK, knap = $('#rapportKnap');
+// Alle ser butikkens rapport oeverst -- ogsaa naar der er valgt en anden periode end rapportens.
+// Den SoMe-ansvarlige har en knap i toppen, der goer feltet til et skrivefelt for den valgte butik.
+function tegnRapport(status) {
+  const p = periode(), maaSkrive = kanStyre && !LINK, knap = $('#rapportKnap');
   knap.hidden = !maaSkrive;
-  knap.textContent = rapportRediger ? 'Luk redigering' : match ? 'Ret rapport' : 'Skriv rapport';
+  knap.textContent = rapportRediger ? 'Luk redigering' : gemtRapport(rapNoegle()) ? 'Ret rapport' : 'Skriv rapport';
   knap.classList.toggle('aktiv', rapportRediger);
-  knap.title = rapportRediger ? 'Tilbage til det, butikken ser' : 'Skriv en tekst til ' + (butik ? butikNavnAf(butik) : 'alle butikker') + ' for den valgte periode';
+  knap.title = rapportRediger ? 'Tilbage til det, butikken ser' : 'Skriv en tekst til ' + (butik ? butikNavnAf(butik) : 'alle butikker');
   gemKladde();
-  if (maaSkrive && rapportRediger) { tegnEditor(p, match); return; }
-  // Modtageren (link) ser altid sin rapport -- ogsaa naar hun har valgt en anden periode
-  const vist = match || (LINK ? liste.find(r => r.id === aktivRapport) || liste[0] : null);
+  if (maaSkrive && rapportRediger) {
+    // Samme butik som foer (der er kun skiftet periode): skrivefeltet bliver staaende uroert
+    const boks = document.querySelector('#rapportBoks [data-noegle]');
+    if (boks && boks.dataset.noegle === rapNoegle()) tegnEditorPeriode(status); else tegnEditor(status);
+    return;
+  }
+  const egen = egenRapport(), faelles = faellesRapport(), vist = egen || faelles;
   if (!vist) { $('#rapportBoks').innerHTML = ''; return; }
-  // Den faelles tekst for samme periode vises under butikkens egen
-  const faelles = vist.butik_id ? rapporter.find(r => !r.butik_id && r.fra === vist.fra && r.til === vist.til) : null;
-  const andre = liste.filter(r => r.id !== vist.id);
-  const valg = andre.length ? `<select class="rapportValg" aria-label="Vælg en anden rapport"><option value="">Andre rapporter …</option>${andre.map(r => `<option value="${r.id}">${esc(r.titel ? r.titel + ' (' + periodeNavn(r.fra, r.til) + ')' : periodeNavn(r.fra, r.til))}</option>`).join('')}</select>` : '';
+  const navn = r => periodeNavn(r.fra, r.til);
   $('#rapportBoks').innerHTML = `<div class="rapport">
-    <div class="rapport-hoved"><span class="rapport-maerke">Rapport · ${esc(periodeNavn(vist.fra, vist.til))}</span><span class="luft"></span>${valg}</div>
+    <div class="rapport-hoved"><span class="rapport-maerke">${egen ? 'Rapport' : 'Til alle butikker'} · ${esc(navn(vist))}</span></div>
     ${vist.titel ? `<h2>${esc(vist.titel)}</h2>` : ''}
     <div class="rapport-tekst">${esc(vist.tekst)}</div>
-    ${faelles ? `<div class="rapport-faelles"><span class="rapport-maerke">Til alle butikker</span>${faelles.titel ? `<h2>${esc(faelles.titel)}</h2>` : ''}<div class="rapport-tekst">${esc(faelles.tekst)}</div></div>` : ''}
-    ${match ? '' : `<div class="rapport-note">Rapporten handler om ${esc(periodeNavn(vist.fra, vist.til))}, men du kigger lige nu på en anden periode. <button class="linkknap" data-r="periode" data-id="${vist.id}">Vis rapportens periode</button></div>`}
+    ${egen && faelles ? `<div class="rapport-faelles"><span class="rapport-maerke">Til alle butikker${navn(faelles) === navn(egen) ? '' : ' · ' + esc(navn(faelles))}</span>${faelles.titel ? `<h2>${esc(faelles.titel)}</h2>` : ''}<div class="rapport-tekst">${esc(faelles.tekst)}</div></div>` : ''}
+    ${vist.fra === p.fra && vist.til === p.til ? '' : `<div class="rapport-note">Rapporten handler om ${esc(navn(vist))}, men du kigger lige nu på en anden periode. <button type="button" class="linkknap" data-r="periode">Vis rapportens periode</button></div>`}
   </div>`;
 }
-function tegnEditor(p, match, status) {
-  const noegle = kladdeNoegle(p), k = kladder.get(noegle);
-  const titel = k ? k.titel : match ? match.titel || '' : '', tekst = k ? k.tekst : match ? match.tekst : '';
-  let h = `<div class="rapport" data-noegle="${esc(noegle)}">
-    <div class="rapport-hoved"><span class="rapport-maerke">${match ? 'Ret rapport' : 'Ny rapport'} · ${butik ? esc(butikNavnAf(butik)) : 'alle butikker (fælles tekst)'} · ${esc(periodeNavn(p.fra, p.til))}</span><span class="luft"></span>
-      ${match && butik ? '<button class="knap stille" data-r="link">Kopiér link til butikken</button>' : ''}</div>
+function tegnEditor(status) {
+  const n = rapNoegle(), gemt = gemtRapport(n), k = kladder.get(n);
+  const titel = k ? k.titel : gemt ? gemt.titel || '' : '', tekst = k ? k.tekst : gemt ? gemt.tekst : '';
+  $('#rapportBoks').innerHTML = `<div class="rapport" data-noegle="${esc(n)}">
+    <div class="rapport-hoved"><span class="rapport-maerke">${gemt ? 'Ret rapport' : 'Ny rapport'} · ${butik ? esc(butikNavnAf(butik)) : 'alle butikker (fælles tekst)'}</span><span class="luft"></span>
+      ${gemt && butik ? '<button type="button" class="knap stille" data-r="link">Kopiér link til butikken</button>' : ''}</div>
     <input type="text" id="rapTitel" maxlength="120" aria-label="Overskrift" placeholder="Overskrift (valgfri)" value="${esc(titel)}">
     <textarea id="rapTekst" maxlength="8000" aria-label="Rapportens tekst" placeholder="⭐ Det her gik rigtig godt i perioden …&#10;⭐ …&#10;🫶 En idé til næste gang …">${esc(tekst)}</textarea>
-    <div class="emoji-linje"><button type="button" class="knap stille" data-r="emoji" aria-expanded="${emojiAaben}">😊 Emojis</button><span class="rapport-note">Klik på en emoji for at sætte den ind, hvor markøren står. Flere: Windows-tast + punktum.</span></div>
-    <div class="emoji-panel"${emojiAaben ? '' : ' hidden'}>${EMOJIS.map(([navn, liste]) => `<div class="emoji-gruppe"><span>${navn}</span>${liste.split(' ').map(x => `<button type="button" class="emoji" aria-label="Indsæt ${x}">${x}</button>`).join('')}</div>`).join('')}</div>
-    <div class="rapport-note">Rapporten låses til <b>${esc(nuTekst)}</b> – perioden valgt øverst. Det er den, butikken ser, når den åbner sit link; den kan selv vælge en anden bagefter. Skift butik eller periode øverst for at skrive til en anden.</div>
-    <div class="rapport-knapper"><button class="knap" data-r="gem">Gem rapport</button><span class="rapport-note" id="rapStatus">${esc(status || (k ? 'Ændringerne er ikke gemt endnu.' : ''))}</span><span class="luft"></span>${match ? '<button class="knap stille fare" data-r="slet">Slet rapport</button>' : ''}</div>
+    <div class="emoji-linje"><button type="button" class="knap stille" data-r="emoji" aria-expanded="${emojiAaben}">😊 Emojis</button><button type="button" class="knap stille" data-r="udkast">✨ AI-udkast</button><span class="rapport-note" id="udkastNote"></span></div>
+    <div class="emoji-panel"${emojiAaben ? '' : ' hidden'}><div class="rapport-note">Klik på en emoji for at sætte den ind, hvor markøren står. Flere: Windows-tast + punktum.</div>${EMOJIS.map(([navn, liste]) => `<div class="emoji-gruppe"><span>${navn}</span>${liste.split(' ').map(x => `<button type="button" class="emoji" aria-label="Indsæt ${x}">${x}</button>`).join('')}</div>`).join('')}</div>
+    <div class="rapport-note" id="rapPeriode"></div>
+    <div class="rapport-knapper"><button type="button" class="knap" data-r="gem">Gem rapport</button><span class="rapport-note" id="rapStatus"></span><span class="luft"></span>${gemt ? '<button type="button" class="knap stille fare" data-r="slet">Slet rapport</button>' : ''}</div>
   </div>`;
-  $('#rapportBoks').innerHTML = h;
+  tegnUdkastNote();
+  tegnEditorPeriode(status);
+}
+// Linjen om, hvilken periode rapporten gemmes for -- rettes uden at roere selve skrivefeltet
+function tegnEditorPeriode(status) {
+  const p = periode(), n = rapNoegle(), gemt = gemtRapport(n), navn = periodeNavn(p.fra, p.til);
+  const gemtNavn = gemt && (gemt.fra !== p.fra || gemt.til !== p.til) ? periodeNavn(gemt.fra, gemt.til) : '';
+  $('#rapPeriode').innerHTML = `Rapporten gemmes for <b>${esc(navn)}</b>${navn === nuTekst ? '' : ' (' + esc(nuTekst) + ')'} – perioden valgt øverst. Det er den periode, butikken lander på, når den åbner sit link; den kan selv vælge en anden bagefter.`
+    + (gemtNavn ? `<br>Den gemte rapport dækker <b>${esc(gemtNavn)}</b>. Gemmer du nu, kommer den til at dække perioden ovenfor i stedet. <button type="button" class="linkknap" data-r="periode">Skift til ${esc(gemtNavn)}</button>` : '');
+  $('#rapStatus').textContent = status || (kladder.has(n) ? 'Ændringerne er ikke gemt endnu.' : '');
+}
+function tegnUdkastNote(besked) {
+  const note = $('#udkastNote'); if (!note) return;
+  const fortryd = !!foerUdkast && foerUdkast.noegle === rapNoegle();
+  note.innerHTML = esc(besked || (fortryd ? 'Udkastet er sat ind – læs det igennem, og ret det til, før du gemmer.' : 'AI-udkast skriver et forslag ud fra periodens tal og top-opslag, som du kan rette til.'))
+    + (fortryd ? ' <button type="button" class="linkknap" data-r="fortryd">Fortryd udkastet</button>' : '');
+}
+// Det, AI'en faar at skrive ud fra: de samme tal, som siden viser for perioden, og de mest sete opslag
+async function udkastKontekst(p) {
+  const linjer = [
+    'Modtager: ' + (butik ? butikNavnAf(butik) : 'alle butikker i kæden (tallene er for hele kæden lagt sammen)'),
+    'Periode: ' + periodeNavn(p.fra, p.til) + ' (' + nuTekst + ')',
+    forrigeTekst ? 'Der sammenlignes med ' + foerNavn().toLowerCase() + ' (' + forrigeTekst + ')' : 'Der er ingen tal at sammenligne med',
+  ];
+  const pct = v => v.toLocaleString('da-DK', { maximumFractionDigits: 1, signDisplay: 'exceptZero' }) + ' %';
+  for (const pf of RAEKKEFOELGE) {
+    const k = data.konti.filter(x => x.platform === pf);
+    if (!k.length || !SEKTION[pf]) continue;
+    linjer.push('', PLATFORM[pf].toUpperCase());
+    [...SEKTION[pf].indsats, ...SEKTION[pf].resultat, ['Følgere', 'foelgere'], ['Nye følgere', 'nye_foelgere']].forEach(([navn, felt]) => {
+      const nu = sum(k, 'nu', felt) ?? (FRA_OPSLAG.includes(felt) ? 0 : null), c = sammenlign(k, felt);
+      linjer.push(navn + ': ' + tal(nu) + (c ? ' (før ' + tal(c.foer) + ', ændring ' + pct(c.pct) + ')' : ''));
+    });
+    if (bedsteTider[pf] && bedsteTider[pf].length) linjer.push('Bedste tidspunkter at poste: ' + bedsteTider[pf].join('; '));
+    let q = client.from('some_opslag')
+      .select('oprettet_at,type,tekst,likes,kommentarer,delinger,visninger,some_konti!inner(navn,platform,aktiv,butik_id)')
+      .eq('some_konti.aktiv', true).eq('some_konti.platform', pf)
+      .or('type.is.null,type.not.in.(STORY,created_event)')
+      .gte('oprettet_at', tilDato(p.fra).toISOString()).lt('oprettet_at', tilDato(plusDage(p.til, 1)).toISOString())
+      .order('visninger', { ascending: false, nullsFirst: false }).limit(6);
+    if (butik) q = q.eq('some_konti.butik_id', butik);
+    const o = (await q).data || [];
+    if (o.length) linjer.push('De mest sete opslag (flest visninger først):');
+    o.forEach((x, i) => linjer.push(`${i + 1}. ${x.type === 'REELS' ? 'Reel' : 'Opslag'}${butik ? '' : ' fra ' + x.some_konti.navn}, ${new Date(x.oprettet_at).toLocaleString('da-DK', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}: ${tal(x.visninger)} visninger, ${tal(x.likes)} likes, ${tal(x.kommentarer)} kommentarer, ${tal(x.delinger)} delinger. Tekst: "${String(x.tekst || '(uden tekst)').replace(/\s+/g, ' ').slice(0, 320)}"`));
+  }
+  return linjer.join('\n');
 }
 $('#rapportKnap').addEventListener('click', () => {
   rapportRediger = !rapportRediger;
@@ -585,7 +636,7 @@ $('#rapportKnap').addEventListener('click', () => {
 $('#rapportBoks').addEventListener('input', e => {
   if (!e.target.closest('#rapTitel, #rapTekst')) return;
   gemKladde();
-  $('#rapStatus').textContent = kladder.has(kladdeNoegle(periode())) ? 'Ændringerne er ikke gemt endnu.' : '';
+  $('#rapStatus').textContent = kladder.has(rapNoegle()) ? 'Ændringerne er ikke gemt endnu.' : '';
 });
 // Husk hvilket felt markoeren stod i, og lad et klik paa en emoji blive i feltet
 $('#rapportBoks').addEventListener('focusin', e => { if (e.target.matches('#rapTitel, #rapTekst')) sidstFelt = e.target.id; });
@@ -600,48 +651,82 @@ $('#rapportBoks').addEventListener('click', async e => {
     return;
   }
   const k = e.target.closest('[data-r]'); if (!k) return;
-  if (k.dataset.r === 'emoji') { emojiAaben = !emojiAaben; k.setAttribute('aria-expanded', emojiAaben); document.querySelector('#rapportBoks .emoji-panel').hidden = !emojiAaben; return; }
-  const p = periode(), nu = rapportListe().find(r => r.fra === p.fra && r.til === p.til), h = k.dataset.r;
+  const h = k.dataset.r;
+  if (h === 'emoji') { emojiAaben = !emojiAaben; k.setAttribute('aria-expanded', emojiAaben); document.querySelector('#rapportBoks .emoji-panel').hidden = !emojiAaben; return; }
+  if (h === 'periode') {
+    // I skrivefeltet: den gemte rapports periode. Ellers: perioden for den rapport, der vises
+    const r = document.querySelector('#rapportBoks [data-noegle]') ? gemtRapport(rapNoegle()) : egenRapport() || faellesRapport();
+    if (r) { saetPeriode(r.fra, r.til); hent(); }
+    return;
+  }
+  // Resten hoerer til skrivefeltet og gaelder den butik, feltet er tegnet for
+  const boks = document.querySelector('#rapportBoks [data-noegle]'); if (!boks) return;
+  const n = boks.dataset.noegle, b = n === 'alle' ? null : n, gemt = gemtRapport(n);
+  const ikkeGemt = () => { $('#rapStatus').textContent = kladder.has(n) ? 'Ændringerne er ikke gemt endnu.' : ''; };
   if (h === 'gem') {
-    const tekst = $('#rapTekst').value, titel = $('#rapTitel').value;
+    const p = periode(), tekst = $('#rapTekst').value, titel = $('#rapTitel').value;
     if (!tekst.trim()) { $('#rapStatus').textContent = 'Skriv en tekst først.'; return; }
     k.disabled = true; $('#rapStatus').textContent = 'Gemmer …';
-    const { data: id, error } = await client.rpc('some_rapporter_gem', { p_butik: butik, p_fra: p.fra, p_til: p.til, p_titel: titel, p_tekst: tekst });
+    const { error } = await client.rpc('some_rapporter_gem', { p_butik: b, p_fra: p.fra, p_til: p.til, p_titel: titel, p_tekst: tekst });
     if (error) { k.disabled = false; $('#rapStatus').textContent = 'Rapporten kunne ikke gemmes: ' + error.message; return; }
-    aktivRapport = id; kladder.delete(kladdeNoegle(p));
+    kladder.delete(n);
+    if (foerUdkast && foerUdkast.noegle === n) foerUdkast = null;
     await hentRapporter();
-    document.querySelector('#rapportBoks [data-noegle]')?.removeAttribute('data-noegle');   // det gemte skal ikke blive til en kladde igen
-    tegnEditor(p, rapportListe().find(r => r.fra === p.fra && r.til === p.til), 'Gemt ✓ kl. ' + new Date().toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' }));
+    if (boks.isConnected) boks.removeAttribute('data-noegle');   // det gemte skal ikke blive til en kladde igen
+    tegnRapport(rapNoegle() === n ? 'Gemt ✓ kl. ' + new Date().toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' }) + ' – rapporten gælder ' + periodeNavn(p.fra, p.til) + '.' : '');
   }
   else if (h === 'slet') {
     // To tryk, saa en rapport ikke forsvinder ved et uheld
     k.dataset.r = 'slet2'; k.textContent = 'Tryk igen for at slette';
     setTimeout(() => { if (k.isConnected) { k.dataset.r = 'slet'; k.textContent = 'Slet rapport'; } }, 4000);
   }
-  else if (h === 'slet2' && nu) {
-    const { error } = await client.rpc('some_rapporter_slet', { p_id: nu.id });
+  else if (h === 'slet2' && gemt) {
+    const { error } = await client.rpc('some_rapporter_slet', { p_id: gemt.id });
     if (error) { $('#rapStatus').textContent = 'Rapporten kunne ikke slettes: ' + error.message; return; }
-    kladder.delete(kladdeNoegle(p));
+    kladder.delete(n);
+    if (foerUdkast && foerUdkast.noegle === n) foerUdkast = null;
     await hentRapporter();
-    document.querySelector('#rapportBoks [data-noegle]')?.removeAttribute('data-noegle');
-    tegnEditor(p, null, 'Rapporten er slettet.');
+    if (boks.isConnected) boks.removeAttribute('data-noegle');
+    tegnRapport(rapNoegle() === n ? 'Rapporten er slettet.' : '');
   }
-  else if (h === 'periode') { const r = rapporter.find(x => x.id === k.dataset.id); if (r) { aktivRapport = r.id; saetPeriode(r.fra, r.til); hent(); } }
-  else if (h === 'link' && nu) {
-    // Butikkens eget link, der aabner direkte paa denne rapport
+  else if (h === 'link' && gemt) {
+    // Butikkens eget link -- det aabner paa rapportens periode
     const { data: links } = await client.rpc('some_links_liste');
-    const l = (links || []).find(x => x.butik_id === butik && x.aktiv && x.noegle);
+    const l = (links || []).find(x => x.butik_id === b && x.aktiv && x.noegle);
     if (!l) { k.textContent = 'Butikken har intet aktivt link (Admin → SoMe-adgang)'; return; }
-    const url = location.origin + '/BL/some/?k=' + l.noegle + '&r=' + nu.id;
+    const url = location.origin + '/BL/some/?k=' + l.noegle;
     try { await navigator.clipboard.writeText(url); k.textContent = 'Link kopieret ✓'; }
     catch (x) { k.outerHTML = `<input type="text" readonly value="${esc(url)}" aria-label="Link til butikken" style="max-width:340px;margin:0" onfocus="this.select()">`; return; }
     setTimeout(() => { if (k.isConnected) k.textContent = 'Kopiér link til butikken'; }, 2500);
   }
-});
-$('#rapportBoks').addEventListener('change', e => {
-  const v = e.target.closest('.rapportValg'); if (!v || !v.value) return;
-  const r = rapporter.find(x => x.id === v.value);
-  if (r) { aktivRapport = r.id; saetPeriode(r.fra, r.til); hent(); }
+  else if (h === 'udkast') {
+    // AI'en (edge-funktionen some-udkast) skriver et forslag ud fra periodens tal og top-opslag.
+    // Det saettes ind i skrivefeltet -- intet gemmes, foer der trykkes "Gem rapport".
+    if (n !== rapNoegle() || !data) return;
+    const p = periode(), mislykket = 'Udkastet kunne ikke laves lige nu. Prøv igen om lidt.';
+    k.disabled = true; k.textContent = '✨ Skriver udkast …';
+    let ud = null, fejl = '';
+    try {
+      const { data: r, error } = await client.functions.invoke('some-udkast', { body: { kontekst: await udkastKontekst(p) } });
+      if (error || !r || r.fejl || !r.tekst) fejl = (r && r.fejl) || mislykket; else ud = r;
+    } catch (x) { fejl = mislykket; }
+    if (!k.isConnected) return;   // der er skiftet butik imens
+    k.disabled = false; k.textContent = '✨ AI-udkast';
+    const nu = periode();
+    if (!fejl && (nu.fra !== p.fra || nu.til !== p.til)) fejl = 'Perioden blev skiftet, mens udkastet blev skrevet. Tryk igen for at få et udkast for den nye periode.';
+    if (fejl) { tegnUdkastNote(fejl); return; }
+    const t = $('#rapTitel'), x = $('#rapTekst');
+    foerUdkast = { noegle: n, titel: t.value, tekst: x.value };
+    if (ud.titel) t.value = String(ud.titel).slice(0, 120);
+    x.value = String(ud.tekst).slice(0, 8000);
+    gemKladde(); tegnUdkastNote(); ikkeGemt();
+    x.focus(); x.setSelectionRange(0, 0); x.scrollTop = 0;
+  }
+  else if (h === 'fortryd' && foerUdkast && foerUdkast.noegle === n) {
+    $('#rapTitel').value = foerUdkast.titel; $('#rapTekst').value = foerUdkast.tekst;
+    foerUdkast = null;
+    gemKladde(); tegnUdkastNote(); ikkeGemt();
+  }
 });
 
 // ---------- Indsats og resultat pr. platform ----------
@@ -694,7 +779,7 @@ function tegnSektioner() {
           <div class="kort-hoved"><h2>Bedste tidspunkter at poste <small>interaktioner pr. opslag i snit</small></h2></div>
           <div class="varmekort" data-p="${p}"></div>
           <ol class="bedst" data-p="${p}"></ol>
-          <div class="lille" style="margin-top:8px">Grøn = de tre bedste tidspunkter. Grå tal = færre end 3 opslag, så de tæller ikke med. – = ingen opslag i perioden.</div>
+          <div class="lille tidNote" data-p="${p}" style="margin-top:8px"></div>
         </div>
       </div>
     </section>`;
@@ -954,9 +1039,12 @@ function tegnTider() {
       if (c) { c.antal += t.antal; c.inter += Number(t.interaktioner || 0); }
     });
     const snit = c => c.antal ? c.inter / c.antal : 0;
-    // Et enkelt opslag der gik godt er ikke et moenster -- de tre bedste kraever mindst 3 opslag,
-    // og felter med faerre taeller hverken med i farveskalaen eller i top 3.
-    const NOK = 3;
+    // Et enkelt opslag der gik godt er ikke et moenster -- et felt taeller foerst med i top 3 og
+    // farveskalaen, naar det har mindst 3 opslag. I en kort periode (eller hos en butik, der slaar
+    // lidt op) naar ingen felter dertil; saa saenkes kravet til 2 og til sidst 1, saa der stadig er
+    // noget at se -- med en bemaerkning om, at tallene bygger paa faa opslag.
+    const medOpslag = celler.flat().filter(c => c.antal);
+    const NOK = [3, 2].find(n => medOpslag.filter(c => c.antal >= n).length >= 3) || 1;
     const top = celler.flatMap((raekke, d) => raekke.map((c, b) => ({ d, b, c }))).filter(x => x.c.antal >= NOK).sort((a, z) => snit(z.c) - snit(a.c)).slice(0, 3);
     const rang = (d, b) => top.findIndex(x => x.d === d && x.b === b) + 1;   // 1-3, eller 0
     const maks = Math.max(1, ...celler.flat().filter(c => c.antal >= NOK).map(snit));
@@ -990,7 +1078,11 @@ function tegnTider() {
     kort.onpointerleave = skjulTip; kort.onfocusout = skjulTip;
     kort.onclick = e => { const k = e.target.closest('.celle.har'); if (k) { skjulTip(); visTidOpslag(pf, Number(k.dataset.d), Number(k.dataset.b), celler[k.dataset.d][k.dataset.b]); } };
     document.querySelector(`.bedst[data-p="${pf}"]`).innerHTML = top.map((x, i) => `<li><span class="rang r${i + 1}">${i + 1}</span>${UGEDAGE[x.d]} kl. ${blokNavn(BLOKKE[x.b])}: <b>${tal(snit(x.c))}</b> interaktioner pr. opslag <span class="lille">(${x.c.antal} opslag)</span></li>`).join('')
-      || '<li class="lille">Der er for få opslag i perioden til at pege på et bedste tidspunkt.</li>';
+      || '<li class="lille">Ingen opslag i perioden.</li>';
+    document.querySelector(`.tidNote[data-p="${pf}"]`).textContent = !medOpslag.length ? '' : 'Grøn = de tre bedste tidspunkter.'
+      + (NOK > 1 ? ` Grå tal = færre end ${NOK} opslag, så de tæller ikke med.` : '') + ' – = ingen opslag i perioden.'
+      + (NOK < 3 ? ' Der er få opslag i perioden, så hvert felt bygger på ganske få opslag – vælg en længere periode (fx 90 dage) for et mere sikkert billede.' : '');
+    bedsteTider[pf] = top.map(x => `${UGEDAGE[x.d]} kl. ${blokNavn(BLOKKE[x.b])} (${tal(snit(x.c))} interaktioner pr. opslag, ${x.c.antal} opslag)`);
   });
 }
 
