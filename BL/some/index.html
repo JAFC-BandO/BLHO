@@ -722,7 +722,7 @@ async function udkastKontekst(p) {
         o.forEach(x => { const n = noegle(x); if (!m.has(n)) m.set(n, []); m.get(n).push(x); });
         linjer.push(titel + ' (antal · visninger pr. stk. i snit · likes+kommentarer+delinger pr. stk. i snit):');
         [...m.entries()].sort((a, b) => orden ? orden.indexOf(a[0]) - orden.indexOf(b[0]) : b[1].length - a[1].length)
-          .forEach(([n, l]) => linjer.push(`- ${n}: ${l.length} · ${hel(snit(l.filter(x => x.visninger != null), x => Number(x.visninger)))} · ${tal(snit(l, inter))}`));
+          .forEach(([n, l]) => linjer.push(`- ${n}: ${l.length} · ${hel(snit(l.filter(x => x.visninger != null), x => Number(x.visninger)))} · ${tal(snit(l, inter))}${l.length < 3 ? ' (for få til et mønster)' : ''}`));
       };
       gruppe('Format', formatAf);
       gruppe('Tidspunkt på dagen', x => { const t = new Date(x.oprettet_at).getHours(); return blokNavn(BLOKKE.find(([a, z]) => t >= a && t < z)); }, BLOKKE.map(blokNavn));
