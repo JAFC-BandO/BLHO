@@ -282,15 +282,11 @@ grant execute on function public.some_link_saet(uuid, text) to authenticated;
 -- Stories (type STORY) taelles for sig og er ikke med i opslag/likes/kommentarer. Stories fra
 -- foer vi selv samlede dem ind, ligger som dagstal i some_dag (historik) og laegges til.
 -- Kernen tjekker IKKE adgang -- den kaldes kun af some_oversigt og some_rapport nedenfor.
-create or replace function public.some_oversigt_kerne(p_fra date, p_til date, p_butik uuid, p_saml boolean)
+-- p_f_fra..p_f_til er perioden, der sammenlignes med -- siden vaelger den: samme periode sidste
+-- aar, eller perioden lige foer. Den skal slutte foer p_fra.
+create or replace function public.some_oversigt_kerne2(p_fra date, p_til date, p_butik uuid, p_saml boolean, p_f_fra date, p_f_til date)
 returns jsonb language sql stable security definer set search_path = public as $$
-  -- Forrige periode: lige saa mange dage lige foer -- eller hele maaneden foer, naar perioden er
-  -- en hel kalendermaaned (som i de maanedlige rapporter). Siden bruger samme regel.
-  with gr as (
-    select case when p_fra = date_trunc('month', p_fra)::date and p_til = (date_trunc('month', p_fra) + interval '1 month - 1 day')::date
-        then (date_trunc('month', p_fra) - interval '1 month')::date
-        else p_fra - (p_til - p_fra + 1) end as f_fra,
-      p_fra - 1 as f_til),
+  with gr as (select p_f_fra as f_fra, p_f_til as f_til),
   kk as (select k.* from some_konti k where k.aktiv and (p_butik is null or k.butik_id = p_butik)),
   nu as (
     select konto_id, sum(nye_foelgere) nye, sum(visninger) vis, sum(raekkevidde) raek, sum(interaktioner) inter,
@@ -312,8 +308,8 @@ returns jsonb language sql stable security definer set search_path = public as $
     select distinct on (konto_id) konto_id, foelgere from some_dag
     where dato <= p_til + 1 and foelgere is not null order by konto_id, dato desc),
   f_foer as (
-    select distinct on (konto_id) konto_id, foelgere from some_dag
-    where dato < p_fra and foelgere is not null order by konto_id, dato desc),
+    select distinct on (konto_id) konto_id, foelgere from some_dag, gr
+    where dato <= gr.f_til + 1 and foelgere is not null order by konto_id, dato desc),
   -- Opslag taelles som i de gamle rapporter: reels og stories for sig, og begivenheder
   -- (created_event) er ikke opslag. Dagene er danske dage, ikke UTC.
   op as (
@@ -325,8 +321,10 @@ returns jsonb language sql stable security definer set search_path = public as $
       sum(delinger) filter (where type is distinct from 'STORY') del,
       nullif(count(*) filter (where type = 'STORY'), 0) stories, sum(visninger) filter (where type = 'STORY') story_vis
     from some_opslag, gr
-    where oprettet_at >= (gr.f_fra::timestamp at time zone 'Europe/Copenhagen')
-      and oprettet_at < ((p_til + 1)::timestamp at time zone 'Europe/Copenhagen') group by 1, 2),
+    where (oprettet_at >= (p_fra::timestamp at time zone 'Europe/Copenhagen')
+        and oprettet_at < ((p_til + 1)::timestamp at time zone 'Europe/Copenhagen'))
+      or (oprettet_at >= (gr.f_fra::timestamp at time zone 'Europe/Copenhagen')
+        and oprettet_at < ((gr.f_til + 1)::timestamp at time zone 'Europe/Copenhagen')) group by 1, 2),
   pr as (
     select k.id, k.platform, k.navn, k.brugernavn, k.billede_url, k.butik_id,
       f_nu.foelgere n_foelg, nu.nye n_nye, nu.vis n_vis, nu.raek n_raek, nu.inter n_inter, a.antal n_ops, a.likes n_likes, a.kom n_kom, a.del n_del,
@@ -352,7 +350,7 @@ returns jsonb language sql stable security definer set search_path = public as $
   serie as (
     select d.dato, k.platform, sum(d.visninger) vis, sum(d.raekkevidde) raek, sum(d.interaktioner) inter, sum(d.nye_foelgere) nye
     from some_dag d join kk k on k.id = d.konto_id, gr
-    where d.dato between gr.f_fra and p_til group by d.dato, k.platform)
+    where d.dato between p_fra and p_til or d.dato between gr.f_fra and gr.f_til group by d.dato, k.platform)
   select jsonb_build_object(
     'konti', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -384,6 +382,18 @@ returns jsonb language sql stable security definer set search_path = public as $
     'sidste_sync', (select jsonb_build_object('startet_at', startet_at, 'afsluttet_at', afsluttet_at, 'ok', ok, 'konti', konti)
       from some_sync_log order by id desc limit 1)
   );
+$$;
+revoke execute on function public.some_oversigt_kerne2(date, date, uuid, boolean, date, date) from public, anon, authenticated;
+
+-- Den oprindelige kerne (bruges af some_overblik/some_rapport, som aeldre udgaver af siden
+-- kalder): sammenligner med perioden lige foer -- eller hele maaneden foer, naar perioden er en
+-- hel kalendermaaned.
+create or replace function public.some_oversigt_kerne(p_fra date, p_til date, p_butik uuid, p_saml boolean)
+returns jsonb language sql stable security definer set search_path = public as $$
+  select public.some_oversigt_kerne2(p_fra, p_til, p_butik, p_saml,
+    case when p_fra = date_trunc('month', p_fra)::date and p_til = (date_trunc('month', p_fra) + interval '1 month - 1 day')::date
+      then (date_trunc('month', p_fra) - interval '1 month')::date else p_fra - (p_til - p_fra + 1) end,
+    p_fra - 1);
 $$;
 revoke execute on function public.some_oversigt_kerne(date, date, uuid, boolean) from public, anon, authenticated;
 
@@ -427,6 +437,43 @@ begin
 end $$;
 revoke execute on function public.some_rapport(text, date, date, text, text) from public;
 grant execute on function public.some_rapport(text, date, date, text, text) to anon, authenticated;
+
+-- ---------- Samme svar, men med valgfri sammenligningsperiode (det siden bruger nu) ----------
+create or replace function public.some_overblik2(p_fra date, p_til date, p_butik uuid, p_f_fra date, p_f_til date)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.har_some_adgang() then return null; end if;
+  if p_til < p_fra or p_f_til < p_f_fra or p_f_til >= p_fra or p_f_til - p_f_fra > 400 then raise exception 'Ugyldig periode'; end if;
+  return public.some_oversigt_kerne2(p_fra, p_til, p_butik, false, p_f_fra, p_f_til) || jsonb_build_object(
+    'butikker', (select coalesce(jsonb_agg(jsonb_build_object('id', b.id, 'navn', b.navn) order by b.navn), '[]'::jsonb)
+      from butikker b where exists (select 1 from some_konti k where k.butik_id = b.id and k.aktiv)),
+    'sync_fejl', (select fejl from some_sync_log order by id desc limit 1));
+end $$;
+revoke execute on function public.some_overblik2(date, date, uuid, date, date) from public, anon;
+grant execute on function public.some_overblik2(date, date, uuid, date, date) to authenticated;
+
+create or replace function public.some_rapport2(p_noegle text, p_fra date, p_til date, p_omfang text, p_sort text, p_f_fra date, p_f_til date)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_butik uuid := public.some_link_butik(p_noegle);
+  v_faelles boolean := p_omfang = 'faelles';
+begin
+  if v_butik is null then return null; end if;
+  if p_til < p_fra or p_til - p_fra > 400 or p_f_til < p_f_fra or p_f_til >= p_fra or p_f_til - p_f_fra > 400 then raise exception 'Ugyldig periode'; end if;
+  return public.some_oversigt_kerne2(p_fra, p_til, case when v_faelles then null else v_butik end, v_faelles, p_f_fra, p_f_til) || jsonb_build_object(
+    'butik', (select navn from butikker where id = v_butik),
+    'opslag', coalesce((select jsonb_agg(to_jsonb(t) - 'nr' order by t.nr) from (
+      select o.ekstern_id, o.oprettet_at, o.tekst, o.permalink, o.billede_url, o.likes, o.kommentarer, o.delinger, o.visninger,
+        jsonb_build_object('navn', k.navn, 'platform', k.platform) some_konti,
+        row_number() over (partition by k.platform
+          order by case p_sort when 'kommentarer' then o.kommentarer when 'likes' then o.likes else o.visninger end desc nulls last) nr
+      from some_opslag o join some_konti k on k.id = o.konto_id and k.aktiv and (v_faelles or k.butik_id = v_butik)
+      where o.oprettet_at >= (p_fra::timestamp at time zone 'Europe/Copenhagen')
+        and o.oprettet_at < ((p_til + 1)::timestamp at time zone 'Europe/Copenhagen')
+        and (o.type is null or o.type not in ('STORY', 'created_event'))) t where t.nr <= 5), '[]'::jsonb));
+end $$;
+revoke execute on function public.some_rapport2(text, date, date, text, text, date, date) from public;
+grant execute on function public.some_rapport2(text, date, date, text, text, date, date) to anon, authenticated;
 
 -- ---------- Opslagene bag ét felt i "Bedste tidspunkter at poste" ----------
 -- p_ugedag 1-7 = mandag-soendag, timerne er dansk tid (samme afgraensning som 'tider' i kernen).
