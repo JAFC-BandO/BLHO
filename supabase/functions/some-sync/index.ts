@@ -2,9 +2,9 @@
 // fra Meta og gemmer dem i Supabase (some_konti, some_dag, some_opslag). Siden BL/some/ laeser
 // kun fra databasen -- den taler aldrig selv med Meta.
 //
-// Koeres hver 3. time af cron-jobbet 'daglig-some-sync' (se supabase/migration_some.sql)
-// og startes desuden fra siden: af brugere i some_adgang, og af butikslinks (body.k). Uden
-// "tving" starter der hoejst én indsamling hvert 5. minut, uanset hvor mange der har siden aaben.
+// Koeres én gang i timen af cron-jobbet 'daglig-some-sync' (se supabase/migration_some.sql)
+// og kan startes fra siden med "Opdater nu" (brugere i some_adgang). Uden "tving" starter der
+// hoejst én indsamling hvert 5. minut.
 //
 // Noegler: ligger krypteret i Supabase Vault og hentes med RPC'en some_noegler, som kun
 // service_role maa kalde. 'meta_system_token' er tokenet fra Meta (en systembruger i Business
@@ -168,9 +168,12 @@ async function hentSide(side: Json, kontoId: string, dage: number, slut: number,
 async function hentInstagram(ig: Json, navn: string, tok: string, kontoId: string, dage: number, slut: number, ud: Dage, opslag: Raekke[], fejl: string[]) {
   const midnat = Math.floor(Date.now() / 1000 / DAG) * DAG - slut * DAG;
   // Tidsserier (hoejst 30 dage ad gangen). follower_count findes kun for konti med 100+ foelgere.
+  // Gaarsdagens tal er stemplet med i dag kl. 07 UTC (dagen slutter amerikansk tid), saa den
+  // loebende indsamling spoerger helt frem til nu -- ellers kommer gaarsdagen foerst med i morgen.
+  const til = slut ? midnat : Math.floor(Date.now() / 1000);
   for (const [maal, felt] of [['reach', 'raekkevidde'], ['follower_count', 'nye_foelgere']]) {
     try {
-      const d = await graf(ig.id + '/insights', { metric: maal, period: 'day', since: midnat - Math.min(dage, 29) * DAG, until: midnat }, tok);
+      const d = await graf(ig.id + '/insights', { metric: maal, period: 'day', since: midnat - Math.min(dage, 29) * DAG, until: til }, tok);
       for (const v of d.data?.[0]?.values ?? []) ud.saet(kontoId, datoFor(v.end_time), felt, v.value);
     } catch (e) { fejl.push(`${navn} (Instagram) ${felt}: ${(e as Error).message}`); }
   }
