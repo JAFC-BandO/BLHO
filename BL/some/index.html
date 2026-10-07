@@ -209,7 +209,7 @@ const datoKort = dt => dt.toLocaleDateString('da-DK', { day: 'numeric', month: '
 const datoLang = dt => dt.toLocaleDateString('da-DK', { weekday: 'long', day: 'numeric', month: 'long' });
 const PLATFORM = { facebook: 'Facebook', instagram: 'Instagram', tiktok: 'TikTok' };
 const RAEKKEFOELGE = ['facebook', 'instagram', 'tiktok']; // fast -- farven foelger platformen
-const METRIK = { visninger: 'Visninger', raekkevidde: 'Rækkevidde', interaktioner: 'Interaktioner', nye_foelgere: 'Nye følgere' };
+const METRIK = { visninger: 'Visninger på kontoen', raekkevidde: 'Rækkevidde', interaktioner: 'Interaktioner', nye_foelgere: 'Nye følgere' };
 const UGEDAGE = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
 const BLOKKE = [[0, 6], [6, 9], [9, 12], [12, 15], [15, 18], [18, 21], [21, 24]];
 
@@ -224,7 +224,7 @@ let data = null;            // svaret fra some_overblik / some_rapport
 let platform = 'alle';
 let metrik = 'visninger';
 let visning = 'butik';
-let sortering = { felt: 'visninger', ned: true };
+let sortering = { felt: 'samlede_visninger', ned: true };
 let opslagSort = 'visninger';   // top-opslag: 'visninger' | 'likes' | 'kommentarer'
 let tabelRaekker = [];      // det tabellen viser lige nu (til CSV)
 
@@ -259,6 +259,16 @@ async function hent() {
   if (error) { besked('Tallene kunne ikke hentes. Prøv igen om lidt.', true); return; }
   if (!d) { vis(LINK ? 'ugyldigtLinkVis' : 'ingenAdgangVis'); return; }
   data = d;
+  // "Samlede visninger" som i de gamle rapporter: visningerne paa det indhold, der er slaaet op
+  // i perioden (opslag + reels + stories). Mangler stories for forrige periode, mens de findes
+  // for denne, kan de to perioder ikke sammenlignes.
+  data.konti.forEach(k => {
+    ['nu', 'foer'].forEach(t => {
+      const dele = [k[t].opslag_visninger, k[t].reel_visninger, k[t].story_visninger];
+      k[t].samlede_visninger = dele.every(v => v == null) ? null : dele.reduce((a, v) => a + Number(v || 0), 0);
+    });
+    if (k.nu.story_visninger != null && k.foer.story_visninger == null) k.foer.samlede_visninger = null;
+  });
   tegn();
 }
 
@@ -343,14 +353,14 @@ function tegn() {
 // ---------- Indsats og resultat pr. platform ----------
 // Kortene foelger de maanedlige rapporter, butikkerne plejer at faa: indsats (hvad der er slaaet
 // op) og resultat (hvad det gav). Opslag, reels og stories taelles hver for sig, og visningerne
-// er dem, indholdet fra perioden har faaet. "Samlede visninger" er hele kontoens visninger i
-// perioden (ogsaa af aeldre indhold) -- det samme tal som grafen viser dag for dag.
+// er dem, indholdet fra perioden har faaet. "Samlede visninger" er summen af dem (som "Samlet
+// views" i rapporterne) -- ikke kontoens visninger dag for dag, som grafen laengere nede viser.
 const SEKTION = {
   facebook: {
     indsats: [['Antal opslag', 'opslag', 'Opslag slået op i perioden. Begivenheder tæller ikke med.']],
     resultat: [
       ['Visninger på opslag', 'opslag_visninger', 'Visninger af de opslag, der er slået op i perioden'],
-      ['Samlede visninger', 'visninger', 'Alle visninger på siden i perioden – også af ældre opslag, video og stories', 'Hele siden – også ældre opslag'],
+      ['Samlede visninger', 'samlede_visninger', 'Visninger af alt det, der er slået op på siden i perioden'],
     ],
   },
   instagram: {
@@ -363,7 +373,7 @@ const SEKTION = {
       ['Visninger på opslag', 'opslag_visninger', 'Visninger af de billeder og karruseller, der er slået op i perioden'],
       ['Visninger på reels', 'reel_visninger', 'Visninger af de reels, der er slået op i perioden'],
       ['Visninger på stories', 'story_visninger', 'Visninger af de stories, der er slået op i perioden'],
-      ['Samlede visninger', 'visninger', 'Alle visninger på kontoen i perioden – også af ældre indhold', 'Hele kontoen – også ældre indhold'],
+      ['Samlede visninger', 'samlede_visninger', 'Opslag, reels og stories lagt sammen'],
     ],
   },
 };
@@ -530,7 +540,7 @@ function skjulPunkt() {
 }
 
 // ---------- Butikker og konti ----------
-const KOL = [['Opslag', 'opslag'], ['Reels', 'reels'], ['Stories', 'stories'], ['Visninger', 'visninger'], ['Interaktioner', 'interaktioner'], ['Følgere', 'foelgere'], ['Nye følgere', 'nye_foelgere']];
+const KOL = [['Opslag', 'opslag'], ['Reels', 'reels'], ['Stories', 'stories'], ['Samlede visninger', 'samlede_visninger'], ['Interaktioner', 'interaktioner'], ['Følgere', 'foelgere'], ['Nye følgere', 'nye_foelgere']];
 function tegnKonti() {
   const k = valgte();
   let r;
