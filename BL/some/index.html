@@ -110,7 +110,7 @@ td .lille.op,td .lille.ned{font-weight:600}
 .varmekort .akse{color:var(--mut);padding:2px 6px 2px 0;display:flex;align-items:center}
 .varmekort .top{justify-content:center;padding:0 0 2px}
 .celle{height:30px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums;background:var(--gitter);color:var(--mut);border:0;padding:0;font-size:11px;font-family:inherit}
-.celle.har{cursor:default}
+.celle.har{cursor:pointer}
 .celle.har:hover,.celle.har:focus-visible{outline:2px solid var(--fg);outline-offset:0}
 .bedst{margin:12px 0 0;padding:0;list-style:none;font-size:13px}
 .bedst li{padding:2px 0}.bedst b{font-variant-numeric:tabular-nums}
@@ -135,6 +135,12 @@ td .lille.op,td .lille.ned{font-weight:600}
 .celle.r1,.celle.r2,.celle.r3{font-weight:700}
 .celle.faa{background:var(--gitter);color:var(--mut)}
 .rang{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;font-size:11px;font-weight:700;margin-right:8px;vertical-align:1px}
+/* --- Opslagene bag et felt i "Bedste tidspunkter" --- */
+dialog.tid{border:1px solid var(--bd);border-radius:14px;background:var(--card);color:var(--fg);padding:0;width:min(760px,calc(100vw - 24px));max-height:min(82vh,820px);overflow:auto}
+dialog.tid::backdrop{background:rgba(0,0,0,.5)}
+.tid-hoved{display:flex;align-items:flex-start;gap:12px;padding:16px 16px 12px;border-bottom:1px solid var(--bd);position:sticky;top:0;background:var(--card);z-index:1}
+.tid-hoved h2{font-size:16px;margin:0 0 2px}
+.tid-liste{padding:4px 16px 12px}
 .besked{background:var(--badge);color:var(--brand-tekst);border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:14px}
 .besked.fejl{background:var(--fejl-bg);color:var(--fejl)}
 @media (max-width:900px){.to{grid-template-columns:minmax(0,1fr)}}
@@ -167,8 +173,8 @@ td .lille.op,td .lille.ned{font-weight:600}
       <input type="date" id="fraDato" aria-label="Fra dato"><span>–</span><input type="date" id="tilDato" aria-label="Til dato">
     </span>
     <span class="luft"></span>
-    <span class="status" id="status"></span>
-    <button class="knap" id="opdater" title="Hent de nyeste tal fra Facebook og Instagram nu">Opdater nu</button>
+    <span class="status" id="status" data-tip="Automatisk indsamling&#10;Tallene hentes fra Facebook og Instagram én gang i timen.&#10;Opdater nu henter dem med det samme."></span>
+    <button class="knap" id="opdater" title="Tallene hentes automatisk én gang i timen. Tryk for at hente de nyeste fra Facebook og Instagram nu.">Opdater nu</button>
     <div class="lille" id="periodeTekst"></div>
   </div>
 
@@ -205,6 +211,14 @@ td .lille.op,td .lille.ned{font-weight:600}
   </div>
 
 </div>
+<dialog class="tid" id="tidDialog" aria-labelledby="tidTitel">
+  <div class="tid-hoved">
+    <div><h2 id="tidTitel"></h2><div class="lille" id="tidUnder"></div></div>
+    <span class="luft"></span>
+    <button class="knap stille" id="tidLuk" type="button">Luk</button>
+  </div>
+  <div class="tid-liste" id="tidListe"></div>
+</dialog>
 <div id="tip" hidden></div>
 
 <script>
@@ -247,6 +261,7 @@ let sortering = { felt: 'samlede_visninger', ned: true };
 let opslagSort = 'visninger';   // top-opslag: 'visninger' | 'likes' | 'kommentarer'
 let tabelRaekker = [];      // det tabellen viser lige nu (til CSV)
 let forrigeTekst = '';      // "12. aug. – 8. sep." -- perioden, pilene sammenligner med
+let sidstLaest = 0;         // hvornaar tallene sidst blev laest fra databasen
 
 function vis(id) { ['laeserVis', 'ingenAdgangVis', 'ugyldigtLinkVis', 'app'].forEach(x => { $('#' + x).hidden = x != id; }); }
 
@@ -288,6 +303,7 @@ async function hent() {
   if (error) { besked('Tallene kunne ikke hentes. Prøv igen om lidt.', true); return; }
   if (!d) { vis(LINK ? 'ugyldigtLinkVis' : 'ingenAdgangVis'); return; }
   data = d;
+  sidstLaest = Date.now();
   // "Samlede visninger" som i de gamle rapporter: visningerne paa det indhold, der er slaaet op
   // i perioden (opslag + reels + stories). Mangler stories for forrige periode, mens de findes
   // for denne, kan de to perioder ikke sammenlignes.
@@ -714,14 +730,39 @@ function tegnTider() {
         n.appendChild(tipLinje(null, 'Interaktioner pr. opslag', tal(snit(c))));
         n.appendChild(tipLinje(null, 'Opslag', tal(c.antal)));
         if (c.antal < NOK) n.appendChild(el('div', 'lille', 'For få opslag til at tælle med i top 3'));
+        n.appendChild(el('div', 'lille', 'Klik for at se opslagene'));
       });
     };
     kort.onpointerover = visCelle; kort.onfocusin = visCelle;
     kort.onpointerleave = skjulTip; kort.onfocusout = skjulTip;
+    kort.onclick = e => { const k = e.target.closest('.celle.har'); if (k) { skjulTip(); visTidOpslag(pf, Number(k.dataset.d), Number(k.dataset.b), celler[k.dataset.d][k.dataset.b]); } };
     document.querySelector(`.bedst[data-p="${pf}"]`).innerHTML = top.map((x, i) => `<li><span class="rang r${i + 1}">${i + 1}</span>${UGEDAGE[x.d]} kl. ${blokNavn(BLOKKE[x.b])}: <b>${tal(snit(x.c))}</b> interaktioner pr. opslag <span class="lille">(${x.c.antal} opslag)</span></li>`).join('')
       || '<li class="lille">Der er for få opslag i perioden til at pege på et bedste tidspunkt.</li>';
   });
 }
+
+// Et klik paa et felt viser de opslag, tallet er regnet ud fra (flest interaktioner foerst)
+async function visTidOpslag(pf, d, b, c) {
+  const p = periode(), [a, z] = BLOKKE[b], dlg = $('#tidDialog'), liste = $('#tidListe');
+  const kl = String(a).padStart(2, '0') + '–' + String(z).padStart(2, '0');
+  $('#tidTitel').textContent = `${PLATFORM[pf]}: ${UGEDAGE[d].toLowerCase()} kl. ${kl}`;
+  $('#tidUnder').textContent = `${tal(c.antal)} opslag · ${tal(c.inter / c.antal)} interaktioner pr. opslag i snit · ${$('#periodeTekst').textContent.split('·')[0].trim().replace(/^Viser /, '')}`;
+  liste.innerHTML = '<div class="lille" style="padding:12px 0">Henter opslagene …</div>';
+  if (!dlg.open) dlg.showModal();
+  const arg = { p_fra: p.fra, p_til: p.til, p_platform: pf, p_ugedag: d + 1, p_time_fra: a, p_time_til: z };
+  const { data: o, error } = LINK
+    ? await client.rpc('some_rapport_tid', { p_noegle: LINK, p_omfang: omfang, ...arg })
+    : await client.rpc('some_tid_opslag', { p_butik: butik, ...arg });
+  if (error || !o) { liste.innerHTML = '<div class="lille" style="padding:12px 0">Opslagene kunne ikke hentes. Prøv igen om lidt.</div>'; return; }
+  liste.innerHTML = o.map(x => `<div class="opslag">
+      ${x.billede_url ? `<img src="${esc(x.billede_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML='<div class=tom></div>'">` : '<div class="tom"></div>'}
+      <a href="${esc(/^https:\/\//.test(x.permalink || '') ? x.permalink : '#')}" target="_blank" rel="noopener"><div class="lille">${esc(x.some_konti.navn)}, ${new Date(x.oprettet_at).toLocaleString('da-DK', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}${x.type === 'REELS' ? ' · reel' : ''}</div><div class="tekst">${esc(x.tekst || '(uden tekst)')}</div></a>
+      <div class="tal2"><b>${tal(x.interaktioner)}</b> interaktioner<br>${tal(x.likes)} likes · ${tal(x.kommentarer)} komm. · ${tal(x.delinger)} delinger${x.visninger != null ? '<br>' + kortTal(x.visninger) + ' visninger' : ''}</div>
+    </div>`).join('') + (o.length < c.antal ? `<div class="lille" style="padding:10px 0">Viser de ${o.length} opslag med flest interaktioner ud af ${tal(c.antal)}.</div>` : '')
+    || '<div class="lille" style="padding:12px 0">Ingen opslag i dette tidsrum.</div>';
+}
+$('#tidLuk').addEventListener('click', () => $('#tidDialog').close());
+$('#tidDialog').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.close(); });
 
 // ---------- Betjening ----------
 // "Vaelg datoer" viser to datofelter, der starter paa den periode, man kom fra
@@ -758,36 +799,36 @@ $('#sektioner').addEventListener('change', e => {
 });
 $('#omfang').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; omfang = b.dataset.o; $('#omfang').querySelectorAll('.chip').forEach(c => c.classList.toggle('aktiv', c === b)); hent(); });
 $('#butik').addEventListener('change', e => { butik = e.target.value || null; hent(); });
-// Friske tal: naar siden aabnes -- og hvert 5. minut mens den er aaben og synlig -- hentes nye
-// tal fra Meta, hvis den seneste indsamling er mere end 5 minutter gammel. Tidsstemplet ligger
-// i databasen og deles af alle, saa flere aabne faner ikke starter hver sin indsamling. Der
-// hentes intet, mens fanen er skjult (log-kvoten).
-const FRISK_MS = 5 * 60 * 1000;
+// Tallene hentes fra Meta én gang i timen af serveren (cron-jobbet) -- nok til at fange alt,
+// foer Meta sletter det (stories lever 24 timer). Siden starter ikke selv en indsamling; den
+// laeser bare databasen. Vil man se de allernyeste tal, henter "Opdater nu" med det samme.
+// En aaben side laeser databasen igen hoejst én gang i timen, og kun mens den er synlig
+// (log-kvoten).
+const FRISK_MS = 60 * 60 * 1000;
 let opdaterer = false;
-async function opdater(manuel) {
+async function opdater() {
   if (opdaterer) return;
-  const s = data && data.sidste_sync;
-  if (!manuel && s && s.startet_at && Date.now() - new Date(s.startet_at).getTime() < FRISK_MS) return;
   opdaterer = true;
   const k = $('#opdater');
   k.disabled = true; k.textContent = 'Henter…';
-  const { data: r, error } = await client.functions.invoke('some-sync', { body: LINK ? { k: LINK } : manuel ? { tving: true } : {} });
+  const { data: r, error } = await client.functions.invoke('some-sync', { body: { tving: true } });
   k.disabled = false; k.textContent = 'Opdater nu';
   opdaterer = false;
-  if (manuel && (error || !r || r.fejl)) { besked((r && r.fejl) || 'De nye tal kunne ikke hentes lige nu. Prøv igen om lidt.', true); return; }
+  if (error || !r || r.fejl) { besked((r && r.fejl) || 'De nye tal kunne ikke hentes lige nu. Prøv igen om lidt.', true); return; }
   await hent();
 }
 const synlig = () => !document.hidden && innerWidth > 0; // 0 = iframen er skjult bag en anden fane
-$('#opdater').addEventListener('click', () => opdater(true));
-setInterval(() => { if (synlig() && data) hent().then(() => opdater(false)); }, FRISK_MS);
-document.addEventListener('visibilitychange', () => { if (synlig() && data) opdater(false); });
+const laesIgen = () => { if (synlig() && data && Date.now() - sidstLaest >= FRISK_MS) hent(); };
+$('#opdater').addEventListener('click', opdater);
+setInterval(laesIgen, 5 * 60 * 1000);   // kigger kun paa uret -- der laeses hoejst én gang i timen
+document.addEventListener('visibilitychange', laesIgen);
 // Grafen tegnes i rigtige pixels (saa tekst ikke straekkes) og tegnes derfor om, naar bredden aendres
 let bredde = 0;
 new ResizeObserver(() => { const b = $('#graf').clientWidth; if (data && b && Math.abs(b - bredde) > 4) { bredde = b; skjulTip(); tegnGraf(); } }).observe($('#graf'));
 window.addEventListener('scroll', skjulTip, true);
 
 async function start() {
-  if (LINK) { vis('app'); await hent(); if (data) opdater(false); return; }
+  if (LINK) { vis('app'); await hent(); return; }
   const { data: { user } } = await client.auth.getUser();
   if (!user) { vis('ingenAdgangVis'); return; }
   // RLS paa some_adgang viser kun brugerens egen raekke -- findes den ikke, er der ingen adgang.
@@ -795,7 +836,6 @@ async function start() {
   if (!adg) { vis('ingenAdgangVis'); return; }
   vis('app');
   await hent();
-  opdater(false);
 }
 // Maanedsmailen linker med &periode=maaned, saa butikken lander paa sidste maaneds tal
 // ... eller med faste datoer (&fra=2026-09-01&til=2026-09-30), saa linket bliver ved med at vise den maaned

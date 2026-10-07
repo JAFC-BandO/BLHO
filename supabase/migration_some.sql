@@ -428,6 +428,48 @@ end $$;
 revoke execute on function public.some_rapport(text, date, date, text, text) from public;
 grant execute on function public.some_rapport(text, date, date, text, text) to anon, authenticated;
 
+-- ---------- Opslagene bag ét felt i "Bedste tidspunkter at poste" ----------
+-- p_ugedag 1-7 = mandag-soendag, timerne er dansk tid (samme afgraensning som 'tider' i kernen).
+-- Hoejst 60 opslag, flest interaktioner foerst. Kernen tjekker ikke adgang.
+create or replace function public.some_tid_kerne(p_fra date, p_til date, p_butik uuid, p_platform text, p_ugedag int, p_time_fra int, p_time_til int)
+returns jsonb language sql stable security definer set search_path = public as $$
+  select coalesce(jsonb_agg(to_jsonb(t) order by t.interaktioner desc, t.oprettet_at desc), '[]'::jsonb) from (
+    select o.ekstern_id, o.oprettet_at, o.type, o.tekst, o.permalink, o.billede_url, o.likes, o.kommentarer, o.delinger, o.visninger,
+      coalesce(o.likes, 0) + coalesce(o.kommentarer, 0) + coalesce(o.delinger, 0) as interaktioner,
+      jsonb_build_object('navn', k.navn, 'platform', k.platform) some_konti
+    from some_opslag o
+    join some_konti k on k.id = o.konto_id and k.aktiv and k.platform = p_platform and (p_butik is null or k.butik_id = p_butik)
+    where o.oprettet_at >= (p_fra::timestamp at time zone 'Europe/Copenhagen')
+      and o.oprettet_at < ((p_til + 1)::timestamp at time zone 'Europe/Copenhagen')
+      and (o.type is null or o.type not in ('STORY', 'created_event'))
+      and extract(isodow from o.oprettet_at at time zone 'Europe/Copenhagen')::int = p_ugedag
+      and extract(hour from o.oprettet_at at time zone 'Europe/Copenhagen')::int >= p_time_fra
+      and extract(hour from o.oprettet_at at time zone 'Europe/Copenhagen')::int < p_time_til
+    order by coalesce(o.likes, 0) + coalesce(o.kommentarer, 0) + coalesce(o.delinger, 0) desc, o.oprettet_at desc
+    limit 60) t;
+$$;
+revoke execute on function public.some_tid_kerne(date, date, uuid, text, int, int, int) from public, anon, authenticated;
+
+-- SoMe-fanen (brugere i some_adgang)
+create or replace function public.some_tid_opslag(p_fra date, p_til date, p_butik uuid, p_platform text, p_ugedag int, p_time_fra int, p_time_til int)
+returns jsonb language sql stable security definer set search_path = public as $$
+  select case when public.har_some_adgang() then public.some_tid_kerne(p_fra, p_til, p_butik, p_platform, p_ugedag, p_time_fra, p_time_til) end;
+$$;
+revoke execute on function public.some_tid_opslag(date, date, uuid, text, int, int, int) from public, anon;
+grant execute on function public.some_tid_opslag(date, date, uuid, text, int, int, int) to authenticated;
+
+-- Butikslinket (uden login): egne opslag, eller paa tvaers af butikkerne i 'faelles'
+create or replace function public.some_rapport_tid(p_noegle text, p_fra date, p_til date, p_omfang text, p_platform text, p_ugedag int, p_time_fra int, p_time_til int)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v_butik uuid := public.some_link_butik(p_noegle);
+begin
+  if v_butik is null then return null; end if;
+  if p_til < p_fra or p_til - p_fra > 400 then raise exception 'Ugyldig periode'; end if;
+  return public.some_tid_kerne(p_fra, p_til, case when p_omfang = 'faelles' then null else v_butik end, p_platform, p_ugedag, p_time_fra, p_time_til);
+end $$;
+revoke execute on function public.some_rapport_tid(text, date, date, text, text, int, int, int) from public;
+grant execute on function public.some_rapport_tid(text, date, date, text, text, int, int, int) to anon, authenticated;
+
 -- ---------- Styring af adgangen (Admin-menuen i butik-redigering) ----------
 -- Kun brugere med kan_styre maa se og aendre, hvem der har SoMe-fanen. Flaget saettes med SQL:
 --   update public.some_adgang set kan_styre = true where bruger_id = (select id from auth.users where email = '...');
@@ -503,11 +545,12 @@ begin
   end if;
 end $$;
 
--- Hver 3. time (kl. xx:30 UTC). Dagstallene behoever kun ét kald i doegnet, men stories lever
--- kun 24 timer: med 8 kald i doegnet fanges hver story sidste gang, naar den er mindst 21 timer
--- gammel, saa visningstallet er (naesten) det endelige.
+-- Én gang i timen (kl. xx:05 UTC), og siden starter ikke selv nogen indsamling -- kun knappen
+-- "Opdater nu". Dagstallene behoever kun ét kald i doegnet, men stories lever kun 24 timer:
+-- med et kald i timen fanges hver story sidste gang, naar den er mindst 23 timer gammel, saa
+-- visningstallet er (naesten) det endelige.
 select cron.unschedule('daglig-some-sync') where exists (select 1 from cron.job where jobname = 'daglig-some-sync');
-select cron.schedule('daglig-some-sync', '30 */3 * * *', $cron$
+select cron.schedule('daglig-some-sync', '5 * * * *', $cron$
   select net.http_post(
     url := 'https://irijatnmgvutrqngwpaa.supabase.co/functions/v1/some-sync',
     headers := jsonb_build_object('Content-Type', 'application/json',
