@@ -166,6 +166,13 @@ td .lille.op,td .lille.ned{font-weight:600}
 .knap.stille.aktiv{background:var(--brand);color:#fff}
 .rapport-note b{color:var(--fg)}
 .emoji-panel .rapport-note{margin:0 0 4px}
+.linkknap.fare{color:var(--bad)}
+.tidligere{margin-top:14px;padding-top:10px;border-top:1px dashed color-mix(in srgb,var(--ok) 32%,var(--bd));font-size:13px}
+.tidligere summary{cursor:pointer;color:var(--mut);font-weight:600}
+.tidl{margin-top:10px;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;background:var(--card)}
+.tidl-hoved{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.tidl-titel{font-weight:600;margin-top:4px}
+.tidl .rapport-tekst{font-size:13px;line-height:1.5;margin-top:4px;color:var(--mut)}
 .linkknap{background:none;border:0;padding:0;color:var(--brand-tekst);font:inherit;font-weight:600;text-decoration:underline;cursor:pointer}
 /* --- Opslagene bag et felt i "Bedste tidspunkter" --- */
 dialog.tid{border:1px solid var(--bd);border-radius:14px;background:var(--card);color:var(--fg);padding:0;width:min(760px,calc(100vw - 24px));max-height:min(82vh,820px);overflow:auto}
@@ -309,7 +316,8 @@ let tabelRaekker = [];      // det tabellen viser lige nu (til CSV)
 let nuTekst = '';           // "9. sep. – 6. okt." -- perioden, der vises
 let forrigeTekst = '';      // "12. aug. – 8. sep." -- perioden, pilene sammenligner med
 let sidstLaest = 0;         // hvornaar tallene sidst blev laest fra databasen
-let rapporter = [];         // rapporterne (tekst + periode), hoejst én pr. butik: alle i fanen, butikkens egen + den faelles via link
+let rapporter = [];         // rapporterne (tekst + periode): butikkens aktive + dens tidligere (arkiveret_at); alle butikker i fanen, butikkens egne + de faelles via link
+let vistRapport = null;     // id paa en tidligere rapport, man har valgt at se (ellers vises den aktive)
 let kanStyre = false;       // maa skrive rapporter (den SoMe-ansvarlige)
 let rapportRediger = false; // den SoMe-ansvarlige har slaaet redigering til (knappen i toppen)
 const kladder = new Map();  // ikke-gemte tekster pr. butik ('alle' = den faelles), saa man kan skifte butik og periode uden at miste noget
@@ -368,12 +376,16 @@ function periode() {
 }
 
 // Mens der hentes, bliver den gamle visning staaende (lidt nedtonet), saa siden ikke hopper.
+// Skifter man butik og periode lige efter hinanden, er der to svar paa vej; kun svaret paa det
+// sidste, der er bedt om, vises (ellers kan det foerste komme sidst og vise en forkert periode).
+let hentNr = 0, opslagNr = 0;
 async function hent() {
-  const p = periode();
+  const p = periode(), nr = ++hentNr;
   $('#app').classList.add('henter');
   const { data: d, error } = LINK
     ? await client.rpc('some_rapport2', { p_noegle: LINK, p_fra: p.fra, p_til: p.til, p_omfang: omfang, p_sort: opslagSort, p_f_fra: p.foerFra, p_f_til: p.foerTil })
     : await client.rpc('some_overblik2', { p_fra: p.fra, p_til: p.til, p_butik: butik, p_f_fra: p.foerFra, p_f_til: p.foerTil });
+  if (nr !== hentNr) return;
   $('#app').classList.remove('henter');
   if (error) { besked('Tallene kunne ikke hentes. Prøv igen om lidt.', true); return; }
   if (!d) { vis(LINK ? 'ugyldigtLinkVis' : 'ingenAdgangVis'); return; }
@@ -483,9 +495,11 @@ function tegn() {
 }
 
 // ---------- Rapporten: tekst fra den SoMe-ansvarlige, laast til en periode ----------
-// Hver butik har hoejst én rapport (og der er hoejst én faelles til alle butikker). Rapporten
+// Hver butik har hoejst én aktiv rapport (og der er hoejst én faelles til alle butikker). Rapporten
 // husker den periode, den blev gemt med: butikslinket aabner paa den, og modtageren kan derefter
-// selv vaelge en anden. I fanen kan den SoMe-ansvarlige skrive og rette.
+// selv vaelge en anden. Gemmes rapporten med en ny periode, bliver den gamle til en "tidligere
+// rapport" (arkiveret_at), som stadig kan ses -- og slettes af den SoMe-ansvarlige, der skriver
+// og retter i fanen.
 const datoTekst = d => datoKort(tilDato(d));
 // "september 2026" for en hel kalendermaaned, "3. kvartal 2026" for et helt kvartal, ellers datoerne
 function periodeNavn(fra, til) {
@@ -500,9 +514,16 @@ async function hentRapporter() {
   const { data: r } = LINK ? await client.rpc('some_rapporter_link', { p_noegle: LINK }) : await client.rpc('some_rapporter_hent');
   rapporter = Array.isArray(r) ? r : [];
 }
-// Rapporten for det, man kigger paa: butikkens egen, og den faelles til alle butikker
-const faellesRapport = () => rapporter.find(r => !r.butik_id) || null;
-const egenRapport = () => (LINK ? (omfang === 'faelles' ? null : rapporter.find(r => r.butik_id)) : butik ? rapporter.find(r => r.butik_id === butik) : null) || null;
+// Rapporterne for det, man kigger paa: butikkens egne, og de faelles til alle butikker
+const faellesListe = () => rapporter.filter(r => !r.butik_id);
+const egenListe = () => LINK ? (omfang === 'faelles' ? [] : rapporter.filter(r => r.butik_id)) : butik ? rapporter.filter(r => r.butik_id === butik) : [];
+const aktiv = liste => liste.find(r => !r.arkiveret_at) || null;
+const faellesRapport = () => aktiv(faellesListe());
+const egenRapport = () => aktiv(egenListe());
+// Det, der kan vaelges imellem i rapportboksen: butikkens rapporter, ellers de faelles
+const visListe = () => egenRapport() ? egenListe() : faellesListe();
+// Den rapport, der vises lige nu: en tidligere, hvis man har valgt én, ellers den aktive
+const vistNu = () => visListe().find(r => r.id === vistRapport) || egenRapport() || faellesRapport();
 // Saetter periodevaelgeren til bestemte datoer -- som et af de faste valg ("Sidste måned",
 // "3. kvartal 2026" ...), naar datoerne svarer til ét, ellers som egne datoer
 function saetPeriode(fra, til) {
@@ -520,7 +541,8 @@ function vaelgStandardRapport() {
 // man periode, mens man skriver, bliver teksten staaende; perioden er den, der er valgt oeverst,
 // i det oejeblik der trykkes "Gem".
 const rapNoegle = () => butik || 'alle';
-const gemtRapport = n => rapporter.find(r => (r.butik_id || 'alle') === n) || null;
+const gemtRapport = n => rapporter.find(r => (r.butik_id || 'alle') === n && !r.arkiveret_at) || null;
+const tidligereRapporter = n => rapporter.filter(r => (r.butik_id || 'alle') === n && r.arkiveret_at);
 // Emojis, der saettes ind, hvor markoeren staar (alle andre: Windows-tast + punktum)
 const EMOJIS = [
   ['Ros', '⭐ 🌟 👏 🙌 💪 🏆 🥇 🎉 🥳 ✨ 🔥 💯'],
@@ -556,14 +578,17 @@ function tegnRapport(status) {
     if (boks && boks.dataset.noegle === rapNoegle()) tegnEditorPeriode(status); else tegnEditor(status);
     return;
   }
-  const egen = egenRapport(), faelles = faellesRapport(), vist = egen || faelles;
+  const egen = egenRapport(), faelles = faellesRapport(), vist = vistNu();
   if (!vist) { $('#rapportBoks').innerHTML = ''; return; }
   const navn = r => periodeNavn(r.fra, r.til);
+  // De andre rapporter for samme butik: de tidligere -- og den nyeste, naar man kigger paa en tidligere
+  const andre = visListe().filter(r => r.id !== vist.id);
+  const valg = andre.length ? `<select class="rapportValg" aria-label="Se en anden rapport"><option value="">${vist.arkiveret_at ? 'Andre rapporter …' : 'Tidligere rapporter …'}</option>${andre.map(r => `<option value="${r.id}">${esc((r.arkiveret_at ? '' : 'Nyeste: ') + navn(r) + (r.titel ? ' – ' + r.titel : ''))}</option>`).join('')}</select>` : '';
   $('#rapportBoks').innerHTML = `<div class="rapport">
-    <div class="rapport-hoved"><span class="rapport-maerke">${egen ? 'Rapport' : 'Til alle butikker'} · ${esc(navn(vist))}</span></div>
+    <div class="rapport-hoved"><span class="rapport-maerke">${vist.arkiveret_at ? 'Tidligere rapport' : vist.butik_id ? 'Rapport' : 'Til alle butikker'} · ${esc(navn(vist))}</span><span class="luft"></span>${valg}</div>
     ${vist.titel ? `<h2>${esc(vist.titel)}</h2>` : ''}
     <div class="rapport-tekst">${esc(vist.tekst)}</div>
-    ${egen && faelles ? `<div class="rapport-faelles"><span class="rapport-maerke">Til alle butikker${navn(faelles) === navn(egen) ? '' : ' · ' + esc(navn(faelles))}</span>${faelles.titel ? `<h2>${esc(faelles.titel)}</h2>` : ''}<div class="rapport-tekst">${esc(faelles.tekst)}</div></div>` : ''}
+    ${vist === egen && faelles ? `<div class="rapport-faelles"><span class="rapport-maerke">Til alle butikker${navn(faelles) === navn(egen) ? '' : ' · ' + esc(navn(faelles))}</span>${faelles.titel ? `<h2>${esc(faelles.titel)}</h2>` : ''}<div class="rapport-tekst">${esc(faelles.tekst)}</div></div>` : ''}
     ${vist.fra === p.fra && vist.til === p.til ? '' : `<div class="rapport-note">Rapporten handler om ${esc(navn(vist))}, men du kigger lige nu på en anden periode. <button type="button" class="linkknap" data-r="periode">Vis rapportens periode</button></div>`}
   </div>`;
 }
@@ -579,9 +604,21 @@ function tegnEditor(status) {
     <div class="emoji-panel"${emojiAaben ? '' : ' hidden'}><div class="rapport-note">Klik på en emoji for at sætte den ind, hvor markøren står. Flere: Windows-tast + punktum.</div>${EMOJIS.map(([navn, liste]) => `<div class="emoji-gruppe"><span>${navn}</span>${liste.split(' ').map(x => `<button type="button" class="emoji" aria-label="Indsæt ${x}">${x}</button>`).join('')}</div>`).join('')}</div>
     <div class="rapport-note" id="rapPeriode"></div>
     <div class="rapport-knapper"><button type="button" class="knap" data-r="gem">Gem rapport</button><span class="rapport-note" id="rapStatus"></span><span class="luft"></span>${gemt ? '<button type="button" class="knap stille fare" data-r="slet">Slet rapport</button>' : ''}</div>
+    <details class="tidligere" id="rapTidligere"></details>
   </div>`;
   tegnUdkastNote();
+  tegnTidligere();
   tegnEditorPeriode(status);
+}
+// Butikkens tidligere rapporter (dem, en nyere har afloest) -- til at se og slette
+function tegnTidligere() {
+  const boks = $('#rapTidligere'); if (!boks) return;
+  const liste = tidligereRapporter(rapNoegle());
+  boks.hidden = !liste.length;
+  boks.innerHTML = `<summary>Tidligere rapporter (${liste.length})</summary>` + liste.map(r => `<div class="tidl">
+      <div class="tidl-hoved"><b>${esc(periodeNavn(r.fra, r.til))}</b><span class="lille">gemt ${esc(datoKort(new Date(r.opdateret_at)))}</span><span class="luft"></span><button type="button" class="linkknap fare" data-r="slettidl" data-id="${r.id}">Slet</button></div>
+      ${r.titel ? `<div class="tidl-titel">${esc(r.titel)}</div>` : ''}<div class="rapport-tekst">${esc(r.tekst)}</div>
+    </div>`).join('');
 }
 // Linjen om, hvilken periode rapporten gemmes for -- rettes uden at roere selve skrivefeltet
 function tegnEditorPeriode(status) {
@@ -655,7 +692,7 @@ $('#rapportBoks').addEventListener('click', async e => {
   if (h === 'emoji') { emojiAaben = !emojiAaben; k.setAttribute('aria-expanded', emojiAaben); document.querySelector('#rapportBoks .emoji-panel').hidden = !emojiAaben; return; }
   if (h === 'periode') {
     // I skrivefeltet: den gemte rapports periode. Ellers: perioden for den rapport, der vises
-    const r = document.querySelector('#rapportBoks [data-noegle]') ? gemtRapport(rapNoegle()) : egenRapport() || faellesRapport();
+    const r = document.querySelector('#rapportBoks [data-noegle]') ? gemtRapport(rapNoegle()) : vistNu();
     if (r) { saetPeriode(r.fra, r.til); hent(); }
     return;
   }
@@ -689,6 +726,16 @@ $('#rapportBoks').addEventListener('click', async e => {
     if (boks.isConnected) boks.removeAttribute('data-noegle');
     tegnRapport(rapNoegle() === n ? 'Rapporten er slettet.' : '');
   }
+  else if (h === 'slettidl') {
+    k.dataset.r = 'slettidl2'; k.textContent = 'Tryk igen for at slette';
+    setTimeout(() => { if (k.isConnected) { k.dataset.r = 'slettidl'; k.textContent = 'Slet'; } }, 4000);
+  }
+  else if (h === 'slettidl2') {
+    const { error } = await client.rpc('some_rapporter_slet', { p_id: k.dataset.id });
+    if (error) { k.textContent = 'Kunne ikke slettes – prøv igen'; return; }
+    await hentRapporter();
+    tegnTidligere();
+  }
   else if (h === 'link' && gemt) {
     // Butikkens eget link -- det aabner paa rapportens periode
     const { data: links } = await client.rpc('some_links_liste');
@@ -705,6 +752,7 @@ $('#rapportBoks').addEventListener('click', async e => {
     if (n !== rapNoegle() || !data) return;
     const p = periode(), mislykket = 'Udkastet kunne ikke laves lige nu. Prøv igen om lidt.';
     k.disabled = true; k.textContent = '✨ Skriver udkast …';
+    tegnUdkastNote('Det tager typisk 10–30 sekunder …');
     let ud = null, fejl = '';
     try {
       const { data: r, error } = await client.functions.invoke('some-udkast', { body: { kontekst: await udkastKontekst(p) } });
@@ -727,6 +775,13 @@ $('#rapportBoks').addEventListener('click', async e => {
     foerUdkast = null;
     gemKladde(); tegnUdkastNote(); ikkeGemt();
   }
+});
+
+$('#rapportBoks').addEventListener('change', e => {
+  const v = e.target.closest('.rapportValg'); if (!v || !v.value) return;
+  const r = rapporter.find(x => x.id === v.value); if (!r) return;
+  vistRapport = r.arkiveret_at ? r.id : null;
+  saetPeriode(r.fra, r.til); hent();
 });
 
 // ---------- Indsats og resultat pr. platform ----------
@@ -998,7 +1053,7 @@ function hentCsv() {
 
 // ---------- Top-opslag (pr. platform) ----------
 async function hentOpslag() {
-  const p = periode();
+  const p = periode(), nr = ++opslagNr;
   await Promise.all([...document.querySelectorAll('.opslagListe')].map(async boks => {
     const pf = boks.dataset.p;
     let o;
@@ -1015,6 +1070,7 @@ async function hentOpslag() {
         .order(opslagSort, { ascending: false, nullsFirst: false }).limit(5);
       if (butik) q = q.eq('some_konti.butik_id', butik);
       o = (await q).data;
+      if (nr !== opslagNr) return;
     }
     boks.innerHTML = (o || []).map(x => {
       const inter = (x.likes || 0) + (x.kommentarer || 0) + (x.delinger || 0);
@@ -1143,8 +1199,8 @@ $('#sektioner').addEventListener('change', e => {
   document.querySelectorAll('.opslagSort').forEach(x => { x.value = opslagSort; });
   LINK ? hent() : hentOpslag();
 });
-$('#omfang').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; omfang = b.dataset.o; $('#omfang').querySelectorAll('.chip').forEach(c => c.classList.toggle('aktiv', c === b)); hent(); });
-$('#butik').addEventListener('change', e => { butik = e.target.value || null; hent(); });
+$('#omfang').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; omfang = b.dataset.o; vistRapport = null; $('#omfang').querySelectorAll('.chip').forEach(c => c.classList.toggle('aktiv', c === b)); hent(); });
+$('#butik').addEventListener('change', e => { butik = e.target.value || null; vistRapport = null; hent(); });
 // Tallene hentes fra Meta én gang i timen af serveren (cron-jobbet) -- nok til at fange alt,
 // foer Meta sletter det (stories lever 24 timer). Siden starter ikke selv en indsamling; den
 // laeser bare databasen. Vil man se de allernyeste tal, henter "Opdater nu" med det samme.
