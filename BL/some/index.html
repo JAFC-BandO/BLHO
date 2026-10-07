@@ -470,11 +470,15 @@ function tegnKonti() {
   const k = valgte();
   let r;
   if (visning === 'butik') {
-    // Facebook-siden og Instagram-kontoen for samme butik hedder det samme hos Meta
+    // Facebook-siden og Instagram-kontoen for samme butik hedder det samme hos Meta -- bortset
+    // fra stavemaaden ("Borneloppen Liège" paa Instagram), saa der sammenlignes uden ø/accenter.
+    const noegle = n => (n || '').toLowerCase().replace(/ø/g, 'o').normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
     const m = new Map();
     k.forEach(x => {
-      if (!m.has(x.navn)) m.set(x.navn, { navn: x.navn, platforme: [], konti: [], nu: {}, foer: {} });
-      const b = m.get(x.navn);
+      const nk = noegle(x.navn);
+      if (!m.has(nk)) m.set(nk, { navn: x.navn, platforme: [], konti: [], nu: {}, foer: {} });
+      const b = m.get(nk);
+      if (x.platform === 'facebook') b.navn = x.navn;
       b.platforme.push(x.platform); b.konti.push(x);
       ['nu', 'foer'].forEach(t => KOL.forEach(([, f]) => { if (x[t][f] != null) b[t][f] = (b[t][f] || 0) + Number(x[t][f]); }));
     });
