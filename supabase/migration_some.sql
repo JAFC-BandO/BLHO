@@ -501,9 +501,11 @@ begin
   end if;
 end $$;
 
--- Kl. 04:30 UTC (05:30/06:30 dansk tid): gaarsdagens tal er klar hos Meta. Ét kald i doegnet.
+-- Hver 3. time (kl. xx:30 UTC). Dagstallene behoever kun ét kald i doegnet, men stories lever
+-- kun 24 timer: med 8 kald i doegnet fanges hver story sidste gang, naar den er mindst 21 timer
+-- gammel, saa visningstallet er (naesten) det endelige.
 select cron.unschedule('daglig-some-sync') where exists (select 1 from cron.job where jobname = 'daglig-some-sync');
-select cron.schedule('daglig-some-sync', '30 4 * * *', $cron$
+select cron.schedule('daglig-some-sync', '30 */3 * * *', $cron$
   select net.http_post(
     url := 'https://irijatnmgvutrqngwpaa.supabase.co/functions/v1/some-sync',
     headers := jsonb_build_object('Content-Type', 'application/json',
