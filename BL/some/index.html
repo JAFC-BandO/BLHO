@@ -156,6 +156,13 @@ td .lille.op,td .lille.ned{font-weight:600}
 .rapport-knapper{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-top:12px}
 .rapport-knapper .rapport-note{margin:0}
 .knap.fare{color:var(--bad)}
+.emoji-linje{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:8px}
+.emoji-linje .rapport-note{margin:0}
+.emoji-panel{display:flex;flex-direction:column;gap:4px;margin-top:8px;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;background:var(--card)}
+.emoji-gruppe{display:flex;flex-wrap:wrap;align-items:center;gap:2px}
+.emoji-gruppe>span{font-size:11px;color:var(--mut);width:96px;flex:none}
+.emoji{border:0;background:none;font-size:20px;line-height:1;padding:5px;border-radius:6px;cursor:pointer;font-family:inherit}
+.emoji:hover,.emoji:focus-visible{background:var(--badge)}
 .knap.stille.aktiv{background:var(--brand);color:#fff}
 .linkknap{background:none;border:0;padding:0;color:var(--brand-tekst);font:inherit;font-weight:600;text-decoration:underline;cursor:pointer}
 /* --- Opslagene bag et felt i "Bedste tidspunkter" --- */
@@ -187,9 +194,12 @@ dialog.tid::backdrop{background:rgba(0,0,0,.5)}
       <option value="7">Seneste 7 dage</option>
       <option value="28" selected>Seneste 28 dage</option>
       <option value="90">Seneste 90 dage</option>
-      <option value="maaned">Sidste måned</option>
       <option value="denne">Denne måned</option>
+      <option value="maaned">Sidste måned</option>
+      <option value="dettekvartal">Dette kvartal</option>
+      <option value="kvartal">Sidste kvartal</option>
       <option value="aar">I år</option>
+      <optgroup label="Kvartaler" id="kvartaler"></optgroup>
       <option value="valgfri">Vælg datoer …</option>
     </select>
     <span class="datoer" id="datoer" hidden>
@@ -318,6 +328,14 @@ function periode() {
   const v = $('#periode').value;
   if (v === 'maaned') { fra = new Date(idag.getFullYear(), idag.getMonth() - 1, 1); til = new Date(idag.getFullYear(), idag.getMonth(), 0); }
   else if (v === 'denne') fra = new Date(til.getFullYear(), til.getMonth(), 1);
+  else if (v === 'kvartal') { const k = Math.floor(idag.getMonth() / 3); fra = new Date(idag.getFullYear(), (k - 1) * 3, 1); til = new Date(idag.getFullYear(), k * 3, 0); }
+  else if (v === 'dettekvartal') fra = new Date(til.getFullYear(), Math.floor(til.getMonth() / 3) * 3, 1);
+  else if (v.startsWith('k:')) {
+    // Et bestemt kvartal ("k:2026-3"); er det ikke slut endnu, vises det til og med i gaar
+    const [aar, kv] = v.slice(2).split('-').map(Number), slut = new Date(aar, kv * 3, 0);
+    fra = new Date(aar, (kv - 1) * 3, 1);
+    if (slut < til) til = slut;
+  }
   else if (v === 'aar') fra = new Date(til.getFullYear(), 0, 1);
   else if (v === 'valgfri' && $('#fraDato').value && $('#tilDato').value) {
     // Egne datoer: aldrig senere end i gaar, og hoejst 400 dage (serverens graense)
@@ -337,7 +355,11 @@ function periode() {
   }
   const helMaaned = fra.getDate() === 1 && fra.getMonth() === til.getMonth() && fra.getFullYear() === til.getFullYear()
     && new Date(til.getFullYear(), til.getMonth(), til.getDate() + 1).getDate() === 1;
-  const foerFra = helMaaned ? new Date(fra.getFullYear(), fra.getMonth() - 1, 1) : new Date(fra.getFullYear(), fra.getMonth(), fra.getDate() - dage);
+  // Et helt kvartal sammenlignes med hele kvartalet foer, en hel maaned med hele maaneden foer
+  const helKvartal = fra.getDate() === 1 && fra.getMonth() % 3 === 0 && til.getFullYear() === fra.getFullYear() && til.getMonth() === fra.getMonth() + 2
+    && new Date(til.getFullYear(), til.getMonth(), til.getDate() + 1).getDate() === 1;
+  const foerFra = helKvartal ? new Date(fra.getFullYear(), fra.getMonth() - 3, 1)
+    : helMaaned ? new Date(fra.getFullYear(), fra.getMonth() - 1, 1) : new Date(fra.getFullYear(), fra.getMonth(), fra.getDate() - dage);
   const forskyd = -Math.round((fra - foerFra) / 864e5);
   return { ...ud, foerFra: tilStreng(foerFra), foerTil: plusDage(ud.fra, -1), foerDag: d => plusDage(d, forskyd) };
 }
@@ -462,9 +484,11 @@ function tegn() {
 // nyeste rapports periode -- eller den, adressen peger paa (&r=<id>) -- og modtageren kan
 // derefter selv vaelge en anden periode. I fanen kan den SoMe-ansvarlige skrive og rette.
 const datoTekst = d => datoKort(tilDato(d));
-// "september 2026" for en hel kalendermaaned, ellers "1. sep. – 14. okt."
+// "september 2026" for en hel kalendermaaned, "3. kvartal 2026" for et helt kvartal, ellers datoerne
 function periodeNavn(fra, til) {
   const a = tilDato(fra), b = tilDato(til);
+  if (a.getDate() === 1 && a.getMonth() % 3 === 0 && b.getFullYear() === a.getFullYear() && b.getMonth() === a.getMonth() + 2
+    && new Date(b.getFullYear(), b.getMonth(), b.getDate() + 1).getDate() === 1) return (a.getMonth() / 3 + 1) + '. kvartal ' + a.getFullYear();
   const helMaaned = a.getDate() === 1 && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear() && new Date(b.getFullYear(), b.getMonth(), b.getDate() + 1).getDate() === 1;
   return helMaaned ? a.toLocaleDateString('da-DK', { month: 'long', year: 'numeric' }) : datoTekst(fra) + ' – ' + datoTekst(til);
 }
@@ -491,6 +515,18 @@ function vaelgStandardRapport() {
 // Den SoMe-ansvarlige har en knap i toppen, der slaar redigering til; saa bliver feltet til et
 // skrivefelt for den butik og periode, der er valgt.
 const kladdeNoegle = p => (butik || 'alle') + '|' + p.fra + '|' + p.til;
+// Emojis, der saettes ind, hvor markoeren staar (alle andre: Windows-tast + punktum)
+const EMOJIS = [
+  ['Ros', '⭐ 🌟 👏 🙌 💪 🏆 🥇 🎉 🥳 ✨ 🔥 💯'],
+  ['Hjerter', '💚 ❤️ 🧡 💛 💙 💜 🤎 🫶 😍 🥰'],
+  ['Ansigter', '😀 😄 😊 😉 😅 😂 🤩 😎 🤔 😮 😢 🙈'],
+  ['Tal og tendens', '📈 📉 📊 🔝 ⬆️ ⬇️ ➡️ ✅ ❌ ❗ ❓ 💡'],
+  ['Butikken', '👶 🧸 👗 👕 👟 🛍️ 🛒 🏷️ 💰 ♻️ 🌱 🚼'],
+  ['SoMe', '📸 🎥 🎬 📱 💬 👀 👍 📣 📅 ⏰ 📌 🔗'],
+  ['Årstid', '☀️ 🍂 ❄️ 🎄 🎃 🌷 🐣 🎁'],
+];
+let emojiAaben = false;       // paletten er slaaet ud
+let sidstFelt = 'rapTekst';   // feltet, markoeren sidst stod i (overskrift eller tekst)
 // Gemmer det, der staar i skrivefeltet, som kladde -- hvis det afviger fra den gemte rapport
 function gemKladde() {
   const boks = document.querySelector('#rapportBoks [data-noegle]'); if (!boks) return;
@@ -533,7 +569,9 @@ function tegnEditor(p, match, status) {
       ${match && butik ? '<button class="knap stille" data-r="link">Kopiér link til butikken</button>' : ''}</div>
     <input type="text" id="rapTitel" maxlength="120" aria-label="Overskrift" placeholder="Overskrift (valgfri)" value="${esc(titel)}">
     <textarea id="rapTekst" maxlength="8000" aria-label="Rapportens tekst" placeholder="⭐ Det her gik rigtig godt i perioden …&#10;⭐ …&#10;🫶 En idé til næste gang …">${esc(tekst)}</textarea>
-    <div class="rapport-note">Rapporten låses til <b>${esc(nuTekst)}</b> – perioden valgt øverst. Det er den, butikken ser, når den åbner sit link; den kan selv vælge en anden bagefter. Skift butik eller periode øverst for at skrive til en anden. Emojis: Windows-tast + punktum.</div>
+    <div class="emoji-linje"><button type="button" class="knap stille" data-r="emoji" aria-expanded="${emojiAaben}">😊 Emojis</button><span class="rapport-note">Klik på en emoji for at sætte den ind, hvor markøren står. Flere: Windows-tast + punktum.</span></div>
+    <div class="emoji-panel"${emojiAaben ? '' : ' hidden'}>${EMOJIS.map(([navn, liste]) => `<div class="emoji-gruppe"><span>${navn}</span>${liste.split(' ').map(x => `<button type="button" class="emoji" aria-label="Indsæt ${x}">${x}</button>`).join('')}</div>`).join('')}</div>
+    <div class="rapport-note">Rapporten låses til <b>${esc(nuTekst)}</b> – perioden valgt øverst. Det er den, butikken ser, når den åbner sit link; den kan selv vælge en anden bagefter. Skift butik eller periode øverst for at skrive til en anden.</div>
     <div class="rapport-knapper"><button class="knap" data-r="gem">Gem rapport</button><span class="rapport-note" id="rapStatus">${esc(status || (k ? 'Ændringerne er ikke gemt endnu.' : ''))}</span><span class="luft"></span>${match ? '<button class="knap stille fare" data-r="slet">Slet rapport</button>' : ''}</div>
   </div>`;
   $('#rapportBoks').innerHTML = h;
@@ -549,8 +587,20 @@ $('#rapportBoks').addEventListener('input', e => {
   gemKladde();
   $('#rapStatus').textContent = kladder.has(kladdeNoegle(periode())) ? 'Ændringerne er ikke gemt endnu.' : '';
 });
+// Husk hvilket felt markoeren stod i, og lad et klik paa en emoji blive i feltet
+$('#rapportBoks').addEventListener('focusin', e => { if (e.target.matches('#rapTitel, #rapTekst')) sidstFelt = e.target.id; });
+$('#rapportBoks').addEventListener('mousedown', e => { if (e.target.closest('.emoji')) e.preventDefault(); });
 $('#rapportBoks').addEventListener('click', async e => {
+  const emoji = e.target.closest('.emoji');
+  if (emoji) {
+    const felt = $('#' + sidstFelt) || $('#rapTekst'), a = felt.selectionStart ?? felt.value.length, b = felt.selectionEnd ?? a;
+    felt.value = felt.value.slice(0, a) + emoji.textContent + felt.value.slice(b);
+    felt.focus(); felt.selectionStart = felt.selectionEnd = a + emoji.textContent.length;
+    felt.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
   const k = e.target.closest('[data-r]'); if (!k) return;
+  if (k.dataset.r === 'emoji') { emojiAaben = !emojiAaben; k.setAttribute('aria-expanded', emojiAaben); document.querySelector('#rapportBoks .emoji-panel').hidden = !emojiAaben; return; }
   const p = periode(), nu = rapportListe().find(r => r.fra === p.fra && r.til === p.til), h = k.dataset.r;
   if (h === 'gem') {
     const tekst = $('#rapTekst').value, titel = $('#rapTitel').value;
@@ -1042,6 +1092,14 @@ async function start() {
   const [, styr] = await Promise.all([hentRapporter(), client.rpc('kan_styre_some')]);
   kanStyre = styr.data === true;
   await hent();
+}
+// Kvartalerne i periodevaelgeren: fra det igangvaerende og tilbage til 1. kvartal 2025 (tallene
+// begynder i november 2024, saa det er det foerste hele kvartal)
+{
+  const g = $('#kvartaler'), t = new Date(); t.setDate(t.getDate() - 1);
+  for (let aar = t.getFullYear(), kv = Math.floor(t.getMonth() / 3) + 1; aar >= 2025; kv === 1 ? (kv = 4, aar--) : kv--) {
+    const o = el('option', '', kv + '. kvartal ' + aar); o.value = 'k:' + aar + '-' + kv; g.appendChild(o);
+  }
 }
 // Maanedsmailen linker med &periode=maaned, saa butikken lander paa sidste maaneds tal
 // ... eller med faste datoer (&fra=2026-09-01&til=2026-09-30), saa linket bliver ved med at vise den maaned
