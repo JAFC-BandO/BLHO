@@ -921,7 +921,8 @@ function tegnFoelgere() {
   $('#foelgerTal').innerHTML = RAEKKEFOELGE.filter(p => data.konti.some(k => k.platform === p)).flatMap(p => {
     const k = data.konti.filter(x => x.platform === p);
     return [kortHtml(k, [PLATFORM[p] + ': følgere', 'foelgere', 'Antal følgere ved periodens slutning']),
-      kortHtml(k, [PLATFORM[p] + ': nye følgere', 'nye_foelgere', 'Nye følgere i perioden'])];
+      // Instagram udleverer tallet med forsinkelse: de seneste to dage staar som 0, indtil Meta har regnet dem ud
+      kortHtml(k, [PLATFORM[p] + ': nye følgere', 'nye_foelgere', 'Nye følgere i perioden.' + (p === 'instagram' ? ' Instagram er op til to døgn om at levere tallet, så de seneste to dage tæller først med senere.' : '')])];
   }).join('');
 }
 
@@ -1075,7 +1076,7 @@ const KOL = [
   ['Samlede visninger', 'samlede_visninger', 'Facebook: alle visninger af sidens indhold i perioden. Instagram: opslag, reels og stories lagt sammen.'],
   ['Interaktioner', 'interaktioner', 'Reaktioner, kommentarer, delinger og klik på kontoen i perioden'],
   ['Følgere', 'foelgere', 'Antal følgere ved periodens slutning'],
-  ['Nye følgere', 'nye_foelgere', 'Nye følgere i perioden'],
+  ['Nye følgere', 'nye_foelgere', 'Nye følgere i perioden. Instagram leverer tallet med op til to døgns forsinkelse.'],
 ];
 // Teksten i forklaringsboksen (data-tip): hvad tallet er, og hvad pilen sammenligner med
 // Format: foerste linje er overskriften; en linje med tabulator er "navn <tab> tal <tab> datoer"
