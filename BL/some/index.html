@@ -1258,8 +1258,9 @@ function tegnTider() {
       '<div class="lille" style="margin:14px 0 6px"><b>Følgere online</b> – hvor mange af følgerne der er på Instagram, i snit pr. time de seneste 4 uger. Mørkegrøn = flest. Meta oplyser det ikke for Facebook.</div>'
       + '<div class="varmekort"><div></div>' + BLOKKE.map(b => `<div class="akse top">${blokNavn(b)}</div>`).join('')
       + online.map((raekke, d) => `<div class="akse">${UGEDAGE[d].slice(0, 3)}</div>` + raekke.map((o, b) => {
-        const s = Math.round(10 + 60 * onl(o) / onlMaks);
-        return `<div class="celle" style="background:color-mix(in srgb, var(--ok) ${s}%, var(--card));color:${s > 55 ? 'var(--card)' : 'var(--fg)'}" title="${UGEDAGE[d]} kl. ${blokNavn(BLOKKE[b])}: ca. ${tal(Math.round(onl(o)))} følgere online i snit pr. time">${kortTal(Math.round(onl(o)))}</div>`;
+        // Fast skala (bleg -> moerkegroen, samme groenne som top 3), saa flest er moerkest i begge temaer
+        const s = Math.round(100 * onl(o) / onlMaks);
+        return `<div class="celle" style="background:color-mix(in srgb, #15803d ${s}%, #dcfce7);color:${s > 55 ? '#fff' : '#062b14'}" title="${UGEDAGE[d]} kl. ${blokNavn(BLOKKE[b])}: ca. ${tal(Math.round(onl(o)))} følgere online i snit pr. time">${kortTal(Math.round(onl(o)))}</div>`;
       }).join('')).join('') + '</div>';
   });
 }
