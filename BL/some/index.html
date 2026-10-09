@@ -923,10 +923,11 @@ function tegnSektioner() {
       <div class="to${visOpslag ? '' : ' en'}">
         ${visOpslag ? `<div class="kort"><div class="kort-hoved"><h2>Top-opslag</h2><span class="luft"></span>${sortValg}</div><div class="opslagListe" data-p="${p}"></div></div>` : ''}
         <div class="kort">
-          <div class="kort-hoved"><h2>Bedste tidspunkter at poste <small>interaktioner pr. opslag i snit</small></h2></div>
+          <div class="kort-hoved"><h2>Bedste tidspunkter at poste <small>visninger pr. opslag i forhold til et normalt opslag for butikken</small></h2></div>
           <div class="varmekort" data-p="${p}"></div>
           <ol class="bedst" data-p="${p}"></ol>
           <div class="lille tidNote" data-p="${p}" style="margin-top:8px"></div>
+          <div class="online" data-p="${p}"></div>
         </div>
       </div>
     </section>`;
@@ -1177,38 +1178,52 @@ async function hentOpslag() {
 }
 
 // ---------- Bedste tidspunkter at poste (pr. platform) ----------
+// Hvert felt er medianen af opslagenes visninger maalt mod butikkens eget normale opslag (1,0x) --
+// serveren regner (score i 'tider'), saa ét opslag, der gik godt, ikke traekker feltet op, og store
+// og smaa butikker kan laegges sammen. Instagram faar desuden Metas "foelgere online" pr. time.
 function tegnTider() {
   const blokNavn = ([a, z]) => String(a).padStart(2, '0') + '–' + String(z).padStart(2, '0');
+  const gange = s => s.toLocaleString('da-DK', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '×';
   document.querySelectorAll('.varmekort[data-p]').forEach(kort => {
     const pf = kort.dataset.p;
-    const celler = UGEDAGE.map(() => BLOKKE.map(() => ({ antal: 0, inter: 0 })));
+    const celler = UGEDAGE.map(() => BLOKKE.map(() => ({ antal: 0, inter: 0, score: null })));
     data.tider.forEach(t => {
       if (t.platform !== pf) return;
       const b = BLOKKE.findIndex(([a, z]) => t.time >= a && t.time < z), c = celler[t.ugedag - 1] && celler[t.ugedag - 1][b];
-      if (c) { c.antal += t.antal; c.inter += Number(t.interaktioner || 0); }
+      if (c) { c.antal += t.antal; c.inter += Number(t.interaktioner || 0); if (t.score != null) c.score = Number(t.score); }
     });
-    const snit = c => c.antal ? c.inter / c.antal : 0;
-    // Et enkelt opslag der gik godt er ikke et moenster -- et felt taeller foerst med i top 3 og
-    // farveskalaen, naar det har mindst 3 opslag. I en kort periode (eller hos en butik, der slaar
-    // lidt op) naar ingen felter dertil; saa saenkes kravet til 2 og til sidst 1, saa der stadig er
-    // noget at se -- med en bemaerkning om, at tallene bygger paa faa opslag.
+    // Foelgere online pr. felt: snit af blokkens timer (seneste 4 uger). Tomt for Facebook.
+    const online = UGEDAGE.map(() => BLOKKE.map(() => ({ sum: 0, n: 0 })));
+    (data.online || []).forEach(t => {
+      if (t.platform !== pf) return;
+      const b = BLOKKE.findIndex(([a, z]) => t.time >= a && t.time < z), o = online[t.ugedag - 1] && online[t.ugedag - 1][b];
+      if (o) { o.sum += Number(t.antal); o.n++; }
+    });
+    const onl = o => o.n ? o.sum / o.n : 0;
+    const onlMaks = Math.max(0, ...online.flat().map(onl));
+    const mangeOnline = (d, b) => onlMaks > 0 && onl(online[d][b]) >= 0.8 * onlMaks;
+    const score = c => c.score ?? 0;
+    // Et felt taeller foerst med i top 3 og farveskalaen, naar det har mindst 5 opslag. I en kort
+    // periode (eller hos en butik, der slaar lidt op) naar ingen felter dertil; saa saenkes kravet
+    // trinvis, saa der stadig er noget at se -- med en bemaerkning om, at tallene bygger paa faa opslag.
     const medOpslag = celler.flat().filter(c => c.antal);
-    const NOK = [3, 2].find(n => medOpslag.filter(c => c.antal >= n).length >= 3) || 1;
-    const top = celler.flatMap((raekke, d) => raekke.map((c, b) => ({ d, b, c }))).filter(x => x.c.antal >= NOK).sort((a, z) => snit(z.c) - snit(a.c)).slice(0, 3);
+    const NOK = [5, 3, 2].find(n => medOpslag.filter(c => c.antal >= n && c.score != null).length >= 3) || 1;
+    const taeller = c => c.antal >= NOK && c.score != null;
+    const top = celler.flatMap((raekke, d) => raekke.map((c, b) => ({ d, b, c }))).filter(x => taeller(x.c)).sort((a, z) => score(z.c) - score(a.c)).slice(0, 3);
     const rang = (d, b) => top.findIndex(x => x.d === d && x.b === b) + 1;   // 1-3, eller 0
-    const maks = Math.max(1, ...celler.flat().filter(c => c.antal >= NOK).map(snit));
+    const maks = Math.max(1, ...celler.flat().filter(taeller).map(score));
     let h = '<div></div>' + BLOKKE.map(b => `<div class="akse top">${blokNavn(b)}</div>`).join('');
     celler.forEach((raekke, d) => {
       h += `<div class="akse">${UGEDAGE[d].slice(0, 3)}</div>`;
       raekke.forEach((c, b) => {
         // Et tomt felt er ikke manglende data: der er bare ikke slaaet noget op i det tidsrum
         if (!c.antal) { h += `<div class="celle tom" title="${UGEDAGE[d]} kl. ${blokNavn(BLOKKE[b])}: ingen opslag i perioden">–</div>`; return; }
-        const r = rang(d, b), tekst = `${UGEDAGE[d]} ${blokNavn(BLOKKE[b])}: ${tal(snit(c))} interaktioner pr. opslag, ${c.antal} opslag`;
-        if (r) { h += `<button type="button" class="celle har r${r}" data-d="${d}" data-b="${b}" aria-label="Nr. ${r}. ${tekst}">${kortTal(Math.round(snit(c)))}</button>`; return; }
-        if (c.antal < NOK) { h += `<button type="button" class="celle har faa" data-d="${d}" data-b="${b}" aria-label="${tekst} (for få til at tælle med)">${kortTal(Math.round(snit(c)))}</button>`; return; }
-        // Resten: én farve fra lys til moerk -- jo flere interaktioner pr. opslag, jo kraftigere
-        const styrke = Math.round(10 + 60 * Math.min(1, snit(c) / maks));
-        h += `<button type="button" class="celle har" data-d="${d}" data-b="${b}" style="background:color-mix(in srgb, var(--varme) ${styrke}%, var(--card));color:${styrke > 55 ? 'var(--card)' : 'var(--fg)'}" aria-label="${tekst}">${kortTal(Math.round(snit(c)))}</button>`;
+        const r = rang(d, b), tekst = `${UGEDAGE[d]} ${blokNavn(BLOKKE[b])}: ${gange(score(c))} så mange visninger som et normalt opslag, ${c.antal} opslag`;
+        if (r) { h += `<button type="button" class="celle har r${r}" data-d="${d}" data-b="${b}" aria-label="Nr. ${r}. ${tekst}">${gange(score(c))}</button>`; return; }
+        if (!taeller(c)) { h += `<button type="button" class="celle har faa" data-d="${d}" data-b="${b}" aria-label="${tekst} (for få til at tælle med)">${c.score == null ? '?' : gange(score(c))}</button>`; return; }
+        // Resten: én farve fra lys til moerk -- jo bedre end normalt, jo kraftigere
+        const styrke = Math.round(10 + 60 * Math.min(1, score(c) / maks));
+        h += `<button type="button" class="celle har" data-d="${d}" data-b="${b}" style="background:color-mix(in srgb, var(--varme) ${styrke}%, var(--card));color:${styrke > 55 ? 'var(--card)' : 'var(--fg)'}" aria-label="${tekst}">${gange(score(c))}</button>`;
       });
     });
     kort.innerHTML = h;
@@ -1217,21 +1232,32 @@ function tegnTider() {
       const c = celler[k.dataset.d][k.dataset.b], r = k.getBoundingClientRect();
       visTip(r.right - 6, r.top + r.height / 2, n => {
         n.appendChild(el('div', 't-titel', UGEDAGE[k.dataset.d] + ' kl. ' + blokNavn(BLOKKE[k.dataset.b])));
-        n.appendChild(tipLinje(null, 'Interaktioner pr. opslag', tal(snit(c))));
+        n.appendChild(tipLinje(null, 'Visninger ift. et normalt opslag', c.score == null ? '?' : gange(score(c))));
+        n.appendChild(tipLinje(null, 'Interaktioner pr. opslag', tal(c.inter / c.antal)));
         n.appendChild(tipLinje(null, 'Opslag', tal(c.antal)));
-        if (c.antal < NOK) n.appendChild(el('div', 'lille', 'For få opslag til at tælle med i top 3'));
+        if (onlMaks > 0) n.appendChild(tipLinje(null, 'Følgere online (snit pr. time)', kortTal(Math.round(onl(online[k.dataset.d][k.dataset.b])))));
+        if (!taeller(c)) n.appendChild(el('div', 'lille', c.score == null ? 'Ingen visningstal for opslagene' : 'For få opslag til at tælle med i top 3'));
         n.appendChild(el('div', 'lille', 'Klik for at se opslagene'));
       });
     };
     kort.onpointerover = visCelle; kort.onfocusin = visCelle;
     kort.onpointerleave = skjulTip; kort.onfocusout = skjulTip;
     kort.onclick = e => { const k = e.target.closest('.celle.har'); if (k) { skjulTip(); visTidOpslag(pf, Number(k.dataset.d), Number(k.dataset.b), celler[k.dataset.d][k.dataset.b]); } };
-    document.querySelector(`.bedst[data-p="${pf}"]`).innerHTML = top.map((x, i) => `<li><span class="rang r${i + 1}">${i + 1}</span>${UGEDAGE[x.d]} kl. ${blokNavn(BLOKKE[x.b])}: <b>${tal(snit(x.c))}</b> interaktioner pr. opslag <span class="lille">(${x.c.antal} opslag)</span></li>`).join('')
+    const onlineTekst = x => mangeOnline(x.d, x.b) ? ' · mange følgere online' : '';
+    document.querySelector(`.bedst[data-p="${pf}"]`).innerHTML = top.map((x, i) => `<li><span class="rang r${i + 1}">${i + 1}</span>${UGEDAGE[x.d]} kl. ${blokNavn(BLOKKE[x.b])}: <b>${gange(score(x.c))}</b> så mange visninger som normalt <span class="lille">(${x.c.antal} opslag${onlineTekst(x)})</span></li>`).join('')
       || '<li class="lille">Ingen opslag i perioden.</li>';
-    document.querySelector(`.tidNote[data-p="${pf}"]`).textContent = !medOpslag.length ? '' : 'Grøn = de tre bedste tidspunkter.'
+    document.querySelector(`.tidNote[data-p="${pf}"]`).textContent = !medOpslag.length ? '' : 'Grøn = de tre bedste tidspunkter. 1,0× = et normalt opslag for butikken (medianen af opslagenes visninger).'
       + (NOK > 1 ? ` Grå tal = færre end ${NOK} opslag, så de tæller ikke med.` : '') + ' – = ingen opslag i perioden.'
-      + (NOK < 3 ? ' Der er få opslag i perioden, så hvert felt bygger på ganske få opslag – vælg en længere periode (fx 90 dage) for et mere sikkert billede.' : '');
-    bedsteTider[pf] = top.map(x => `${UGEDAGE[x.d]} kl. ${blokNavn(BLOKKE[x.b])} (${tal(snit(x.c))} interaktioner pr. opslag, ${x.c.antal} opslag)`);
+      + (NOK < 5 ? ' Der er få opslag i perioden, så hvert felt bygger på ganske få opslag – vælg en længere periode (fx 90 dage) for et mere sikkert billede.' : '');
+    bedsteTider[pf] = top.map(x => `${UGEDAGE[x.d]} kl. ${blokNavn(BLOKKE[x.b])} (${gange(score(x.c))} så mange visninger som et normalt opslag, ${x.c.antal} opslag${onlineTekst(x)})`);
+    // Foelgere online: samme gitter, farvet efter andel af det travleste felt
+    document.querySelector(`.online[data-p="${pf}"]`).innerHTML = onlMaks <= 0 ? '' :
+      '<div class="lille" style="margin:14px 0 6px"><b>Følgere online</b> – hvor mange af følgerne der er på Instagram, i snit pr. time de seneste 4 uger. Mørk = flest. Meta oplyser det ikke for Facebook.</div>'
+      + '<div class="varmekort"><div></div>' + BLOKKE.map(b => `<div class="akse top">${blokNavn(b)}</div>`).join('')
+      + online.map((raekke, d) => `<div class="akse">${UGEDAGE[d].slice(0, 3)}</div>` + raekke.map((o, b) => {
+        const s = Math.round(10 + 60 * onl(o) / onlMaks);
+        return `<div class="celle" style="background:color-mix(in srgb, var(--instagram) ${s}%, var(--card));color:${s > 55 ? 'var(--card)' : 'var(--fg)'}" title="${UGEDAGE[d]} kl. ${blokNavn(BLOKKE[b])}: ca. ${tal(Math.round(onl(o)))} følgere online i snit pr. time">${kortTal(Math.round(onl(o)))}</div>`;
+      }).join('')).join('') + '</div>';
   });
 }
 

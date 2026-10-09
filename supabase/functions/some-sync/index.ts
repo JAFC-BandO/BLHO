@@ -165,7 +165,7 @@ async function hentSide(side: Json, kontoId: string, dage: number, slut: number,
   }
 }
 
-async function hentInstagram(ig: Json, navn: string, tok: string, kontoId: string, dage: number, slut: number, ud: Dage, opslag: Raekke[], fejl: string[]) {
+async function hentInstagram(ig: Json, navn: string, tok: string, kontoId: string, dage: number, slut: number, ud: Dage, opslag: Raekke[], online: Map<string, Raekke>, fejl: string[]) {
   const midnat = Math.floor(Date.now() / 1000 / DAG) * DAG - slut * DAG;
   // Tidsserier (hoejst 30 dage ad gangen). follower_count findes kun for konti med 100+ foelgere.
   // Gaarsdagens tal er stemplet med i dag kl. 07 UTC (dagen slutter amerikansk tid), saa den
@@ -193,6 +193,24 @@ async function hentInstagram(ig: Json, navn: string, tok: string, kontoId: strin
   });
   if (dagFejl) fejl.push(`${navn} (Instagram) visninger: ${dagFejl}`);
   if (!slut && ig.followers_count != null) ud.saet(kontoId, iDag(), 'foelgere', ig.followers_count);
+
+  // Foelgere online pr. time (til "Bedste tidspunkter"; konti med 100+ foelgere). Meta regner i
+  // amerikansk tid (dagen slutter kl. 07 UTC), saa hver time flyttes til dansk dato og klokkeslaet.
+  // Kun 'data' laeses -- svarets paging-links indeholder noeglen. Et Map, fordi to amerikanske
+  // timer kan ende paa samme danske time den nat, uret stilles tilbage.
+  if (!slut) {
+    try {
+      const d = await graf(ig.id + '/insights', { metric: 'online_followers', period: 'lifetime', since: midnat - Math.min(dage, 30) * DAG, until: midnat }, tok);
+      const dk = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Copenhagen', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' });
+      for (const v of d.data?.[0]?.values ?? []) {
+        const start = new Date(v.end_time).getTime() - 24 * 3600e3;
+        for (const [h, antal] of Object.entries(v.value ?? {})) {
+          const [dato, time] = dk.format(new Date(start + Number(h) * 3600e3)).split(' ');
+          online.set(kontoId + dato + time, { konto_id: kontoId, dato, time: Number(time), antal: Number(antal) });
+        }
+      }
+    } catch (e) { fejl.push(`${navn} (Instagram) følgere online: ${(e as Error).message}`); }
+  }
 
   // Stories kan kun hentes mens de er live (24 timer) -- derfor gemmes de ved hver indsamling,
   // og visningstallet opdateres, indtil storyen udloeber.
@@ -363,6 +381,7 @@ Deno.serve(async (req) => {
     // ---------- Hent tallene ----------
     const ud = new Dage();
     const opslag: Raekke[] = [];
+    const online = new Map<string, Raekke>();
     // Hver side har sin egen noegle og sin egen kvote hos Meta, saa siderne kan hentes samtidig
     await iHold(sider.filter((s) => !kunSider || kunSider.has(String(s.id))), 9, async (s) => {
       const fb = id.get('facebook:' + s.id);
@@ -370,11 +389,12 @@ Deno.serve(async (req) => {
       const igK = ig && id.get('instagram:' + ig.id);
       await Promise.all([
         fb?.aktiv ? hentSide(s, fb.id, dage, slut, ud, opslag, fejl) : null,
-        igK?.aktiv ? hentInstagram(ig, igK.navn, s.access_token, igK.id, dage, slut, ud, opslag, fejl) : null,
+        igK?.aktiv ? hentInstagram(ig, igK.navn, s.access_token, igK.id, dage, slut, ud, opslag, online, fejl) : null,
       ]);
     });
     await upsert('some_dag', 'konto_id,dato', ud.alle());
     await upsert('some_opslag', 'konto_id,ekstern_id', opslag);
+    await upsert('some_online', 'konto_id,dato,time', [...online.values()]);
   } catch (e) {
     fejl.unshift((e as Error).message);
     await db('some_sync_log?id=eq.' + log.id, { method: 'PATCH', body: JSON.stringify({ afsluttet_at: new Date().toISOString(), ok: false, konti: antal, fejl: fejl.slice(0, 60), token: tokenInfo }) });
