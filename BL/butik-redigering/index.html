@@ -169,6 +169,17 @@
      ligge oven paa dens tekstfelt. Den skjules, mens panelet er aabent (kun paa vagtplan-fanen). */
   body.fane-vagtplan.vp-assistent-aaben #feedbackFloatBtn { display: none !important; }
   #vagtplanVisning iframe, #someVisning iframe { width: 100%; height: 100%; border: 0; display: block; }
+  /* Spinner over hele vinduet, naar man lander direkte paa #some: daekker den tomme side og
+     butiks-fanen, der ellers blinker frem, indtil SoMe-tallene er tegnet (se someKlar). */
+  #faneLaeser { position: fixed; inset: 0; z-index: 5000; background: var(--ui-side); color: var(--ui-tekst-666);
+    display: grid; place-content: center; justify-items: center; gap: 14px; font-size: 13px; }
+  #faneLaeser[hidden] { display: none; }
+  .spinner { width: 44px; height: 44px; animation: drej 2s linear infinite; }
+  .spinner circle { fill: none; stroke: var(--ui-kant); stroke-width: 4; }
+  .spinner .bue { stroke: var(--ui-brand-tekst); stroke-linecap: round; animation: straek 1.5s ease-in-out infinite; }
+  @keyframes drej { to { transform: rotate(360deg); } }
+  @keyframes straek { 0% { stroke-dasharray: 1 150; stroke-dashoffset: 0; } 50% { stroke-dasharray: 90 150; stroke-dashoffset: -35; } 100% { stroke-dasharray: 90 150; stroke-dashoffset: -124; } }
+  @media (prefers-reduced-motion: reduce) { .spinner .bue { animation: none; stroke-dasharray: 60 150; } }
 
   .main {
     display: grid;
@@ -509,6 +520,8 @@
 </style>
 </head>
 <body>
+
+<div id="faneLaeser" role="status" hidden><svg class="spinner" viewBox="0 0 50 50" aria-hidden="true"><circle cx="25" cy="25" r="20"/><circle class="bue" cx="25" cy="25" r="20"/></svg>Indlæser…</div>
 
 <div class="login-wrap" id="loginWrap">
   <!-- Inde i loginWrap, saa den forsvinder sammen med login-skaermen. -->
@@ -1241,9 +1254,17 @@
   // Er der en gemt session (fx naar man kommer tilbage fra vagtplanen), skjules login-kortet
   // fra start -- ellers blinker det frem, mens sessionen tjekkes over netvaerket, og det ser
   // ud som om man er blevet logget ud. visLogin() viser det igen, hvis sessionen ikke holder.
-  function visLogin() { loginWrap.style.display = 'flex'; }
+  const faneLaeser = document.getElementById('faneLaeser');
+  // SoMe-siden (iframen) kalder someKlar, naar dens foerste tal er tegnet
+  window.someKlar = () => { faneLaeser.hidden = true; };
+  function visLogin() { loginWrap.style.display = 'flex'; faneLaeser.hidden = true; }
   try {
-    if (localStorage.getItem('sb-butik-redigering-auth') && !/[#&]type=recovery/.test(location.hash)) loginWrap.style.display = 'none';
+    if (localStorage.getItem('sb-butik-redigering-auth') && !/[#&]type=recovery/.test(location.hash)) {
+      loginWrap.style.display = 'none';
+      // Lander man direkte paa SoMe-fanen, vises spinneren, til tallene er der. De 15 sek. er en
+      // noedbremse, saa en fejl undervejs ikke efterlader hele siden daekket.
+      if (location.hash === '#some') { faneLaeser.hidden = false; setTimeout(window.someKlar, 15000); }
+    }
   } catch (e) { /* localStorage blokeret -- saa vises login bare som hidtil */ }
   const app = document.getElementById('app');
   const loginMsg = document.getElementById('loginMsg');
@@ -1584,6 +1605,7 @@
       client.from(t).select(t === 'some_adgang' ? 'bruger_id, kan_styre' : 'bruger_id').eq('bruger_id', brugerId).maybeSingle()));
     knap('vagtplan').hidden = !vp.data;
     knap('some').hidden = !so.data;
+    if (!so.data) faneLaeser.hidden = true; // ingen SoMe-fane at vente paa
     document.getElementById('someAdgangBtn').style.display = so.data && so.data.kan_styre ? '' : 'none';
     if (so.data && so.data.kan_styre) tjekSomeAlarm();
     if (!vp.data && !so.data) return;
@@ -1611,7 +1633,7 @@
         const ramme = document.createElement('iframe');
         ramme.title = 'SoMe-performance';
         // ?v= skal bumpes naar some/index.html aendres (samme grund som for vagtplanen nedenfor)
-        ramme.src = '../some/?indlejret=1&v=2026-10-07-23';
+        ramme.src = '../some/?indlejret=1&v=2026-10-09-1';
         vis.appendChild(ramme);
       }
       updateSlideOverlay();
