@@ -1211,7 +1211,10 @@ function tegnTider() {
     const taeller = c => c.antal >= NOK && c.score != null;
     const top = celler.flatMap((raekke, d) => raekke.map((c, b) => ({ d, b, c }))).filter(x => taeller(x.c)).sort((a, z) => score(z.c) - score(a.c)).slice(0, 3);
     const rang = (d, b) => top.findIndex(x => x.d === d && x.b === b) + 1;   // 1-3, eller 0
-    const maks = Math.max(1, ...celler.flat().filter(taeller).map(score));
+    // Farven foelger feltets placering blandt de taellende felter, ikke afstanden: scorerne ligger
+    // taet omkring 1,0, saa en skala efter stoerrelse blev ensfarvet
+    const sorteret = celler.flat().filter(taeller).map(score).sort((a, z) => a - z);
+    const placering = c => sorteret.length > 1 ? sorteret.indexOf(score(c)) / (sorteret.length - 1) : 1;
     let h = '<div></div>' + BLOKKE.map(b => `<div class="akse top">${blokNavn(b)}</div>`).join('');
     celler.forEach((raekke, d) => {
       h += `<div class="akse">${UGEDAGE[d].slice(0, 3)}</div>`;
@@ -1221,8 +1224,8 @@ function tegnTider() {
         const r = rang(d, b), tekst = `${UGEDAGE[d]} ${blokNavn(BLOKKE[b])}: ${gange(score(c))} så mange visninger som et normalt opslag, ${c.antal} opslag`;
         if (r) { h += `<button type="button" class="celle har r${r}" data-d="${d}" data-b="${b}" aria-label="Nr. ${r}. ${tekst}">${gange(score(c))}</button>`; return; }
         if (!taeller(c)) { h += `<button type="button" class="celle har faa" data-d="${d}" data-b="${b}" aria-label="${tekst} (for få til at tælle med)">${c.score == null ? '?' : gange(score(c))}</button>`; return; }
-        // Resten: én farve fra lys til moerk -- jo bedre end normalt, jo kraftigere
-        const styrke = Math.round(10 + 60 * Math.min(1, score(c) / maks));
+        // Resten: én farve fra lys til moerk -- jo bedre placeret, jo kraftigere
+        const styrke = Math.round(10 + 60 * placering(c));
         h += `<button type="button" class="celle har" data-d="${d}" data-b="${b}" style="background:color-mix(in srgb, var(--varme) ${styrke}%, var(--card));color:${styrke > 55 ? 'var(--card)' : 'var(--fg)'}" aria-label="${tekst}">${gange(score(c))}</button>`;
       });
     });
@@ -1252,11 +1255,11 @@ function tegnTider() {
     bedsteTider[pf] = top.map(x => `${UGEDAGE[x.d]} kl. ${blokNavn(BLOKKE[x.b])} (${gange(score(x.c))} så mange visninger som et normalt opslag, ${x.c.antal} opslag${onlineTekst(x)})`);
     // Foelgere online: samme gitter, farvet efter andel af det travleste felt
     document.querySelector(`.online[data-p="${pf}"]`).innerHTML = onlMaks <= 0 ? '' :
-      '<div class="lille" style="margin:14px 0 6px"><b>Følgere online</b> – hvor mange af følgerne der er på Instagram, i snit pr. time de seneste 4 uger. Mørk = flest. Meta oplyser det ikke for Facebook.</div>'
+      '<div class="lille" style="margin:14px 0 6px"><b>Følgere online</b> – hvor mange af følgerne der er på Instagram, i snit pr. time de seneste 4 uger. Mørkegrøn = flest. Meta oplyser det ikke for Facebook.</div>'
       + '<div class="varmekort"><div></div>' + BLOKKE.map(b => `<div class="akse top">${blokNavn(b)}</div>`).join('')
       + online.map((raekke, d) => `<div class="akse">${UGEDAGE[d].slice(0, 3)}</div>` + raekke.map((o, b) => {
         const s = Math.round(10 + 60 * onl(o) / onlMaks);
-        return `<div class="celle" style="background:color-mix(in srgb, var(--instagram) ${s}%, var(--card));color:${s > 55 ? 'var(--card)' : 'var(--fg)'}" title="${UGEDAGE[d]} kl. ${blokNavn(BLOKKE[b])}: ca. ${tal(Math.round(onl(o)))} følgere online i snit pr. time">${kortTal(Math.round(onl(o)))}</div>`;
+        return `<div class="celle" style="background:color-mix(in srgb, var(--ok) ${s}%, var(--card));color:${s > 55 ? 'var(--card)' : 'var(--fg)'}" title="${UGEDAGE[d]} kl. ${blokNavn(BLOKKE[b])}: ca. ${tal(Math.round(onl(o)))} følgere online i snit pr. time">${kortTal(Math.round(onl(o)))}</div>`;
       }).join('')).join('') + '</div>';
   });
 }
