@@ -33,6 +33,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .indhold{padding:16px 20px 48px;max-width:1320px;margin:0 auto;transition:opacity .15s}
 .indhold.henter{opacity:.55}
 .laeser{text-align:center;color:var(--mut);padding:20vh 20px}
+/* Spinneren ligger OVER siden, saa den ogsaa daekker den tomme side, mens de foerste tal hentes */
+#laeserVis{position:fixed;inset:0;z-index:50;background:var(--bg);padding:0;display:grid;place-content:center;justify-items:center;gap:14px;font-size:13px}
+.spinner{width:44px;height:44px;animation:drej 2s linear infinite}
+.spinner circle{fill:none;stroke:var(--bd);stroke-width:4}
+.spinner .bue{stroke:var(--brand-tekst);stroke-linecap:round;animation:straek 1.5s ease-in-out infinite}
+@keyframes drej{to{transform:rotate(360deg)}}
+@keyframes straek{0%{stroke-dasharray:1 150;stroke-dashoffset:0}50%{stroke-dasharray:90 150;stroke-dashoffset:-35}100%{stroke-dasharray:90 150;stroke-dashoffset:-124}}
 .hoved{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-bottom:16px}
 .hoved h1{font-size:20px;margin:0;color:var(--brand-tekst)}
 .hoved #periodeTekst{flex-basis:100%;font-size:12px;margin-top:-4px}
@@ -184,10 +191,10 @@ dialog.tid::backdrop{background:rgba(0,0,0,.5)}
 .besked.fejl{background:var(--fejl-bg);color:var(--fejl)}
 @media (max-width:900px){.to{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:760px){.noegletal,.gruppe .noegletal,.foelgerTal{grid-template-columns:repeat(2,minmax(0,1fr))}.gruppe{flex-basis:100%}.indhold{padding:12px}.opslag{grid-template-columns:44px 1fr}.opslag img,.opslag .tom{width:44px;height:44px}.opslag .tal2{grid-column:2;text-align:left}}
-@media (prefers-reduced-motion:reduce){.indhold{transition:none}}
+@media (prefers-reduced-motion:reduce){.indhold{transition:none}.spinner .bue{animation:none;stroke-dasharray:60 150}}
 </style></head><body>
 
-<div class="laeser" id="laeserVis">Indlæser…</div>
+<div class="laeser" id="laeserVis" role="status"><svg class="spinner" viewBox="0 0 50 50" aria-hidden="true"><circle cx="25" cy="25" r="20"/><circle class="bue" cx="25" cy="25" r="20"/></svg>Indlæser…</div>
 <div class="laeser" id="ingenAdgangVis" hidden>Din konto har ikke adgang til SoMe-tallene.</div>
 <div class="laeser" id="ugyldigtLinkVis" hidden>Linket virker ikke længere. Bed om et nyt link til din butiks SoMe-tal.</div>
 
@@ -327,7 +334,14 @@ let periodeFraUrl = false;  // adressen bad selv om en bestemt periode
 let sammenligning = 'aar';  // 'aar' = samme periode sidste aar, 'foer' = perioden lige foer
 const foerNavn = () => sammenligning === 'aar' ? 'Samme periode sidste år' : 'Perioden lige før';
 
-function vis(id) { ['laeserVis', 'ingenAdgangVis', 'ugyldigtLinkVis', 'app'].forEach(x => { $('#' + x).hidden = x != id; }); }
+// laeserVis (spinneren) ligger over siden og er ikke en af visningerne: den fjernes, naar de foerste
+// tal er hentet (hent), eller naar der i stedet vises en besked. Butik-redigering har sin egen spinner
+// over hele vinduet, naar man lander direkte paa #some, og faar besked i samme oejeblik (someKlar).
+function skjulLaeser() {
+  $('#laeserVis').hidden = true;
+  try { if (window.parent !== window && window.parent.someKlar) window.parent.someKlar(); } catch (e) {}
+}
+function vis(id) { ['ingenAdgangVis', 'ugyldigtLinkVis', 'app'].forEach(x => { $('#' + x).hidden = x != id; }); if (id != 'app') skjulLaeser(); }
 
 // Perioden slutter i gaar: dagens tal er ikke faerdige foer i morgen. Der sammenlignes med samme
 // datoer aaret foer -- eller, hvis man vaelger det, med perioden lige foer: lige saa mange dage,
@@ -387,6 +401,7 @@ async function hent() {
     : await client.rpc('some_overblik2', { p_fra: p.fra, p_til: p.til, p_butik: butik, p_f_fra: p.foerFra, p_f_til: p.foerTil });
   if (nr !== hentNr) return;
   $('#app').classList.remove('henter');
+  skjulLaeser();
   if (error) { besked('Tallene kunne ikke hentes. Prøv igen om lidt.', true); return; }
   if (!d) { vis(LINK ? 'ugyldigtLinkVis' : 'ingenAdgangVis'); return; }
   data = d;
