@@ -98,6 +98,18 @@ create table if not exists public.some_opslag (
 );
 create index if not exists some_opslag_oprettet on public.some_opslag (oprettet_at);
 
+-- ---------- Foelgere online (kun Instagram) ----------
+-- Metas online_followers: hvor mange af kontoens foelgere der var online i hver time, pr. dag
+-- (omregnet til dansk dato og klokkeslaet). Meta gemmer kun 30 dage, saa indsamlingen gemmer
+-- dem her. Facebook har ikke tallet laengere (fjernet af Meta i september 2024).
+create table if not exists public.some_online (
+  konto_id uuid not null references public.some_konti(id) on delete cascade,
+  dato date not null,
+  "time" smallint not null,
+  antal integer not null,
+  primary key (konto_id, dato, "time")
+);
+
 -- ---------- Log over indsamlinger ----------
 create table if not exists public.some_sync_log (
   id bigint generated always as identity primary key,
@@ -112,7 +124,7 @@ create table if not exists public.some_sync_log (
 do $$
 declare t text;
 begin
-  foreach t in array array['some_konti', 'some_dag', 'some_opslag', 'some_sync_log'] loop
+  foreach t in array array['some_konti', 'some_dag', 'some_opslag', 'some_online', 'some_sync_log'] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('revoke all on public.%I from anon, authenticated', t);
     execute format('grant select on public.%I to authenticated', t);
@@ -368,16 +380,34 @@ returns jsonb language sql stable security definer set search_path = public as $
     'serie_foer', coalesce((
       select jsonb_agg(jsonb_build_object('dato', dato, 'platform', platform, 'visninger', vis, 'raekkevidde', raek,
         'interaktioner', inter, 'nye_foelgere', nye) order by dato) from serie where dato < p_fra), '[]'::jsonb),
+    -- Bedste tidspunkter: pr. ugedag og tidsblok (blokkens foerste time). Ét opslag der gik godt er
+    -- ikke et moenster, og en stor butik faar altid flere visninger end en lille -- derfor maales
+    -- hvert opslag mod sin egen kontos median i perioden (1 = et normalt opslag), og feltet faar
+    -- medianen af dem (score). Interaktioner er med som hidtil (til dialogen bag feltet).
     'tider', coalesce((
-      select jsonb_agg(jsonb_build_object('platform', t.platform, 'ugedag', t.ugedag, 'time', t.time, 'antal', t.antal, 'interaktioner', t.inter))
+      select jsonb_agg(jsonb_build_object('platform', t.platform, 'ugedag', t.ugedag, 'time', t.time, 'antal', t.antal, 'interaktioner', t.inter, 'score', t.score))
       from (
-        select k.platform, extract(isodow from o.oprettet_at at time zone 'Europe/Copenhagen')::int ugedag,
-          extract(hour from o.oprettet_at at time zone 'Europe/Copenhagen')::int "time",
-          count(*) antal, sum(coalesce(o.likes, 0) + coalesce(o.kommentarer, 0) + coalesce(o.delinger, 0)) inter
-        from some_opslag o join kk k on k.id = o.konto_id
-        where o.oprettet_at >= (p_fra::timestamp at time zone 'Europe/Copenhagen')
-          and o.oprettet_at < ((p_til + 1)::timestamp at time zone 'Europe/Copenhagen')
-          and (o.type is null or o.type not in ('STORY', 'created_event')) group by 1, 2, 3) t), '[]'::jsonb),
+        with p as (
+          select k.platform, o.konto_id, o.visninger, coalesce(o.likes, 0) + coalesce(o.kommentarer, 0) + coalesce(o.delinger, 0) inter,
+            extract(isodow from o.oprettet_at at time zone 'Europe/Copenhagen')::int ugedag,
+            extract(hour from o.oprettet_at at time zone 'Europe/Copenhagen')::int tm
+          from some_opslag o join kk k on k.id = o.konto_id
+          where o.oprettet_at >= (p_fra::timestamp at time zone 'Europe/Copenhagen')
+            and o.oprettet_at < ((p_til + 1)::timestamp at time zone 'Europe/Copenhagen')
+            and (o.type is null or o.type not in ('STORY', 'created_event'))),
+        m as (select konto_id, percentile_cont(0.5) within group (order by visninger) med from p where visninger is not null group by 1)
+        select p.platform, p.ugedag,
+          case when p.tm < 6 then 0 when p.tm < 9 then 6 when p.tm < 12 then 9 when p.tm < 15 then 12 when p.tm < 18 then 15 when p.tm < 21 then 18 else 21 end "time",
+          count(*) antal, sum(p.inter) inter,
+          round((percentile_cont(0.5) within group (order by p.visninger::numeric / nullif(m.med, 0)))::numeric, 2) score
+        from p left join m on m.konto_id = p.konto_id group by 1, 2, 3) t), '[]'::jsonb),
+    -- Foelgere online (kun Instagram): snit pr. ugedag og time over de seneste 4 uger med tal
+    'online', coalesce((
+      select jsonb_agg(jsonb_build_object('platform', 'instagram', 'ugedag', x.ugedag, 'time', x.time, 'antal', x.antal))
+      from (
+        select extract(isodow from s.dato)::int ugedag, s.time, round(sum(s.antal)::numeric / count(distinct s.dato)) antal
+        from some_online s join kk k on k.id = s.konto_id
+        where s.dato > (select max(dato) from some_online) - 28 group by 1, 2) x), '[]'::jsonb),
     'foerste_dato', (select min(d.dato) from some_dag d join kk k on k.id = d.konto_id),
     'sidste_sync', (select jsonb_build_object('startet_at', startet_at, 'afsluttet_at', afsluttet_at, 'ok', ok, 'konti', konti)
       from some_sync_log order by id desc limit 1)
