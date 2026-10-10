@@ -824,14 +824,18 @@ returns uuid language sql stable security definer set search_path = public as $$
     (select butik_id from public.some_mail_log where kode = p_noegle and sendt_at > now() - interval '1 month'));
 $$;
 
--- Siden henter rapporterne én gang, naar et link aabnes: her taelles aabningen af et personligt link
+-- Siden henter rapporterne én gang, naar et link aabnes: her taelles aabningen af et personligt
+-- link, og den skrives i Aktivitetsloggen (admin_log), hvor superadmin kan filtrere paa den
 create or replace function public.some_rapporter_link(p_noegle text)
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare v_butik uuid := public.some_link_butik(p_noegle);
+declare v_butik uuid := public.some_link_butik(p_noegle); v_modtager text;
 begin
   if v_butik is null then return null; end if;
   update some_mail_log set aabninger = aabninger + 1, aabnet_foerst = coalesce(aabnet_foerst, now()), aabnet_sidst = now()
-  where kode = p_noegle;
+  where kode = p_noegle returning modtager into v_modtager;
+  if v_modtager is not null then
+    insert into admin_log (butik_id, handling, detaljer) values (v_butik, 'some_rapport_aabnet', v_modtager);
+  end if;
   return coalesce((
     select jsonb_agg(jsonb_build_object('id', r.id, 'butik_id', r.butik_id, 'fra', r.fra, 'til', r.til, 'titel', r.titel,
       'tekst', r.tekst, 'opdateret_at', r.opdateret_at, 'arkiveret_at', r.arkiveret_at)

@@ -732,7 +732,7 @@
       </div>
 
       <div style="font-size:12px; color:var(--ui-tekst-888); margin-bottom:16px;">
-        Hvem logger ind, og hvornår indhold/skabeloner bliver gemt — kun synligt for superadmin. De seneste 200 hændelser.
+        Hvem logger ind, hvornår indhold/skabeloner bliver gemt, og hvem der åbner en SoMe-rapport fra en mail — kun synligt for superadmin. De seneste 200 hændelser.
       </div>
 
       <div style="display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;">
@@ -744,6 +744,7 @@
           <option value="login">Login</option>
           <option value="gem_indhold">Gemt indhold</option>
           <option value="gem_skabelon">Gemt fælles skabelon</option>
+          <option value="some_rapport_aabnet">SoMe-rapport åbnet</option>
           <option value="js_fejl">JS-fejl</option>
           <option value="status">Status (heartbeat)</option>
           <option value="checkin_loop_start">Check-in-loop startet</option>
@@ -1633,7 +1634,7 @@
         const ramme = document.createElement('iframe');
         ramme.title = 'SoMe-performance';
         // ?v= skal bumpes naar some/index.html aendres (samme grund som for vagtplanen nedenfor)
-        ramme.src = '../some/?indlejret=1&v=2026-10-10-4';
+        ramme.src = '../some/?indlejret=1&v=2026-10-10-5';
         vis.appendChild(ramme);
       }
       updateSlideOverlay();
@@ -2662,7 +2663,7 @@
       .then(({ error }) => { if (error) dbgWarn('[aktivitetslog] kunne ikke logge:', error.message); });
   }
 
-  const HANDLING_LABELS = { login: 'Login', gem_indhold: 'Gemte indhold', gem_skabelon: 'Gemte fælles skabelon', js_fejl: 'JS-fejl', status: 'Status', checkin_loop_start: 'Check-in-loop startet', proaktiv_genstart: 'Proaktiv genstart (lav hukommelse)' };
+  const HANDLING_LABELS = { login: 'Login', gem_indhold: 'Gemte indhold', gem_skabelon: 'Gemte fælles skabelon', some_rapport_aabnet: 'Åbnede SoMe-rapporten', js_fejl: 'JS-fejl', status: 'Status', checkin_loop_start: 'Check-in-loop startet', proaktiv_genstart: 'Proaktiv genstart (lav hukommelse)' };
 
   async function loadAktivitetslog() {
     const butikFilter = document.getElementById('aktivitetslogButikFilter').value;
@@ -2685,13 +2686,15 @@
     }
     liste.innerHTML = data.map(row => {
       const butikNavn = row.butik_navn || '(ukendt butik)';
-      const brugerEmail = row.bruger_email || '(ukendt bruger)';
+      // En SoMe-rapport aabnes uden login via modtagerens personlige link: adressen staar i detaljer
+      const erSome = row.handling === 'some_rapport_aabnet';
+      const brugerEmail = erSome ? row.detaljer : row.bruger_email || '(ukendt bruger)';
       const label = HANDLING_LABELS[row.handling] || row.handling;
       const erFejl = row.handling === 'js_fejl';
       return '<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px; background:' + (erFejl ? 'var(--ui-flade-fejl)' : 'var(--ui-flade-graa)') + '; border-radius:8px; padding:8px 12px; font-size:13px;">' +
         '<div><b>' + escapeHtml(butikNavn) + '</b> — ' + escapeHtml(label) +
         ' <span style="color:var(--ui-tekst-888);">(' + escapeHtml(brugerEmail) + ')</span>' +
-        (row.detaljer ? '<br><span style="color:' + (erFejl ? 'var(--ui-fejl-tekst2)' : 'var(--ui-tekst-888)') + '; font-size:12px; white-space:pre-wrap; font-family:monospace; display:block; max-height:160px; overflow-y:auto; margin-top:4px;">' + escapeHtml(row.detaljer) + '</span>' : '') + '</div>' +
+        (row.detaljer && !erSome ? '<br><span style="color:' + (erFejl ? 'var(--ui-fejl-tekst2)' : 'var(--ui-tekst-888)') + '; font-size:12px; white-space:pre-wrap; font-family:monospace; display:block; max-height:160px; overflow-y:auto; margin-top:4px;">' + escapeHtml(row.detaljer) + '</span>' : '') + '</div>' +
         '<div style="color:var(--ui-tekst-aaa); font-size:11px; white-space:nowrap;">' + tidSiden(row.oprettet_at) + '</div>' +
         '</div>';
     }).join('');
