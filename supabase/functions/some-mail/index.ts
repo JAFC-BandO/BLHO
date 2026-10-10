@@ -79,14 +79,27 @@ Deno.serve(async (req) => {
   const periode = periodeNavn(d.rapport.fra, d.rapport.til);
   const url = SIDE + '?k=' + d.link;
   const titel = d.rapport.titel || 'SoMe-rapport ' + periode;
-  // Knappen er en tabelcelle: Outlook ser bort fra luft og baggrund paa et almindeligt link
-  const html = `<div style="font-family:'Segoe UI',Arial,sans-serif;font-size:16px;line-height:1.6;color:#1f2937;max-width:600px;margin:0 auto">
-<p style="font-size:12px;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:#15803d;margin:0 0 8px">SoMe-rapport · ${esc(periode)} · ${esc(butik)}</p>
-<h2 style="font-size:20px;line-height:1.3;margin:0 0 12px">${esc(titel)}</h2>
-<div>${esc(d.rapport.tekst).replace(/\r?\n/g, '<br>')}</div>
-<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0 12px"><tr><td bgcolor="#15803d" style="border-radius:8px;padding:12px 22px"><a href="${esc(url)}" style="color:#ffffff;text-decoration:none;font-weight:bold">Se alle tallene</a></td></tr></table>
-<p style="font-size:13px;color:#6b7280;margin:0">Linket åbner jeres egen side med alle tallene for perioden. I kan selv vælge andre perioder dér.</p>
-</div>`;
+  // Mailen ligner butikkens side (BL/some/ i lyst tema): graa baggrund, butikkens navn i sidens blaa,
+  // rapporten i den groenne boks og knappen som sidens knapper. Tabeller og faste farver, fordi
+  // Outlook hverken kender CSS-variabler, color-mix eller luft og baggrund paa et almindeligt link.
+  const skrift = `-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif`;
+  const html = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f4f4f2" style="background:#f4f4f2"><tr><td align="center" style="padding:24px 12px">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;font-family:${skrift};color:#1a1a1a;text-align:left">
+<tr><td style="padding:0 2px 14px">
+<div style="font-size:20px;line-height:1.3;font-weight:bold;color:#040DB1">${esc(butik)}</div>
+<div style="font-size:12px;color:#6c6577">SoMe-performance</div>
+</td></tr>
+<tr><td bgcolor="#ecf4ef" style="background:#ecf4ef;border:1px solid #a7c6b3;border-radius:14px;padding:16px 18px">
+<div style="font-size:11px;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;color:#2b8a4f">Rapport · ${esc(periode)}</div>
+<h2 style="font-size:18px;line-height:1.3;margin:10px 0 6px;color:#1a1a1a">${esc(titel)}</h2>
+<div style="font-size:15px;line-height:1.6">${esc(d.rapport.tekst).replace(/\r?\n/g, '<br>')}</div>
+</td></tr>
+<tr><td style="padding:18px 2px 0">
+<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#040DB1" style="background:#040DB1;border-radius:8px;padding:10px 18px"><a href="${esc(url)}" style="font-family:${skrift};font-size:14px;font-weight:bold;color:#ffffff;text-decoration:none">Se alle tallene</a></td></tr></table>
+<div style="font-size:12px;line-height:1.5;color:#6c6577;margin-top:10px">Linket åbner jeres egen side med alle tallene for perioden. I kan selv vælge andre perioder dér.</div>
+</td></tr>
+</table>
+</td></tr></table>`;
   const send = (from: string) => fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + d.noegle, 'Content-Type': 'application/json' },
