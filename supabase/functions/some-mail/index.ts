@@ -25,19 +25,21 @@ const svar = (body: unknown, status = 200) =>
 const SB = Deno.env.get('SUPABASE_URL')!;
 const SR = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const SIDE = 'https://jfclabs.dk/BL/some/';
+// Logoet som PNG (BL/logo-boerneloppen-mail.png, lavet af logo-boerneloppen.svg): mailprogrammer viser ikke SVG
+const LOGO = 'https://jfclabs.dk/BL/logo-boerneloppen-mail.png';
 const FRA = 'Børneloppen SoMe <boerneloppen-some@jfclabs.dk>';
 const TESTFRA = 'Børneloppen SoMe <onboarding@resend.dev>';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 const dag = (d: string) => new Date(d + 'T12:00:00Z');
-// "september 2026" for en hel kalendermaaned, ellers datoerne
+// "september 2026" for en hel kalendermaaned, ellers "12. september – 9. oktober 2026"
 function periodeNavn(fra: string, til: string): string {
   const sidste = new Date(Date.UTC(+til.slice(0, 4), +til.slice(5, 7), 0)).getUTCDate();
   if (fra.slice(0, 7) === til.slice(0, 7) && fra.endsWith('-01') && +til.slice(8) === sidste) {
     return dag(fra).toLocaleDateString('da-DK', { month: 'long', year: 'numeric', timeZone: 'UTC' });
   }
-  const kort = (d: string) => dag(d).toLocaleDateString('da-DK', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
-  return kort(fra) + ' – ' + kort(til);
+  const dato = (d: string, aar: boolean) => dag(d).toLocaleDateString('da-DK', { day: 'numeric', month: 'long', ...(aar ? { year: 'numeric' } : {}), timeZone: 'UTC' });
+  return dato(fra, fra.slice(0, 4) !== til.slice(0, 4)) + ' – ' + dato(til, true);
 }
 
 Deno.serve(async (req) => {
@@ -81,27 +83,25 @@ Deno.serve(async (req) => {
   const periode = periodeNavn(d.rapport.fra, d.rapport.til);
   const url = SIDE + '?k=' + d.link;
   const kontakt = typeof d.kontakt === 'string' ? d.kontakt.trim() : '';
-  // Sidens farver (BL/some/ i lyst tema): graa baggrund, hvidt kort og den blaa fra knapperne.
+  // Et brev paa Boerneloppens brevpapir: logoet paa den blaa flade som paa login-siden, og under
+  // det et almindeligt brev med én knap -- ingen overskrifter, maerkater eller anden skabelon-pynt.
   // Tabeller og faste farver, fordi Outlook hverken kender CSS-variabler eller luft og baggrund paa
-  // et almindeligt link (mso-padding-alt giver knappen sin luft dér).
+  // et almindeligt link (mso-padding-alt giver knappen sin luft dér). Vises billeder ikke, staar
+  // logoets alt-tekst i hvidt paa den blaa flade.
   const skrift = `-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif`;
   const html = `<div style="display:none;max-height:0;overflow:hidden;opacity:0">Jeres SoMe-rapport for ${esc(periode)} er klar.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f4f4f2" style="background:#f4f4f2"><tr><td align="center" style="padding:32px 12px">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;font-family:${skrift};color:#1a1a1a;text-align:left">
-<tr><td bgcolor="#040DB1" style="background:#040DB1;border-radius:14px 14px 0 0;padding:26px 30px 24px">
-<div style="font-size:11px;font-weight:bold;letter-spacing:.08em;text-transform:uppercase;color:#c5c9f7">Børneloppen · SoMe-rapport</div>
-<div style="font-size:24px;line-height:1.25;font-weight:bold;color:#ffffff;margin-top:6px">${esc(butik)}</div>
-<div style="font-size:14px;color:#dfe1fb;margin-top:4px">${esc(periode)}</div>
+<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;text-align:left">
+<tr><td align="center" bgcolor="#040DB1" style="background:#040DB1;border-radius:12px 12px 0 0;padding:28px 20px"><img src="${LOGO}" width="180" alt="Børneloppen" style="display:block;width:180px;max-width:100%;height:auto;border:0;font-family:${skrift};font-size:22px;font-weight:bold;color:#ffffff"></td></tr>
+<tr><td bgcolor="#ffffff" style="background:#ffffff;border:1px solid #e2e2e2;border-top:0;border-radius:0 0 12px 12px;padding:32px 34px 34px;font-family:${skrift};font-size:16px;line-height:1.6;color:#1a1a1a">
+<p style="margin:0 0 16px">Kære ${esc(butik)}</p>
+<p style="margin:0 0 16px">Nedenfor finder I SoMe-rapporten for ${esc(butik)} for perioden <b>${esc(periode)}</b>.</p>
+<p style="margin:0 0 26px">Følg linket for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.</p>
+<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#040DB1" style="background:#040DB1;border-radius:8px;mso-padding-alt:13px 26px"><a href="${esc(url)}" style="display:inline-block;padding:13px 26px;font-family:${skrift};font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none">Åbn SoMe-rapporten</a></td></tr></table>
+${kontakt ? `<p style="margin:26px 0 0">Har I spørgsmål til rapporten, er I velkomne til at skrive til <a href="mailto:${esc(kontakt)}" style="color:#040DB1">${esc(kontakt)}</a>.</p>` : ''}
+<p style="margin:${kontakt ? 16 : 26}px 0 0">Med venlig hilsen<br>Børneloppen-teamet</p>
 </td></tr>
-<tr><td bgcolor="#ffffff" style="background:#ffffff;border:1px solid #e2e2e2;border-top:0;border-radius:0 0 14px 14px;padding:28px 30px 30px">
-<p style="font-size:17px;line-height:1.5;font-weight:bold;margin:0 0 14px">Kære ${esc(butik)}</p>
-<p style="font-size:16px;line-height:1.6;margin:0 0 12px">Nedenfor finder I SoMe-rapporten for ${esc(butik)} for perioden <b>${esc(periode)}</b>.</p>
-<p style="font-size:16px;line-height:1.6;margin:0 0 24px">Følg linket for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.</p>
-<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#040DB1" style="background:#040DB1;border-radius:10px;mso-padding-alt:14px 30px"><a href="${esc(url)}" style="display:inline-block;padding:14px 30px;font-family:${skrift};font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none">Åbn SoMe-rapporten&nbsp;&rarr;</a></td></tr></table>
-${kontakt ? `<p style="font-size:14px;line-height:1.6;color:#6c6577;margin:28px 0 0;padding-top:18px;border-top:1px solid #e2e2e2">Har I spørgsmål til rapporten, er I velkomne til at skrive til <a href="mailto:${esc(kontakt)}" style="color:#040DB1">${esc(kontakt)}</a>.</p>` : ''}
-<p style="font-size:16px;line-height:1.6;margin:${kontakt ? 18 : 28}px 0 0">Med venlig hilsen<br><b>Børneloppen-teamet</b></p>
-</td></tr>
-<tr><td style="padding:14px 4px 0;font-size:12px;line-height:1.5;color:#6c6577">Virker knappen ikke? Kopiér linket ind i browseren:<br><a href="${esc(url)}" style="color:#6c6577;word-break:break-all">${esc(url)}</a></td></tr>
+<tr><td style="padding:16px 4px 0;font-family:${skrift};font-size:12px;line-height:1.5;color:#6c6577">Virker knappen ikke? Kopiér linket ind i browseren:<br><a href="${esc(url)}" style="color:#6c6577;word-break:break-all">${esc(url)}</a></td></tr>
 </table>
 </td></tr></table>`;
   const text = `Kære ${butik}\n\nNedenfor finder I SoMe-rapporten for ${butik} for perioden ${periode}. Følg linket for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.\n\n${url}\n\n`
@@ -109,7 +109,7 @@ ${kontakt ? `<p style="font-size:14px;line-height:1.6;color:#6c6577;margin:28px 
   const send = (from: string) => fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + d.noegle, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from, to: til, ...(kontakt ? { reply_to: kontakt } : {}), subject: `SoMe-rapport ${periode} – ${butik}`, html, text }),
+    body: JSON.stringify({ from, to: til, ...(kontakt ? { reply_to: kontakt } : {}), subject: `SoMe-rapport for ${butik}, ${periode}`, html, text }),
     signal: AbortSignal.timeout(20000),
   }).catch(() => null);
   let res = await send(FRA);
