@@ -327,6 +327,7 @@ let rapporter = [];         // rapporterne (tekst + periode): butikkens aktive +
 let vistRapport = null;     // id paa en tidligere rapport, man har valgt at se (ellers vises den aktive)
 let kanStyre = false;       // maa skrive rapporter (den SoMe-ansvarlige)
 let rapportRediger = false; // den SoMe-ansvarlige har slaaet redigering til (knappen i toppen)
+let mailGrupper = {};       // butikkernes mailgrupper: { butik_id: "a@x.dk, b@y.dk" } (kun for den SoMe-ansvarlige)
 const kladder = new Map();  // ikke-gemte tekster pr. butik ('alle' = den faelles), saa man kan skifte butik og periode uden at miste noget
 let foerUdkast = null;      // det, der stod i skrivefeltet, foer AI-udkastet blev sat ind (til "Fortryd")
 const bedsteTider = {};     // de bedste tidspunkter pr. platform, som tekst (til AI-udkastet)
@@ -572,8 +573,6 @@ const EMOJIS = [
   ['SoMe', '📸 🎥 🎬 📱 💬 👀 👍 📣 📅 ⏰ 📌 🔗'],
   ['Årstid', '☀️ 🍂 ❄️ 🎄 🎃 🌷 🐣 🎁'],
 ];
-// Modtagerne huskes pr. butik i browseren, saa én butiks rapport ikke ryger til en andens adresse
-const mailTil = n => { try { return localStorage.getItem('someMail:' + n) || ''; } catch (x) { return ''; } };
 let emojiAaben = false;       // paletten er slaaet ud
 let sidstFelt = 'rapTekst';   // feltet, markoeren sidst stod i (overskrift eller tekst)
 // Gemmer det, der staar i skrivefeltet, som kladde -- hvis det afviger fra den gemte rapport
@@ -625,7 +624,7 @@ function tegnEditor(status) {
     <div class="emoji-panel"${emojiAaben ? '' : ' hidden'}><div class="rapport-note">Klik på en emoji for at sætte den ind, hvor markøren står. Flere: Windows-tast + punktum.</div>${EMOJIS.map(([navn, liste]) => `<div class="emoji-gruppe"><span>${navn}</span>${liste.split(' ').map(x => `<button type="button" class="emoji" aria-label="Indsæt ${x}">${x}</button>`).join('')}</div>`).join('')}</div>
     <div class="rapport-note" id="rapPeriode"></div>
     <div class="rapport-knapper"><button type="button" class="knap" data-r="gem">Gem rapport</button><span class="rapport-note" id="rapStatus"></span><span class="luft"></span>${gemt ? '<button type="button" class="knap stille fare" data-r="slet">Slet rapport</button>' : ''}</div>
-    ${gemt && butik ? `<div class="rapport-knapper"><input type="text" id="rapMail" aria-label="Modtagere af mailen" placeholder="Mailadresse (flere adskilles med komma)" value="${esc(mailTil(n))}" style="flex:1;min-width:220px;margin:0;font-weight:400"><button type="button" class="knap stille" data-r="mail">✉️ Send rapporten på mail</button></div><div class="rapport-note" id="mailStatus">Mailen er en kort hilsen med en knap til butikkens side, hvor rapporten og alle tallene står.</div>` : ''}
+    ${butik ? `<div class="rapport-knapper"><input type="text" id="rapMail" aria-label="Butikkens mailgruppe" placeholder="Butikkens mailgruppe: adresser adskilt med komma" value="${esc(mailGrupper[n] || '')}" style="flex:1;min-width:220px;margin:0;font-weight:400"><button type="button" class="knap stille" data-r="mailgem">Gem modtagere</button>${gemt ? '<button type="button" class="knap stille" data-r="mail">✉️ Send rapporten på mail</button>' : ''}</div><div class="rapport-note" id="mailStatus">${gemt ? 'Mailen er en kort hilsen med en knap til butikkens side, hvor rapporten og alle tallene står.' : 'Rapporten kan sendes på mail, når den er gemt.'} Gemte modtagere står her igen næste gang.</div>` : ''}
     <details class="tidligere" id="rapTidligere"></details>
   </div>`;
   tegnUdkastNote();
@@ -852,8 +851,20 @@ $('#rapportBoks').addEventListener('click', async e => {
     if (!k.isConnected) return;
     k.disabled = false;
     if (!r || !r.ok) { st.textContent = (r && r.fejl) || 'Mailen kunne ikke sendes lige nu. Prøv igen om lidt.'; return; }
-    try { localStorage.setItem('someMail:' + n, til); } catch (x) {}
-    st.textContent = 'Sendt ✓ til ' + r.til.join(', ') + (r.test ? ' – fra Resends testadresse, fordi domænet ikke er godkendt endnu.' : '');
+    st.textContent = 'Sendt ✓ til ' + r.til.join(', ') + (r.test ? ' – fra Resends testadresse, fordi domænet ikke er godkendt endnu.' : '.')
+      + (r.til.join(', ') === (mailGrupper[n] || '') ? '' : ' Modtagerne er ikke gemt som butikkens mailgruppe.');
+  }
+  else if (h === 'mailgem' && b) {
+    // Butikkens mailgruppe gemmes i databasen (RPC'en tjekker adresserne), saa den staar her naeste gang
+    const st = $('#mailStatus');
+    k.disabled = true;
+    const { data: r, error } = await client.rpc('some_mail_gruppe_gem', { p_butik: b, p_modtagere: $('#rapMail').value });
+    if (!k.isConnected) return;
+    k.disabled = false;
+    if (error) { st.textContent = 'Modtagerne kunne ikke gemmes: ' + error.message; return; }
+    mailGrupper[n] = r || '';
+    $('#rapMail').value = mailGrupper[n];
+    st.textContent = r ? 'Modtagerne er gemt for ' + butikNavnAf(b) + '.' : butikNavnAf(b) + ' har ingen gemte modtagere nu.';
   }
   else if (h === 'udkast') {
     // AI'en (edge-funktionen some-udkast) skriver et forslag ud fra alt, siden ved om perioden.
@@ -1377,8 +1388,9 @@ async function start() {
   const { data: adg } = await client.from('some_adgang').select('bruger_id').eq('bruger_id', user.id).maybeSingle();
   if (!adg) { vis('ingenAdgangVis'); return; }
   vis('app');
-  const [, styr] = await Promise.all([hentRapporter(), client.rpc('kan_styre_some')]);
+  const [, styr, grupper] = await Promise.all([hentRapporter(), client.rpc('kan_styre_some'), client.rpc('some_mail_grupper_hent')]);
   kanStyre = styr.data === true;
+  mailGrupper = grupper.data || {};
   await hent();
 }
 // Kvartalerne i periodevaelgeren: fra det igangvaerende og tilbage til 1. kvartal 2025 (tallene
