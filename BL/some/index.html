@@ -625,7 +625,7 @@ function tegnEditor(status) {
     <div class="emoji-panel"${emojiAaben ? '' : ' hidden'}><div class="rapport-note">Klik på en emoji for at sætte den ind, hvor markøren står. Flere: Windows-tast + punktum.</div>${EMOJIS.map(([navn, liste]) => `<div class="emoji-gruppe"><span>${navn}</span>${liste.split(' ').map(x => `<button type="button" class="emoji" aria-label="Indsæt ${x}">${x}</button>`).join('')}</div>`).join('')}</div>
     <div class="rapport-note" id="rapPeriode"></div>
     <div class="rapport-knapper"><button type="button" class="knap" data-r="gem">Gem rapport</button><span class="rapport-note" id="rapStatus"></span><span class="luft"></span>${gemt ? '<button type="button" class="knap stille fare" data-r="slet">Slet rapport</button>' : ''}</div>
-    ${gemt && butik ? `<div class="rapport-knapper"><input type="text" id="rapMail" aria-label="Modtagere af mailen" placeholder="Mailadresse (flere adskilles med komma)" value="${esc(mailTil(n))}" style="flex:1;min-width:220px;margin:0;font-weight:400"><button type="button" class="knap stille" data-r="mail">✉️ Send rapporten på mail</button></div><div class="rapport-note" id="mailStatus">Mailen indeholder den gemte rapport og butikkens link til alle tallene.</div>` : ''}
+    ${gemt && butik ? `<div class="rapport-knapper"><input type="text" id="rapMail" aria-label="Modtagere af mailen" placeholder="Mailadresse (flere adskilles med komma)" value="${esc(mailTil(n))}" style="flex:1;min-width:220px;margin:0;font-weight:400"><button type="button" class="knap stille" data-r="mail">✉️ Send rapporten på mail</button></div><div class="rapport-note" id="mailStatus">Mailen er en kort hilsen med en knap til butikkens side, hvor rapporten og alle tallene står.</div>` : ''}
     <details class="tidligere" id="rapTidligere"></details>
   </div>`;
   tegnUdkastNote();
@@ -842,10 +842,10 @@ $('#rapportBoks').addEventListener('click', async e => {
     setTimeout(() => { if (k.isConnected) k.textContent = 'Kopiér link til butikken'; }, 2500);
   }
   else if (h === 'mail' && gemt) {
-    // Edge-funktionen some-mail sender den GEMTE rapport (ikke kladden) med butikkens link
+    // Edge-funktionen some-mail sender en hilsen med butikkens link -- dér staar den GEMTE rapport (ikke kladden)
     const til = $('#rapMail').value.trim(), st = $('#mailStatus');
     if (!til) { st.textContent = 'Skriv modtagerens mailadresse.'; return; }
-    if (kladder.has(n)) { st.textContent = 'Gem ændringerne først – mailen indeholder den gemte rapport.'; return; }
+    if (kladder.has(n)) { st.textContent = 'Gem ændringerne først – butikken ser den gemte rapport, når den åbner linket.'; return; }
     k.disabled = true; st.textContent = 'Sender …';
     let r = null;
     try { r = (await client.functions.invoke('some-mail', { body: { butik: b, til } })).data; } catch (x) {}

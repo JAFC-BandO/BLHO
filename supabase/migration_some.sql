@@ -741,17 +741,20 @@ end $$;
 revoke execute on function public.some_rapporter_slet(uuid) from public, anon;
 grant execute on function public.some_rapporter_slet(uuid) to authenticated;
 
--- Rapporten paa mail (edge-funktionen some-mail): alt, den skal bruge for at sende butikkens gemte
--- rapport -- Resend-noeglen fra Vault, cron-noeglen, butikkens navn og link og den aktive rapport.
--- Noeglen saettes ind i SQL Editor:  select vault.create_secret('<noegle>', 'resend_api_key');
+-- Rapporten paa mail (edge-funktionen some-mail): alt, den skal bruge for at sende butikken en mail
+-- med link til rapporten -- Resend-noeglen og kontaktadressen fra Vault, cron-noeglen, butikkens
+-- navn og link og den aktive rapports periode. Saettes ind i SQL Editor:
+--   select vault.create_secret('<noegle>', 'resend_api_key');
+--   select vault.create_secret('<mail, butikkerne kan skrive til>', 'some_mail_kontakt');
 create or replace function public.some_mail_data(p_butik uuid)
 returns jsonb language sql stable security definer set search_path = '' as $$
   select jsonb_build_object(
     'noegle', (select decrypted_secret from vault.decrypted_secrets where name = 'resend_api_key'),
+    'kontakt', (select decrypted_secret from vault.decrypted_secrets where name = 'some_mail_kontakt'),
     'cron', (select decrypted_secret from vault.decrypted_secrets where name = 'some_cron_noegle'),
     'butik', (select navn from public.butikker where id = p_butik),
     'link', (select noegle from public.some_links where butik_id = p_butik and aktiv),
-    'rapport', (select jsonb_build_object('fra', r.fra, 'til', r.til, 'titel', r.titel, 'tekst', r.tekst)
+    'rapport', (select jsonb_build_object('fra', r.fra, 'til', r.til)
       from public.some_rapporter r where r.butik_id = p_butik and r.slettet_at is null and r.arkiveret_at is null));
 $$;
 revoke execute on function public.some_mail_data(uuid) from public, anon, authenticated;
