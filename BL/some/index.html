@@ -328,6 +328,7 @@ let vistRapport = null;     // id paa en tidligere rapport, man har valgt at se 
 let kanStyre = false;       // maa skrive rapporter (den SoMe-ansvarlige)
 let rapportRediger = false; // den SoMe-ansvarlige har slaaet redigering til (knappen i toppen)
 let mailGrupper = {};       // butikkernes mailgrupper: { butik_id: "a@x.dk, b@y.dk" } (kun for den SoMe-ansvarlige)
+let mailLog = null;         // sendte rapportmails og hvem der har aabnet dem (hentes, naar skrivefeltet aabnes)
 const kladder = new Map();  // ikke-gemte tekster pr. butik ('alle' = den faelles), saa man kan skifte butik og periode uden at miste noget
 let foerUdkast = null;      // det, der stod i skrivefeltet, foer AI-udkastet blev sat ind (til "Fortryd")
 const bedsteTider = {};     // de bedste tidspunkter pr. platform, som tekst (til AI-udkastet)
@@ -624,12 +625,35 @@ function tegnEditor(status) {
     <div class="emoji-panel"${emojiAaben ? '' : ' hidden'}><div class="rapport-note">Klik på en emoji for at sætte den ind, hvor markøren står. Flere: Windows-tast + punktum.</div>${EMOJIS.map(([navn, liste]) => `<div class="emoji-gruppe"><span>${navn}</span>${liste.split(' ').map(x => `<button type="button" class="emoji" aria-label="Indsæt ${x}">${x}</button>`).join('')}</div>`).join('')}</div>
     <div class="rapport-note" id="rapPeriode"></div>
     <div class="rapport-knapper"><button type="button" class="knap" data-r="gem">Gem rapport</button><span class="rapport-note" id="rapStatus"></span><span class="luft"></span>${gemt ? '<button type="button" class="knap stille fare" data-r="slet">Slet rapport</button>' : ''}</div>
-    ${butik ? `<div class="rapport-knapper"><input type="text" id="rapMail" aria-label="Butikkens mailgruppe" placeholder="Butikkens mailgruppe: adresser adskilt med komma" value="${esc(mailGrupper[n] || '')}" style="flex:1;min-width:220px;margin:0;font-weight:400"><button type="button" class="knap stille" data-r="mailgem">Gem modtagere</button>${gemt ? '<button type="button" class="knap stille" data-r="mail">✉️ Send rapporten på mail</button>' : ''}</div><div class="rapport-note" id="mailStatus">${gemt ? 'Mailen er en kort hilsen med en knap til butikkens side, hvor rapporten og alle tallene står.' : 'Rapporten kan sendes på mail, når den er gemt.'} Gemte modtagere står her igen næste gang.</div>` : ''}
+    ${butik ? `<div class="rapport-knapper"><input type="text" id="rapMail" aria-label="Butikkens mailgruppe" placeholder="Butikkens mailgruppe: adresser adskilt med komma" value="${esc(mailGrupper[n] || '')}" style="flex:1;min-width:220px;margin:0;font-weight:400"><button type="button" class="knap stille" data-r="mailgem">Gem modtagere</button>${gemt ? '<button type="button" class="knap stille" data-r="mail">✉️ Send rapporten på mail</button>' : ''}</div><div class="rapport-note" id="mailStatus">${gemt ? 'Hver modtager får en kort mail med sit eget link til butikkens side. Linket virker i en måned, og nedenfor kan du se, hvem der har åbnet det.' : 'Rapporten kan sendes på mail, når den er gemt.'} Gemte modtagere står her igen næste gang.</div>` : ''}
+    <details class="tidligere" id="rapMailLog" hidden></details>
     <details class="tidligere" id="rapTidligere"></details>
   </div>`;
   tegnUdkastNote();
   tegnTidligere();
+  tegnMailLog();
   tegnEditorPeriode(status);
+}
+// Hvem har faaet rapportmailen, og hvem har aabnet sit link: for en butik dens seneste afsendelser
+// med modtagerne, for "alle butikker" den seneste afsendelse pr. butik. Hentes foerste gang
+// skrivefeltet aabnes, og igen efter en afsendelse.
+const tidspunkt = s => { const d = new Date(s); return datoKort(d) + ' kl. ' + d.toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' }); };
+async function tegnMailLog(hentIgen) {
+  if (hentIgen || !mailLog) mailLog = (await client.rpc('some_mail_log_hent')).data || [];
+  const boks = $('#rapMailLog'); if (!boks) return;
+  // Raekker med samme butik og tidspunkt er sendt i samme omgang (nyeste foerst)
+  const omgange = new Map();
+  for (const r of mailLog) { const k = r.butik_id + r.sendt_at; if (!omgange.has(k)) omgange.set(k, []); omgange.get(k).push(r); }
+  const set = new Set();
+  const liste = [...omgange.values()].filter(o => butik ? o[0].butik_id === butik : !set.has(o[0].butik_id) && set.add(o[0].butik_id)).slice(0, butik ? 6 : 100);
+  boks.hidden = !liste.length; if (!liste.length) return;
+  const aabnet = o => o.filter(r => r.aabninger > 0).length, sum = f => (butik ? liste.slice(0, 1) : liste).reduce((s, o) => s + f(o), 0);
+  boks.innerHTML = `<summary>Sendte mails: ${sum(aabnet)} af ${sum(o => o.length)} har åbnet ${butik ? 'den seneste' : 'butikkernes seneste'}</summary>` + liste.map(o => {
+    const udloeb = new Date(o[0].sendt_at); udloeb.setMonth(udloeb.getMonth() + 1);
+    return `<div class="tidl">
+      <div class="tidl-hoved"><b>${butik ? '' : esc(butikNavnAf(o[0].butik_id)) + ' – '}sendt ${esc(tidspunkt(o[0].sendt_at))}</b><span class="lille">rapporten for ${esc(periodeNavn(o[0].fra, o[0].til))} – ${udloeb < new Date() ? 'linket er udløbet' : 'linket virker til ' + esc(datoKort(udloeb))}</span><span class="luft"></span><span>${aabnet(o)} af ${o.length} har åbnet</span></div>
+      ${butik ? o.map(r => `<div class="rapport-tekst">${esc(r.modtager)} – ${r.aabninger ? `åbnet ${r.aabninger} ${r.aabninger === 1 ? 'gang' : 'gange'}, senest ${esc(tidspunkt(r.aabnet_sidst))}` : 'ikke åbnet'}</div>`).join('') : ''}
+    </div>`; }).join('');
 }
 // Butikkens tidligere rapporter (dem, en nyere har afloest) -- til at se og slette
 function tegnTidligere() {
@@ -852,7 +876,9 @@ $('#rapportBoks').addEventListener('click', async e => {
     k.disabled = false;
     if (!r || !r.ok) { st.textContent = (r && r.fejl) || 'Mailen kunne ikke sendes lige nu. Prøv igen om lidt.'; return; }
     st.textContent = 'Sendt ✓ til ' + r.til.join(', ') + (r.test ? ' – fra Resends testadresse, fordi domænet ikke er godkendt endnu.' : '.')
-      + (r.til.join(', ') === (mailGrupper[n] || '') ? '' : ' Modtagerne er ikke gemt som butikkens mailgruppe.');
+      + (r.fejlet && r.fejlet.length ? ' Kunne ikke sendes til ' + r.fejlet.join(', ') + '.' : '')
+      + (til.split(/[\s,;]+/).filter(Boolean).join(', ') === (mailGrupper[n] || '') ? '' : ' Modtagerne er ikke gemt som butikkens mailgruppe.');
+    tegnMailLog(true);
   }
   else if (h === 'mailgem' && b) {
     // Butikkens mailgruppe gemmes i databasen (RPC'en tjekker adresserne), saa den staar her naeste gang
