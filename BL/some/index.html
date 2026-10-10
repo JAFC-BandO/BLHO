@@ -40,8 +40,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 #henterVis{display:none;position:fixed;inset:0;z-index:40;place-content:center;pointer-events:none}
 .indhold.henter~#henterVis{display:grid;animation:frem .15s .25s both}
 @keyframes frem{from{opacity:0}to{opacity:1}}
-#temaKnap{display:inline-flex;align-items:center;gap:6px}
-#temaKnap svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+/* Tema-knappen paa butikslinket: samme runde ikon-knap og samme skift som i butik-redigering --
+   det nye tema vokser ud i en cirkel fra knappen (animeres fra klikket) */
+#temaKnap{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border:none;border-radius:50%;padding:0;background:var(--badge);color:var(--brand-tekst);line-height:1;cursor:pointer}
+#temaKnap svg{width:16px;height:16px;display:block;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+#temaKnap:hover{background:#dde1fb}
+:root[data-tema="moerk"] #temaKnap:hover{background:#313866}
+::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
 .laeser{text-align:center;color:var(--mut);padding:20vh 20px}
 /* Spinneren ligger OVER siden, saa den ogsaa daekker den tomme side, mens de foerste tal hentes */
 #laeserVis{position:fixed;inset:0;z-index:50;background:var(--bg);padding:0;display:grid;place-content:center;justify-items:center;gap:14px;font-size:13px}
@@ -239,7 +244,7 @@ dialog.tid::backdrop{background:rgba(0,0,0,.5)}
     <span class="status" id="status" data-tip="Automatisk indsamling&#10;Tallene hentes fra Facebook og Instagram én gang i timen.&#10;Opdater nu henter dem med det samme."></span>
     <button class="knap stille" id="rapportKnap" type="button" hidden>Skriv rapport</button>
     <button class="knap" id="opdater" title="Tallene hentes automatisk én gang i timen. Tryk for at hente de nyeste fra Facebook og Instagram nu.">Opdater nu</button>
-    <button class="knap stille" id="temaKnap" type="button" hidden></button>
+    <button id="temaKnap" type="button" hidden></button>
     <div class="lille" id="periodeTekst"></div>
   </div>
 
@@ -1430,13 +1435,23 @@ const TEMA_NAESTE = { system: 'lys', lys: 'moerk', moerk: 'system' };
 function tegnTemaKnap() {
   const v = temaValg(), k = $('#temaKnap');
   k.hidden = !LINK;
-  k.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${TEMA[v][1]}</svg>${TEMA[v][0]}`;
+  k.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${TEMA[v][1]}</svg>`;
   k.title = `Tema: ${TEMA[v][0]} (klik for ${TEMA[TEMA_NAESTE[v]][0]})`;
   k.setAttribute('aria-label', k.title);
 }
-$('#temaKnap').addEventListener('click', () => {
-  try { localStorage.setItem('blho-tema', TEMA_NAESTE[temaValg()]); } catch (e) { /* blokeret -- saa skifter den ikke */ }
-  saetTema(); tegnTemaKnap();
+$('#temaKnap').addEventListener('click', e => {
+  try { localStorage.setItem('blho-tema', TEMA_NAESTE[temaValg()]); } catch (x) { /* blokeret -- saa skifter den ikke */ }
+  const skift = () => { saetTema(); tegnTemaKnap(); };
+  // Uden browser-understoettelse (View Transitions), eller naar man har bedt om faerre animationer,
+  // skiftes der med det samme
+  if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) { skift(); return; }
+  const b = e.currentTarget.getBoundingClientRect(), x = b.left + b.width / 2, y = b.top + b.height / 2;
+  const r = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+  document.startViewTransition(skift).ready.then(() => {
+    document.documentElement.animate(
+      { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${r}px at ${x}px ${y}px)`] },
+      { duration: 650, easing: 'cubic-bezier(.65, 0, .35, 1)', pseudoElement: '::view-transition-new(root)' });
+  }).catch(() => {});
 });
 window.addEventListener('storage', e => { if (e.key === 'blho-tema') tegnTemaKnap(); });
 tegnTemaKnap();
