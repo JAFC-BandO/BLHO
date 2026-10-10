@@ -250,6 +250,7 @@ create table if not exists public.some_links (
 alter table public.some_links enable row level security;
 revoke all on public.some_links from anon, authenticated;
 
+-- (Defineres igen laengere nede, hvor ogsaa de personlige links fra mails gaelder -- se some_mail_log)
 create or replace function public.some_link_butik(p_noegle text)
 returns uuid language sql stable security definer set search_path = public as $$
   select butik_id from public.some_links where noegle = p_noegle and aktiv and length(p_noegle) >= 32;
@@ -693,6 +694,7 @@ revoke execute on function public.some_rapporter_hent() from public, anon;
 grant execute on function public.some_rapporter_hent() to authenticated;
 
 -- Butikslinket (uden login): butikkens egne rapporter + de faelles. Ugyldigt link giver null.
+-- (Defineres igen laengere nede, hvor aabningen af et personligt link fra en mail ogsaa taelles.)
 create or replace function public.some_rapporter_link(p_noegle text)
 returns jsonb language sql stable security definer set search_path = public as $$
   select coalesce((
@@ -743,7 +745,7 @@ grant execute on function public.some_rapporter_slet(uuid) to authenticated;
 
 -- Rapporten paa mail (edge-funktionen some-mail): alt, den skal bruge for at sende butikken en mail
 -- med link til rapporten -- Resend-noeglen og kontaktadressen fra Vault, cron-noeglen, butikkens
--- navn og link og den aktive rapports periode. Saettes ind i SQL Editor:
+-- navn og den aktive rapports periode. Saettes ind i SQL Editor:
 --   select vault.create_secret('<noegle>', 'resend_api_key');
 --   select vault.create_secret('<mail, butikkerne kan skrive til>', 'some_mail_kontakt');
 create or replace function public.some_mail_data(p_butik uuid)
@@ -753,7 +755,6 @@ returns jsonb language sql stable security definer set search_path = '' as $$
     'kontakt', (select decrypted_secret from vault.decrypted_secrets where name = 'some_mail_kontakt'),
     'cron', (select decrypted_secret from vault.decrypted_secrets where name = 'some_cron_noegle'),
     'butik', (select navn from public.butikker where id = p_butik),
-    'link', (select noegle from public.some_links where butik_id = p_butik and aktiv),
     'rapport', (select jsonb_build_object('fra', r.fra, 'til', r.til)
       from public.some_rapporter r where r.butik_id = p_butik and r.slettet_at is null and r.arkiveret_at is null));
 $$;
@@ -794,6 +795,64 @@ begin
 end $$;
 revoke execute on function public.some_mail_gruppe_gem(uuid, text) from public, anon;
 grant execute on function public.some_mail_gruppe_gem(uuid, text) to authenticated;
+
+-- Sendte rapportmails: én raekke pr. modtager. Koden er modtagerens personlige link (?k=<kode>):
+-- det aabner butikkens side uden login ligesom butikslinket, men holder op med at virke en maaned
+-- efter afsendelsen, og siden taeller, naar det bliver aabnet -- saa den SoMe-ansvarlige kan se,
+-- hvem der har aabnet rapporten. (Videresendes mailen, taeller aabningen paa den oprindelige
+-- modtager.) some-mail opretter raekkerne med service_role; ingen andre kan laese tabellen.
+create table if not exists public.some_mail_log (
+  kode text primary key default replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''),
+  butik_id uuid not null references public.butikker(id) on delete cascade,
+  modtager text not null,
+  fra date not null,
+  til date not null,
+  sendt_at timestamptz not null default now(),
+  aabnet_foerst timestamptz,
+  aabnet_sidst timestamptz,
+  aabninger integer not null default 0
+);
+create index if not exists some_mail_log_butik on public.some_mail_log (butik_id, sendt_at desc);
+alter table public.some_mail_log enable row level security;
+revoke all on public.some_mail_log from anon, authenticated;
+
+-- Et link er enten butikkens faste link eller et personligt link fra en mail (hoejst en maaned gammelt)
+create or replace function public.some_link_butik(p_noegle text)
+returns uuid language sql stable security definer set search_path = public as $$
+  select coalesce(
+    (select butik_id from public.some_links where noegle = p_noegle and aktiv and length(p_noegle) >= 32),
+    (select butik_id from public.some_mail_log where kode = p_noegle and sendt_at > now() - interval '1 month'));
+$$;
+
+-- Siden henter rapporterne én gang, naar et link aabnes: her taelles aabningen af et personligt link
+create or replace function public.some_rapporter_link(p_noegle text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_butik uuid := public.some_link_butik(p_noegle);
+begin
+  if v_butik is null then return null; end if;
+  update some_mail_log set aabninger = aabninger + 1, aabnet_foerst = coalesce(aabnet_foerst, now()), aabnet_sidst = now()
+  where kode = p_noegle;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('id', r.id, 'butik_id', r.butik_id, 'fra', r.fra, 'til', r.til, 'titel', r.titel,
+      'tekst', r.tekst, 'opdateret_at', r.opdateret_at, 'arkiveret_at', r.arkiveret_at)
+      order by (r.arkiveret_at is not null), r.til desc, r.fra desc, r.opdateret_at desc)
+    from some_rapporter r where r.slettet_at is null and (r.butik_id is null or r.butik_id = v_butik)), '[]'::jsonb);
+end $$;
+
+-- Til den SoMe-ansvarlige: hvem har faaet rapporten, og hvem har aabnet den (det seneste aar)
+create or replace function public.some_mail_log_hent()
+returns jsonb language sql stable security definer set search_path = public as $$
+  select case when public.kan_styre_some() then coalesce((
+    select jsonb_agg(jsonb_build_object('butik_id', l.butik_id, 'modtager', l.modtager, 'fra', l.fra, 'til', l.til, 'sendt_at', l.sendt_at,
+      'aabnet_foerst', l.aabnet_foerst, 'aabnet_sidst', l.aabnet_sidst, 'aabninger', l.aabninger) order by l.sendt_at desc, l.modtager)
+    from some_mail_log l where l.sendt_at > now() - interval '12 months'), '[]'::jsonb) end;
+$$;
+revoke execute on function public.some_mail_log_hent() from public, anon;
+grant execute on function public.some_mail_log_hent() to authenticated;
+
+-- Oplysningerne om, hvem der har aabnet hvad, gemmes hoejst 13 maaneder (ryddes den 1. i hver maaned)
+select cron.unschedule('some-mail-log-oprydning') where exists (select 1 from cron.job where jobname = 'some-mail-log-oprydning');
+select cron.schedule('some-mail-log-oprydning', '15 3 1 * *', $cron$delete from public.some_mail_log where sendt_at < now() - interval '13 months'$cron$);
 
 -- ---------- Alarm: kommer tallene stadig ind, og er noget ved at udloebe? ----------
 -- Indsamlingen spoerger Meta om noeglernes tilstand én gang i doegnet og gemmer svaret i loggen:
