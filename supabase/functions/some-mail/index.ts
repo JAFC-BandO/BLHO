@@ -23,7 +23,7 @@ const svar = (body: unknown, status = 200) =>
 const SB = Deno.env.get('SUPABASE_URL')!;
 const SR = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const SIDE = 'https://jfclabs.dk/BL/some/';
-const FRA = 'Børneloppen SoMe <some@jfclabs.dk>';
+const FRA = 'Børneloppen SoMe <boerneloppen-some@jfclabs.dk>';
 const TESTFRA = 'Børneloppen SoMe <onboarding@resend.dev>';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
