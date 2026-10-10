@@ -69,7 +69,7 @@ select,input[type=date]{padding:7px 10px;border:1px solid var(--felt);border-rad
 .knap.stille{background:var(--badge);color:var(--brand-tekst)}
 :focus-visible{outline:2px solid var(--brand-tekst);outline-offset:2px}
 .chips{display:inline-flex;background:var(--badge);border-radius:20px;padding:3px;gap:2px}
-.chip{background:none;border:none;color:var(--brand-tekst);font-weight:700;font-size:12px;padding:4px 12px;border-radius:20px;cursor:pointer}
+.chip{background:none;border:none;color:var(--brand-tekst);font-weight:700;font-size:12px;padding:4px 12px;border-radius:20px;cursor:pointer;white-space:nowrap}
 .chip.aktiv{background:var(--brand);color:#fff}
 .status{font-size:12px;color:var(--mut)}.status.bad{color:var(--bad)}
 .kort{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:16px;min-width:0}
@@ -91,11 +91,11 @@ select,input[type=date]{padding:7px 10px;border:1px solid var(--felt);border-rad
 .streg{display:inline-block;width:16px;height:0;border-top:2px solid}
 .streg.stiplet{border-top-style:dashed;border-color:var(--mut)}
 #graf{position:relative}
-#graf svg{display:block;width:100%;height:280px;cursor:crosshair;border-radius:6px}
+#graf svg{display:block;width:100%;height:280px;cursor:crosshair;border-radius:6px;touch-action:pan-y}
 #graf text{font-size:11px;fill:var(--mut);font-variant-numeric:tabular-nums}
 #tip{position:fixed;z-index:50;pointer-events:none;background:var(--card);border:1px solid var(--bd);border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.18);padding:10px 12px;font-size:12px;min-width:150px;max-width:260px}
 #tip .t-titel{font-weight:600;margin-bottom:6px}
-#tip{max-width:360px}
+#tip{max-width:min(360px,calc(100vw - 16px))}
 #tip .t-tekst{color:var(--mut);line-height:1.4;margin-bottom:6px}
 #tip .t-linje+.t-tekst{margin:6px 0 0}
 #tip .t-linje span.n{white-space:nowrap}
@@ -109,7 +109,9 @@ details.tabelvisning{margin-top:10px;font-size:12px}
 details.tabelvisning summary{cursor:pointer;color:var(--mut)}
 details.tabelvisning .rul{max-height:260px;overflow:auto;margin-top:8px}
 /* --- Tabeller --- */
-.rul{overflow-x:auto}
+/* Skygge i den kant, hvor tabellen fortsaetter -- paa en telefon er der ingen rullebjaelke at se.
+   De to foerste lag foelger indholdet og daekker skyggen, naar man er rullet helt ud til kanten. */
+.rul{overflow-x:auto;background:linear-gradient(90deg,var(--card) 40%,transparent) 0 0/28px 100% no-repeat local,linear-gradient(270deg,var(--card) 40%,transparent) 100% 0/28px 100% no-repeat local,linear-gradient(90deg,rgba(0,0,0,.14),transparent) 0 50%/10px calc(100% - 2px) no-repeat,linear-gradient(270deg,rgba(0,0,0,.14),transparent) 100% 50%/10px calc(100% - 2px) no-repeat}
 table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
 th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--bd);white-space:nowrap}
 th:first-child,td:first-child{text-align:left}
@@ -205,7 +207,7 @@ dialog.tid::backdrop{background:rgba(0,0,0,.5)}
 .besked{background:var(--badge);color:var(--brand-tekst);border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:14px}
 .besked.fejl{background:var(--fejl-bg);color:var(--fejl)}
 @media (max-width:900px){.to{grid-template-columns:minmax(0,1fr)}}
-@media (max-width:760px){.noegletal,.gruppe .noegletal,.foelgerTal{grid-template-columns:repeat(2,minmax(0,1fr))}.gruppe{flex-basis:100%}.indhold{padding:12px}.opslag{grid-template-columns:44px 1fr}.opslag img,.opslag .tom{width:44px;height:44px}.opslag .tal2{grid-column:2;text-align:left}}
+@media (max-width:760px){.chips{flex-wrap:wrap}.noegletal,.gruppe .noegletal,.foelgerTal{grid-template-columns:repeat(2,minmax(0,1fr))}.gruppe{flex-basis:100%}.indhold{padding:12px}.opslag{grid-template-columns:44px 1fr}.opslag img,.opslag .tom{width:44px;height:44px}.opslag .tal2{grid-column:2;text-align:left}}
 @media (prefers-reduced-motion:reduce){.indhold{transition:none}.spinner .bue{animation:none;stroke-dasharray:60 150}}
 </style></head><body>
 
@@ -1041,7 +1043,9 @@ function visForklaring(e) {
 }
 document.addEventListener('pointerover', visForklaring);
 document.addEventListener('focusin', visForklaring);
-document.addEventListener('pointerout', e => { const t = e.target.closest && e.target.closest('[data-tip]'); if (t && !t.contains(e.relatedTarget)) skjulTip(); });
+// Med finger bliver forklaringen staaende, til man trykker et andet sted eller ruller
+document.addEventListener('pointerout', e => { const t = e.target.closest && e.target.closest('[data-tip]'); if (t && !t.contains(e.relatedTarget) && e.pointerType !== 'touch') skjulTip(); });
+document.addEventListener('pointerdown', e => { if (e.pointerType === 'touch' && e.target.closest && !e.target.closest('[data-tip],#graf')) skjulPunkt(); });
 // Navne kommer udefra (Meta) -- derfor textContent og aldrig innerHTML i tooltippet
 function el(tag, klasse, tekst) { const e = document.createElement(tag); if (klasse) e.className = klasse; if (tekst != null) e.textContent = tekst; return e; }
 function tipLinje(farve, navn, vaerdi, stiplet) {
@@ -1113,7 +1117,9 @@ function tegnGraf() {
   grafTilstand = { g, x, y, sv, B, V, HO, i: -1 };
   const tilIndeks = e => { const r = sv.getBoundingClientRect(); const px = (e.clientX - r.left) * B / r.width; return Math.max(0, Math.min(n - 1, Math.round((px - V) / ((B - V - HO) / Math.max(1, n - 1))))); };
   sv.addEventListener('pointermove', e => visPunkt(tilIndeks(e), e.clientY));
-  sv.addEventListener('pointerleave', skjulPunkt);
+  // Finger: et tryk viser dagen (traek til siden for at flytte), og den bliver staaende, naar fingeren loeftes
+  sv.addEventListener('pointerdown', e => visPunkt(tilIndeks(e), e.clientY));
+  sv.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch') skjulPunkt(); });
   sv.addEventListener('blur', skjulPunkt);
   sv.addEventListener('keydown', e => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
@@ -1151,10 +1157,10 @@ function visPunkt(i, musY) {
   });
 }
 function skjulPunkt() {
+  skjulTip();
   const t = grafTilstand; if (!t) return;
   t.i = -1;
   t.sv.querySelectorAll('#sigte,circle').forEach(e => e.setAttribute('visibility', 'hidden'));
-  skjulTip();
 }
 
 // ---------- Butikker og konti ----------
@@ -1422,7 +1428,7 @@ document.addEventListener('visibilitychange', laesIgen);
 // Grafen tegnes i rigtige pixels (saa tekst ikke straekkes) og tegnes derfor om, naar bredden aendres
 let bredde = 0;
 new ResizeObserver(() => { const b = $('#graf').clientWidth; if (data && b && Math.abs(b - bredde) > 4) { bredde = b; skjulTip(); tegnGraf(); } }).observe($('#graf'));
-window.addEventListener('scroll', skjulTip, true);
+window.addEventListener('scroll', skjulPunkt, true);
 
 // ---------- Tema-knap paa butikslinket: System -> Lys -> Moerk ----------
 // I fanen sidder knappen i butik-redigerings topbar; valget deles via localStorage 'blho-tema'.
