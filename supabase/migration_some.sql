@@ -760,6 +760,41 @@ $$;
 revoke execute on function public.some_mail_data(uuid) from public, anon, authenticated;
 grant execute on function public.some_mail_data(uuid) to service_role;
 
+-- Butikkens mailgruppe: de adresser, butikkens rapport sendes til (gemt som "a@x.dk, b@y.dk"), saa
+-- de staar klar i skrivefeltet naeste gang. Kun den, der maa skrive rapporter, kan se og rette dem.
+create table if not exists public.some_mail_grupper (
+  butik_id uuid primary key references public.butikker(id) on delete cascade,
+  modtagere text not null,
+  opdateret_at timestamptz not null default now()
+);
+alter table public.some_mail_grupper enable row level security;
+revoke all on public.some_mail_grupper from anon, authenticated;
+
+-- Alle butikkers grupper som { butik_id: modtagere } -- null for andre end den SoMe-ansvarlige
+create or replace function public.some_mail_grupper_hent()
+returns jsonb language sql stable security definer set search_path = public as $$
+  select case when public.kan_styre_some() then
+    coalesce((select jsonb_object_agg(butik_id, modtagere) from some_mail_grupper), '{}'::jsonb) end;
+$$;
+revoke execute on function public.some_mail_grupper_hent() from public, anon;
+grant execute on function public.some_mail_grupper_hent() to authenticated;
+
+-- Gemmer butikkens gruppe (tom tekst = ingen modtagere) og returnerer den, som den blev gemt
+create or replace function public.some_mail_gruppe_gem(p_butik uuid, p_modtagere text)
+returns text language plpgsql security definer set search_path = public as $$
+declare v text[] := array(select x from regexp_split_to_table(coalesce(p_modtagere, ''), '[\s,;]+') x where x <> '');
+begin
+  if not public.kan_styre_some() then raise exception 'Ingen adgang'; end if;
+  if cardinality(v) > 10 or exists (select 1 from unnest(v) x where x !~* '^[^\s@<>"]+@[^\s@<>"]+\.[a-z]{2,}$') then
+    raise exception 'Skriv hoejst 10 gyldige mailadresser, adskilt med komma';
+  end if;
+  insert into some_mail_grupper (butik_id, modtagere) values (p_butik, array_to_string(v, ', '))
+  on conflict (butik_id) do update set modtagere = excluded.modtagere, opdateret_at = now();
+  return array_to_string(v, ', ');
+end $$;
+revoke execute on function public.some_mail_gruppe_gem(uuid, text) from public, anon;
+grant execute on function public.some_mail_gruppe_gem(uuid, text) to authenticated;
+
 -- ---------- Alarm: kommer tallene stadig ind, og er noget ved at udloebe? ----------
 -- Indsamlingen spoerger Meta om noeglernes tilstand én gang i doegnet og gemmer svaret i loggen:
 -- { "bruger": { gyldigt, udloeber, dataadgang }, "side": { ... } } (tider i sekunder; 0 = aldrig).
