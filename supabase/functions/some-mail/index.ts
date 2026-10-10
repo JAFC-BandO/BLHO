@@ -25,7 +25,9 @@ const svar = (body: unknown, status = 200) =>
 const SB = Deno.env.get('SUPABASE_URL')!;
 const SR = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const SIDE = 'https://jfclabs.dk/BL/some/';
-// Logoet som PNG (BL/logo-boerneloppen-mail.png, lavet af logo-boerneloppen.svg): mailprogrammer viser ikke SVG
+// Logoet som PNG (BL/logo-boerneloppen-mail.png, lavet af logo-boerneloppen.svg): mailprogrammer viser
+// ikke SVG. Resend henter det og laegger det ind i selve mailen (cid:logo) -- et billede, der skal
+// hentes udefra, skjuler Outlook, indtil modtageren trykker "Hent billeder".
 const LOGO = 'https://jfclabs.dk/BL/logo-boerneloppen-mail.png';
 const FRA = 'Børneloppen SoMe <boerneloppen-some@jfclabs.dk>';
 const TESTFRA = 'Børneloppen SoMe <onboarding@resend.dev>';
@@ -92,7 +94,7 @@ Deno.serve(async (req) => {
   const html = `<div style="display:none;max-height:0;overflow:hidden;opacity:0">Jeres SoMe-rapport for ${esc(periode)} er klar.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f4f4f2" style="background:#f4f4f2"><tr><td align="center" style="padding:32px 12px">
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;text-align:left">
-<tr><td align="center" bgcolor="#040DB1" style="background:#040DB1;border-radius:12px 12px 0 0;padding:28px 20px"><img src="${LOGO}" width="180" alt="Børneloppen" style="display:block;width:180px;max-width:100%;height:auto;border:0;font-family:${skrift};font-size:22px;font-weight:bold;color:#ffffff"></td></tr>
+<tr><td align="center" bgcolor="#040DB1" style="background:#040DB1;border-radius:12px 12px 0 0;padding:28px 20px"><img src="cid:logo" width="180" alt="Børneloppen" style="display:block;width:180px;max-width:100%;height:auto;border:0;font-family:${skrift};font-size:22px;font-weight:bold;color:#ffffff"></td></tr>
 <tr><td bgcolor="#ffffff" style="background:#ffffff;border:1px solid #e2e2e2;border-top:0;border-radius:0 0 12px 12px;padding:32px 34px 34px;font-family:${skrift};font-size:16px;line-height:1.6;color:#1a1a1a">
 <p style="margin:0 0 16px">Kære ${esc(butik)}</p>
 <p style="margin:0 0 16px">Nedenfor finder I SoMe-rapporten for ${esc(butik)} for perioden <b>${esc(periode)}</b>.</p>
@@ -101,7 +103,6 @@ Deno.serve(async (req) => {
 ${kontakt ? `<p style="margin:26px 0 0">Har I spørgsmål til rapporten, er I velkomne til at skrive til <a href="mailto:${esc(kontakt)}" style="color:#040DB1">${esc(kontakt)}</a>.</p>` : ''}
 <p style="margin:${kontakt ? 16 : 26}px 0 0">Med venlig hilsen<br>Børneloppen-teamet</p>
 </td></tr>
-<tr><td style="padding:16px 4px 0;font-family:${skrift};font-size:12px;line-height:1.5;color:#6c6577">Virker knappen ikke? Kopiér linket ind i browseren:<br><a href="${esc(url)}" style="color:#6c6577;word-break:break-all">${esc(url)}</a></td></tr>
 </table>
 </td></tr></table>`;
   const text = `Kære ${butik}\n\nNedenfor finder I SoMe-rapporten for ${butik} for perioden ${periode}. Følg linket for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.\n\n${url}\n\n`
@@ -109,7 +110,10 @@ ${kontakt ? `<p style="margin:26px 0 0">Har I spørgsmål til rapporten, er I ve
   const send = (from: string) => fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + d.noegle, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from, to: til, ...(kontakt ? { reply_to: kontakt } : {}), subject: `SoMe-rapport for ${butik}, ${periode}`, html, text }),
+    body: JSON.stringify({
+      from, to: til, ...(kontakt ? { reply_to: kontakt } : {}), subject: `SoMe-rapport for ${butik}, ${periode}`, html, text,
+      attachments: [{ path: LOGO, filename: 'boerneloppen.png', content_type: 'image/png', content_id: 'logo' }],
+    }),
     signal: AbortSignal.timeout(20000),
   }).catch(() => null);
   let res = await send(FRA);
