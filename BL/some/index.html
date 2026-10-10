@@ -572,6 +572,8 @@ const EMOJIS = [
   ['SoMe', '📸 🎥 🎬 📱 💬 👀 👍 📣 📅 ⏰ 📌 🔗'],
   ['Årstid', '☀️ 🍂 ❄️ 🎄 🎃 🌷 🐣 🎁'],
 ];
+// Modtagerne huskes pr. butik i browseren, saa én butiks rapport ikke ryger til en andens adresse
+const mailTil = n => { try { return localStorage.getItem('someMail:' + n) || ''; } catch (x) { return ''; } };
 let emojiAaben = false;       // paletten er slaaet ud
 let sidstFelt = 'rapTekst';   // feltet, markoeren sidst stod i (overskrift eller tekst)
 // Gemmer det, der staar i skrivefeltet, som kladde -- hvis det afviger fra den gemte rapport
@@ -623,6 +625,7 @@ function tegnEditor(status) {
     <div class="emoji-panel"${emojiAaben ? '' : ' hidden'}><div class="rapport-note">Klik på en emoji for at sætte den ind, hvor markøren står. Flere: Windows-tast + punktum.</div>${EMOJIS.map(([navn, liste]) => `<div class="emoji-gruppe"><span>${navn}</span>${liste.split(' ').map(x => `<button type="button" class="emoji" aria-label="Indsæt ${x}">${x}</button>`).join('')}</div>`).join('')}</div>
     <div class="rapport-note" id="rapPeriode"></div>
     <div class="rapport-knapper"><button type="button" class="knap" data-r="gem">Gem rapport</button><span class="rapport-note" id="rapStatus"></span><span class="luft"></span>${gemt ? '<button type="button" class="knap stille fare" data-r="slet">Slet rapport</button>' : ''}</div>
+    ${gemt && butik ? `<div class="rapport-knapper"><input type="text" id="rapMail" aria-label="Modtagere af mailen" placeholder="Mailadresse (flere adskilles med komma)" value="${esc(mailTil(n))}" style="flex:1;min-width:220px;margin:0;font-weight:400"><button type="button" class="knap stille" data-r="mail">✉️ Send rapporten på mail</button></div><div class="rapport-note" id="mailStatus">Mailen indeholder den gemte rapport og butikkens link til alle tallene.</div>` : ''}
     <details class="tidligere" id="rapTidligere"></details>
   </div>`;
   tegnUdkastNote();
@@ -837,6 +840,20 @@ $('#rapportBoks').addEventListener('click', async e => {
     try { await navigator.clipboard.writeText(url); k.textContent = 'Link kopieret ✓'; }
     catch (x) { k.outerHTML = `<input type="text" readonly value="${esc(url)}" aria-label="Link til butikken" style="max-width:340px;margin:0" onfocus="this.select()">`; return; }
     setTimeout(() => { if (k.isConnected) k.textContent = 'Kopiér link til butikken'; }, 2500);
+  }
+  else if (h === 'mail' && gemt) {
+    // Edge-funktionen some-mail sender den GEMTE rapport (ikke kladden) med butikkens link
+    const til = $('#rapMail').value.trim(), st = $('#mailStatus');
+    if (!til) { st.textContent = 'Skriv modtagerens mailadresse.'; return; }
+    if (kladder.has(n)) { st.textContent = 'Gem ændringerne først – mailen indeholder den gemte rapport.'; return; }
+    k.disabled = true; st.textContent = 'Sender …';
+    let r = null;
+    try { r = (await client.functions.invoke('some-mail', { body: { butik: b, til } })).data; } catch (x) {}
+    if (!k.isConnected) return;
+    k.disabled = false;
+    if (!r || !r.ok) { st.textContent = (r && r.fejl) || 'Mailen kunne ikke sendes lige nu. Prøv igen om lidt.'; return; }
+    try { localStorage.setItem('someMail:' + n, til); } catch (x) {}
+    st.textContent = 'Sendt ✓ til ' + r.til.join(', ') + (r.test ? ' – fra Resends testadresse, fordi domænet ikke er godkendt endnu.' : '');
   }
   else if (h === 'udkast') {
     // AI'en (edge-funktionen some-udkast) skriver et forslag ud fra alt, siden ved om perioden.
