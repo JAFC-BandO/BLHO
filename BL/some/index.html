@@ -11,9 +11,12 @@
 if (window.top === window && !new URLSearchParams(location.search).get('k')) location.replace('../butik-redigering/#some');
 // Tema (system/lys/moerk) deles med butik-redigering via localStorage 'blho-tema'.
 const systemMoerk = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+function temaValg() {
+  try { const v = localStorage.getItem('blho-tema'); if (v === 'lys' || v === 'moerk') return v; } catch (e) {}
+  return 'system';
+}
 function saetTema() {
-  let valg = 'system';
-  try { const v = localStorage.getItem('blho-tema'); if (v === 'lys' || v === 'moerk') valg = v; } catch (e) {}
+  const valg = temaValg();
   const moerk = valg === 'moerk' || (valg === 'system' && !!systemMoerk && systemMoerk.matches);
   document.documentElement.setAttribute('data-tema', moerk ? 'moerk' : 'lys');
 }
@@ -32,6 +35,13 @@ if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('c
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);margin:0;color:var(--fg);font-size:15px;line-height:1.4}
 .indhold{padding:16px 20px 48px;max-width:1320px;margin:0 auto;transition:opacity .15s}
 .indhold.henter{opacity:.55}
+/* Spinner oven paa den udtonede side, mens nye tal hentes (fx naar der skiftes periode) -- kommer
+   foerst efter et kvart sekund, saa den ikke blinker ved hurtige svar */
+#henterVis{display:none;position:fixed;inset:0;z-index:40;place-content:center;pointer-events:none}
+.indhold.henter~#henterVis{display:grid;animation:frem .15s .25s both}
+@keyframes frem{from{opacity:0}to{opacity:1}}
+#temaKnap{display:inline-flex;align-items:center;gap:6px}
+#temaKnap svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .laeser{text-align:center;color:var(--mut);padding:20vh 20px}
 /* Spinneren ligger OVER siden, saa den ogsaa daekker den tomme side, mens de foerste tal hentes */
 #laeserVis{position:fixed;inset:0;z-index:50;background:var(--bg);padding:0;display:grid;place-content:center;justify-items:center;gap:14px;font-size:13px}
@@ -229,6 +239,7 @@ dialog.tid::backdrop{background:rgba(0,0,0,.5)}
     <span class="status" id="status" data-tip="Automatisk indsamling&#10;Tallene hentes fra Facebook og Instagram én gang i timen.&#10;Opdater nu henter dem med det samme."></span>
     <button class="knap stille" id="rapportKnap" type="button" hidden>Skriv rapport</button>
     <button class="knap" id="opdater" title="Tallene hentes automatisk én gang i timen. Tryk for at hente de nyeste fra Facebook og Instagram nu.">Opdater nu</button>
+    <button class="knap stille" id="temaKnap" type="button" hidden></button>
     <div class="lille" id="periodeTekst"></div>
   </div>
 
@@ -266,6 +277,7 @@ dialog.tid::backdrop{background:rgba(0,0,0,.5)}
   </div>
 
 </div>
+<div id="henterVis" role="status" aria-label="Henter tal"><svg class="spinner" viewBox="0 0 50 50" aria-hidden="true"><circle cx="25" cy="25" r="20"/><circle class="bue" cx="25" cy="25" r="20"/></svg></div>
 <dialog class="tid" id="tidDialog" aria-labelledby="tidTitel">
   <div class="tid-hoved">
     <div><h2 id="tidTitel"></h2><div class="lille" id="tidUnder"></div></div>
@@ -646,7 +658,8 @@ async function tegnMailLog(hentIgen) {
   for (const r of mailLog) { const k = r.butik_id + r.sendt_at; if (!omgange.has(k)) omgange.set(k, []); omgange.get(k).push(r); }
   const set = new Set();
   const liste = [...omgange.values()].filter(o => butik ? o[0].butik_id === butik : !set.has(o[0].butik_id) && set.add(o[0].butik_id)).slice(0, butik ? 6 : 100);
-  boks.hidden = !liste.length; if (!liste.length) return;
+  boks.hidden = false;
+  if (!liste.length) { boks.innerHTML = '<summary>Sendte mails: ingen endnu</summary><div class="rapport-note">Når rapporten er sendt på mail, kan du se her, hvem der har åbnet den. Åbningerne står også i Aktivitetsloggen i Admin-menuen.</div>'; return; }
   const aabnet = o => o.filter(r => r.aabninger > 0).length, sum = f => (butik ? liste.slice(0, 1) : liste).reduce((s, o) => s + f(o), 0);
   boks.innerHTML = `<summary>Sendte mails: ${sum(aabnet)} af ${sum(o => o.length)} har åbnet ${butik ? 'den seneste' : 'butikkernes seneste'}</summary>` + liste.map(o => {
     const udloeb = new Date(o[0].sendt_at); udloeb.setMonth(udloeb.getMonth() + 1);
@@ -1405,6 +1418,28 @@ document.addEventListener('visibilitychange', laesIgen);
 let bredde = 0;
 new ResizeObserver(() => { const b = $('#graf').clientWidth; if (data && b && Math.abs(b - bredde) > 4) { bredde = b; skjulTip(); tegnGraf(); } }).observe($('#graf'));
 window.addEventListener('scroll', skjulTip, true);
+
+// ---------- Tema-knap paa butikslinket: System -> Lys -> Moerk ----------
+// I fanen sidder knappen i butik-redigerings topbar; valget deles via localStorage 'blho-tema'.
+const TEMA = {
+  system: ['System', '<path d="M12 8a2.83 2.83 0 0 0 4 4 4 4 0 1 1-4-4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>'],
+  lys: ['Lys', '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>'],
+  moerk: ['Mørk', '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>'],
+};
+const TEMA_NAESTE = { system: 'lys', lys: 'moerk', moerk: 'system' };
+function tegnTemaKnap() {
+  const v = temaValg(), k = $('#temaKnap');
+  k.hidden = !LINK;
+  k.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${TEMA[v][1]}</svg>${TEMA[v][0]}`;
+  k.title = `Tema: ${TEMA[v][0]} (klik for ${TEMA[TEMA_NAESTE[v]][0]})`;
+  k.setAttribute('aria-label', k.title);
+}
+$('#temaKnap').addEventListener('click', () => {
+  try { localStorage.setItem('blho-tema', TEMA_NAESTE[temaValg()]); } catch (e) { /* blokeret -- saa skifter den ikke */ }
+  saetTema(); tegnTemaKnap();
+});
+window.addEventListener('storage', e => { if (e.key === 'blho-tema') tegnTemaKnap(); });
+tegnTemaKnap();
 
 async function start() {
   if (LINK) { vis('app'); await hentRapporter(); vaelgStandardRapport(); await hent(); return; }
