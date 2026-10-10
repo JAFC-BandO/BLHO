@@ -96,7 +96,8 @@ Deno.serve(async (req) => {
   // Tabeller og faste farver, fordi Outlook hverken kender CSS-variabler eller luft og baggrund paa
   // et almindeligt link (mso-padding-alt giver knappen sin luft dér). Vises billeder ikke, staar
   // logoets alt-tekst i hvidt paa den blaa flade. Logoet har fast stoerrelse og blaa baggrund, saa
-  // det ikke staar som en hvid boks, mens Outlook henter det frem.
+  // det ikke staar som en hvid boks, mens Outlook henter det frem. Dag og maaned holdes sammen
+  // (&nbsp;), saa en smal telefon ikke deler "9." og "oktober" over to linjer.
   const skrift = `-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif`;
   const html = (url: string) => `<div style="display:none;max-height:0;overflow:hidden;opacity:0">Jeres SoMe-rapport for ${esc(periode)} er klar.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f4f4f2" style="background:#f4f4f2"><tr><td align="center" style="padding:32px 12px">
@@ -104,7 +105,7 @@ Deno.serve(async (req) => {
 <tr><td align="center" bgcolor="#040DB1" style="background:#040DB1;border-radius:12px 12px 0 0;padding:28px 20px"><img src="cid:logo" width="180" height="108" alt="Børneloppen" style="display:block;width:180px;height:108px;border:0;background:#040DB1;font-family:${skrift};font-size:22px;font-weight:bold;color:#ffffff"></td></tr>
 <tr><td bgcolor="#ffffff" style="background:#ffffff;border:1px solid #e2e2e2;border-top:0;border-radius:0 0 12px 12px;padding:32px 34px 34px;font-family:${skrift};font-size:16px;line-height:1.6;color:#1a1a1a">
 <p style="margin:0 0 16px">Kære ${esc(butik)}</p>
-<p style="margin:0 0 16px">Nedenfor finder I SoMe-rapporten for ${esc(butik)} for perioden <b>${esc(periode)}</b>.</p>
+<p style="margin:0 0 16px">Nedenfor finder I SoMe-rapporten for ${esc(butik)} for perioden <b>${esc(periode).replace(/(\d\.) /g, '$1&nbsp;')}</b>.</p>
 <p style="margin:0 0 26px">Følg linket for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.</p>
 <table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#040DB1" style="background:#040DB1;border-radius:8px;mso-padding-alt:13px 26px"><a href="${esc(url)}" style="display:inline-block;padding:13px 26px;font-family:${skrift};font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none">Åbn SoMe-rapporten</a></td></tr></table>
 ${kontakt ? `<p style="margin:26px 0 0">Har I spørgsmål til rapporten, er I velkomne til at skrive til <a href="mailto:${esc(kontakt)}" style="color:#040DB1">${esc(kontakt)}</a>.</p>` : ''}
