@@ -253,7 +253,6 @@ dialog.tid::backdrop{background:rgba(0,0,0,.5)}
 
   <div id="besked" class="besked" hidden></div>
   <div id="rapportBoks"></div>
-  <div id="samletTider"></div>
   <div id="sektioner"></div>
 
   <div class="kort">
@@ -804,7 +803,7 @@ async function udkastKontekst(p) {
       linjer.push(`${i + 1}. ${butik ? '' : x.some_konti.navn + ' · '}${formatAf(x)} · ${new Date(x.oprettet_at).toLocaleString('da-DK', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${hel(x.visninger)} · ${x.likes || 0} · ${x.kommentarer || 0} · ${x.delinger || 0} · "${String(x.tekst || '(uden tekst)').replace(/\s+/g, ' ').slice(0, tegn)}"`);
     });
   }
-  if (bedsteTider.samlet && bedsteTider.samlet.length) linjer.push('', 'BEDSTE TIDSPUNKTER SAMLET (Facebook og Instagram lagt sammen, med følgere online): ' + bedsteTider.samlet.join('; '));
+  if (bedsteTider.samlet && bedsteTider.samlet.length) linjer.push('', 'BEDSTE TIDSPUNKTER PÅ INSTAGRAM SAMLET (visninger pr. opslag og følgere online lagt sammen): ' + bedsteTider.samlet.join('; '));
   // Lige under periode og sammenligning, saa det ikke drukner i opslagene
   linjer.splice(3, 0, tilbagegang.length ? 'TILBAGEGANG, SOM SKAL NÆVNES (hvert punkt i et 💡-afsnit, roligt og konkret): ' + tilbagegang.join('; ') : 'Ingen tydelig tilbagegang i nøgletallene.');
   return linjer.join('\n');
@@ -1011,6 +1010,7 @@ function tegnSektioner() {
           <div class="online" data-p="${p}"></div>
         </div>
       </div>
+      ${p === 'instagram' ? '<div id="samletTider"></div>' : ''}
     </section>`;
   }).join('');
 }
@@ -1353,7 +1353,7 @@ function tegnTider() {
   tegnSamlet(pr);
 }
 
-// ---------- Bedste tidspunkter samlet (begge platforme + foelgere online) ----------
+// ---------- Bedste tidspunkter paa Instagram samlet (visninger + foelgere online) ----------
 // Svaret paa "hvornaar skal vi poste?" paa tvaers af kilderne: hvert felt faar gennemsnittet af de
 // signaler, der findes for det -- Facebooks og Instagrams placering (0-1, fra tegnTider) og
 // Instagrams "foelgere online" som andel af det travleste felt. Facebook har kun opslagene
@@ -1361,7 +1361,7 @@ function tegnTider() {
 // taeller ikke med i top 3.
 function tegnSamlet(pr) {
   const boks = $('#samletTider'); if (!boks) return;
-  const pfs = RAEKKEFOELGE.filter(p => pr[p]);
+  const pfs = pr.instagram ? ['instagram'] : [];   // kun Instagram: Facebook har ikke 'foelgere online'
   if (!pfs.length) { boks.innerHTML = ''; return; }
   const blokNavn = ([a, z]) => String(a).padStart(2, '0') + '–' + String(z).padStart(2, '0');
   const gange = s => s.toLocaleString('da-DK', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '×';
@@ -1395,8 +1395,8 @@ function tegnSamlet(pr) {
   h += `<div class="rul" style="margin-top:12px"><table><thead><tr><th>Tidspunkt</th>${pfs.map(pf => `<th>${PLATFORM[pf]}<br><span class="lille">visninger ift. normalt</span></th>`).join('')}${harOnline ? '<th>Følgere online<br><span class="lille">Instagram, pr. time</span></th>' : ''}<th>Samlet</th></tr></thead><tbody>`
     + tabel.map(r => `<tr><td>${rang(r) ? `<span class="rang r${rang(r)}">${rang(r)}</span>` : ''}${UGEDAGE[r.d]} kl. ${blokNavn(BLOKKE[r.b])}</td>${pfs.map(pf => pfKol(r, pf)).join('')}${harOnline ? `<td>${kortTal(Math.round(r.online))} <span class="lille">${pctTal(r.online / ig.onlMaks)} af flest</span></td>` : ''}<td><b>${pctTal(r.samlet)}</b>${taeller(r) ? '' : ' <span class="lille">kun én kilde</span>'}</td></tr>`).join('')
     + '</tbody></table></div>';
-  h += `<div class="lille" style="margin-top:8px"><b>Kilder:</b> ${pfs.map(pf => pf === 'facebook' ? 'Facebook – visninger pr. opslag i perioden (Meta oplyser ikke, hvornår følgerne er online på Facebook)' : 'Instagram – visninger pr. opslag i perioden' + (harOnline ? ' og Metas "følgere online" pr. time de seneste 4 uger' : '')).join('. ')}. Samlet = gennemsnittet af kildernes placering, 100 % = bedst på dem alle. Grøn = de tre bedste; grå = kun én kilde. Tabellen viser de 10 bedste felter med mindst to kilder.</div>`;
-  boks.innerHTML = `<div class="kort"><div class="kort-hoved"><h2>Bedste tidspunkter at poste – samlet <small>Facebook og Instagram lagt sammen${harOnline ? ', med følgere online' : ''}</small></h2></div>${h}</div>`;
+  h += `<div class="lille" style="margin-top:8px"><b>Kilder:</b> Instagram – visninger pr. opslag i perioden (kortet ovenfor)${harOnline ? ' og Metas "følgere online" pr. time de seneste 4 uger' : ''}. Facebook holdes udenfor: dér oplyser Meta ikke, hvornår følgerne er online, så Facebooks eget kort står alene. Samlet = gennemsnittet af kildernes placering, 100 % = bedst på dem alle. Grøn = de tre bedste; grå = kun én kilde. Tabellen viser de 10 bedste felter med mindst to kilder.</div>`;
+  boks.innerHTML = `<div class="kort"><div class="kort-hoved"><h2>Bedste tidspunkter på Instagram – samlet <small>visninger pr. opslag og følgere online lagt sammen</small></h2></div>${h}</div>`;
   const kort = boks.querySelector('.varmekort');
   const visCelle = e => {
     const k = e.target.closest('.celle.har'); if (!k) return;
