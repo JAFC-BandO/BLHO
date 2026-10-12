@@ -100,18 +100,30 @@ Deno.serve(async (req) => {
   // det ikke staar som en hvid boks, mens Outlook henter det frem. Dag og maaned holdes sammen
   // (&nbsp;), saa en smal telefon ikke deler "9." og "oktober" over to linjer.
   const skrift = `-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif`;
-  // Hele dokumentet med fast lyst tema: ellers vender mailprogrammer i moerk tilstand baggrund og
-  // tekst om, og det hvide logo paa den blaa flade ser forkert ud.
-  const html = (url: string) => `<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only"><style>:root{color-scheme:light only;supported-color-schemes:light only}</style></head><body style="margin:0;background:#f3f8fc"><div style="display:none;max-height:0;overflow:hidden;opacity:0">Jeres SoMe-rapport for ${esc(periode)} er klar.</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f3f8fc" style="background:#f3f8fc"><tr><td align="center" style="padding:32px 12px">
+  // Lys og moerk variant (DESIGN.md): mailprogrammer i moerk tilstand faar sidens egne moerke
+  // farver i stedet for at vende de lyse om selv. Lyst: logoet paa Night som sitets header.
+  // Moerkt: logoet og knappen paa brand-blaa (#33a3dc), kort #1e2029 paa side #15161b. Klasserne
+  // styrer kun den moerke variant; de faste farver inline er den lyse. [data-ogsc] er Outlook.com.
+  const html = (url: string) => `<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>
+:root{color-scheme:light dark;supported-color-schemes:light dark}
+@media (prefers-color-scheme:dark){
+ .side,body{background:#15161b!important}
+ .hoved,.hoved img{background:#33a3dc!important}
+ .kort{background:#1e2029!important;border-color:#3a3d4a!important;color:#e8e8ee!important}
+ .kort a.lnk{color:#7fc7ea!important}
+ .knap{background:#33a3dc!important}
+}
+[data-ogsc] .side{background:#15161b!important}[data-ogsc] .hoved,[data-ogsc] .hoved img{background:#33a3dc!important}[data-ogsc] .kort{background:#1e2029!important;border-color:#3a3d4a!important;color:#e8e8ee!important}[data-ogsc] .kort a.lnk{color:#7fc7ea!important}[data-ogsc] .knap{background:#33a3dc!important}
+</style></head><body class="side" style="margin:0;background:#f3f8fc"><div style="display:none;max-height:0;overflow:hidden;opacity:0">Jeres SoMe-rapport for ${esc(periode)} er klar.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f3f8fc" class="side" style="background:#f3f8fc"><tr><td align="center" class="side" style="padding:32px 12px">
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;text-align:left">
-<tr><td align="center" bgcolor="#143546" style="background:#143546;border-radius:12px 12px 0 0;padding:28px 20px"><img src="cid:logo" width="180" height="108" alt="Børneloppen" style="display:block;width:180px;height:108px;border:0;background:#143546;font-family:${skrift};font-size:22px;font-weight:bold;color:#ffffff"></td></tr>
-<tr><td bgcolor="#ffffff" style="background:#ffffff;border:1px solid #d9e4ec;border-top:0;border-radius:0 0 12px 12px;padding:32px 34px 34px;font-family:${skrift};font-size:16px;line-height:1.6;color:#143546">
+<tr><td align="center" bgcolor="#143546" class="hoved" style="background:#143546;border-radius:12px 12px 0 0;padding:28px 20px"><img src="cid:logo" width="180" height="108" alt="Børneloppen" style="display:block;width:180px;height:108px;border:0;background:#143546;font-family:${skrift};font-size:22px;font-weight:bold;color:#ffffff"></td></tr>
+<tr><td bgcolor="#ffffff" class="kort" style="background:#ffffff;border:1px solid #d9e4ec;border-top:0;border-radius:0 0 12px 12px;padding:32px 34px 34px;font-family:${skrift};font-size:16px;line-height:1.6;color:#143546">
 <p style="margin:0 0 16px">Kære ${esc(butik)}</p>
 <p style="margin:0 0 16px">Nedenfor finder I SoMe-rapporten for ${esc(butik)} for perioden <b>${esc(periode).replace(/(\d\.) /g, '$1&nbsp;')}</b>.</p>
 <p style="margin:0 0 26px">Følg linket og log ind med butikkens login for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.</p>
-<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#33a3dc" style="background:#33a3dc;border-radius:999px;mso-padding-alt:13px 26px"><a href="${esc(url)}" style="display:inline-block;padding:13px 26px;font-family:${skrift};font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none">Log ind og læs rapporten</a></td></tr></table>
-${kontakt ? `<p style="margin:26px 0 0">Har I spørgsmål til rapporten, er I velkomne til at skrive til <a href="mailto:${esc(kontakt)}" style="color:#143546">${esc(kontakt)}</a>.</p>` : ''}
+<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#33a3dc" class="knap" style="background:#33a3dc;border-radius:999px;mso-padding-alt:13px 26px"><a href="${esc(url)}" style="display:inline-block;padding:13px 26px;font-family:${skrift};font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none">Log ind og læs rapporten</a></td></tr></table>
+${kontakt ? `<p style="margin:26px 0 0">Har I spørgsmål til rapporten, er I velkomne til at skrive til <a href="mailto:${esc(kontakt)}" class="lnk" style="color:#143546">${esc(kontakt)}</a>.</p>` : ''}
 <p style="margin:${kontakt ? 16 : 26}px 0 0">Med venlig hilsen<br>Børneloppen-teamet</p>
 </td></tr>
 </table>

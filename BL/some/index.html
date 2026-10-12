@@ -32,7 +32,7 @@ if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('c
 :root{--bg:#f3f8fc;--fg:#143546;--mut:#6c6577;--card:#fff;--bd:#d9e4ec;--gitter:#ececec;--felt:#ddd;--bad:#c93a3a;--ok:#277339;--brand:#33a3dc;--brand-tekst:#143546;--badge:#d6edf8;--fejl-bg:#fdecea;--fejl:#b92a15;--facebook:#1877F2;--instagram:#D93175;--tiktok:#241F21;--varme:#33a3dc;color-scheme:light}
 :root[data-tema="moerk"]{--bg:#15161b;--fg:#e8e8ee;--mut:#9a9cab;--card:#1e2029;--bd:#3a3d4a;--gitter:#2b2e39;--felt:#4a4d5a;--bad:#ff7a7a;--ok:#6fd49a;--brand:#33a3dc;--brand-tekst:#7fc7ea;--badge:#1b3344;--fejl-bg:#3a2023;--fejl:#ff7b6b;--facebook:#3b82f6;--instagram:#e0508c;--tiktok:#d0d0d8;--varme:#7fc7ea;color-scheme:dark}
 *{box-sizing:border-box}[hidden]{display:none!important}
-body{font-family: -apple-system, BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);margin:0;color:var(--fg);font-size:15px;line-height:1.4}
+body{font-family: -apple-system, BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);margin:0;color:var(--fg);font-size:15px;line-height:1.4;overflow-x:hidden}
 .indhold{padding:16px 20px 48px;max-width:1320px;margin:0 auto;transition:opacity .15s}
 .indhold.henter{opacity:.55}
 /* Spinner oven paa den udtonede side, mens nye tal hentes (fx naar der skiftes periode) -- kommer
@@ -172,7 +172,7 @@ td .lille.op,td .lille.ned{font-weight:600}
 .rapport-hoved+h2,.rapport-hoved+.rapport-tekst,.rapport-hoved+input{margin-top:10px}
 .rapport-maerke{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ok)}
 .rapport h2{font-size:18px;margin:0 0 6px}
-.rapport-tekst{white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px;line-height:1.6}
+.rapport-tekst{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;font-size:15px;line-height:1.6}
 .rapport-faelles{margin-top:14px;padding-top:12px;border-top:1px dashed color-mix(in srgb,var(--ok) 32%,var(--bd))}
 .rapport-faelles .rapport-maerke{display:block;margin-bottom:6px}
 .rapport-note{font-size:12px;color:var(--mut);margin-top:10px}
@@ -195,7 +195,7 @@ td .lille.op,td .lille.ned{font-weight:600}
 .linkknap.fare{color:var(--bad)}
 .tidligere{margin-top:14px;padding-top:10px;border-top:1px dashed color-mix(in srgb,var(--ok) 32%,var(--bd));font-size:13px}
 .tidligere summary{cursor:pointer;color:var(--mut);font-weight:600}
-.tidl{margin-top:10px;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;background:var(--card)}
+.tidl{margin-top:10px;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;background:var(--card);min-width:0;overflow-wrap:anywhere}
 .tidl-hoved{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
 .tidl-titel{font-weight:600;margin-top:4px}
 .tidl .rapport-tekst{font-size:13px;line-height:1.5;margin-top:4px;color:var(--mut)}

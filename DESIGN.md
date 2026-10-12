@@ -18,7 +18,7 @@ System-stack (-apple-system, Segoe UI, Roboto). Poppins blev proevet 12/10-2026 
 | Mørk flade med hvid tekst (logo-panel, mailhoved, bannere) | #143546 (Night, som sitets header/footer) |
 
 ## Farver (mørk)
-En mørk udgave af den lyse, ikke Night-tonet: side #15161b, kort #1e2029, flader #2a2c37/#262833/#30323d, kanter #3a3d4a/#4a4d5a, tekst #e8e8ee, dæmpet #9a9cab. Knapper forbliver #33a3dc; brand-tekst lysnes til #7fc7ea. Blå-tonede flader: #1b3344/#182c3b, kant #2a5570. Logo-panelet er Night i begge temaer.
+En mørk udgave af den lyse, ikke Night-tonet: side #15161b, kort #1e2029, flader #2a2c37/#262833/#30323d, kanter #3a3d4a/#4a4d5a, tekst #e8e8ee, dæmpet #9a9cab. Knapper forbliver #33a3dc; brand-tekst lysnes til #7fc7ea. Blå-tonede flader: #1b3344/#182c3b, kant #2a5570. Logo-panelet er Night i begge temaer i appen. I rapportmailens mørke variant står logoet og knappen på brand-blå #33a3dc (kort #1e2029 på side #15161b), så det hvide logo ikke drukner i Night på en mørk mailbaggrund.
 
 ## Form
 - CTA- og primærknapper er piller (`border-radius: 999px`), også i rapportmailen.
