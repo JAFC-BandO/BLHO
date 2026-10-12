@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f3f8fc" style="background:#f3f8fc"><tr><td align="center" style="padding:32px 12px">
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;text-align:left">
 <tr><td align="center" bgcolor="#143546" style="background:#143546;border-radius:12px 12px 0 0;padding:28px 20px"><img src="cid:logo" width="180" height="108" alt="Børneloppen" style="display:block;width:180px;height:108px;border:0;background:#143546;font-family:${skrift};font-size:22px;font-weight:bold;color:#ffffff"></td></tr>
-<tr><td bgcolor="#ffffff" style="background:#ffffff;border:1px solid #d9e4ec;border-top:0;border-radius:0 0 12px 12px;padding:32px 34px 34px;font-family:${skrift};font-size:16px;line-height:1.6;color:#1a1a1a">
+<tr><td bgcolor="#ffffff" style="background:#ffffff;border:1px solid #d9e4ec;border-top:0;border-radius:0 0 12px 12px;padding:32px 34px 34px;font-family:${skrift};font-size:16px;line-height:1.6;color:#143546">
 <p style="margin:0 0 16px">Kære ${esc(butik)}</p>
 <p style="margin:0 0 16px">Nedenfor finder I SoMe-rapporten for ${esc(butik)} for perioden <b>${esc(periode).replace(/(\d\.) /g, '$1&nbsp;')}</b>.</p>
 <p style="margin:0 0 26px">Følg linket for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.</p>
