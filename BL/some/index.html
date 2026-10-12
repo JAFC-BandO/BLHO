@@ -644,7 +644,7 @@ function tegnEditor(status) {
     <div class="emoji-panel"${emojiAaben ? '' : ' hidden'}><div class="rapport-note">Klik på en emoji for at sætte den ind, hvor markøren står. Flere: Windows-tast + punktum.</div>${EMOJIS.map(([navn, liste]) => `<div class="emoji-gruppe"><span>${navn}</span>${liste.split(' ').map(x => `<button type="button" class="emoji" aria-label="Indsæt ${x}">${x}</button>`).join('')}</div>`).join('')}</div>
     <div class="rapport-note" id="rapPeriode"></div>
     <div class="rapport-knapper"><button type="button" class="knap" data-r="gem">Gem rapport</button><span class="rapport-note" id="rapStatus"></span><span class="luft"></span>${gemt ? '<button type="button" class="knap stille fare" data-r="slet">Slet rapport</button>' : ''}</div>
-    ${butik ? `<div class="rapport-knapper"><input type="text" id="rapMail" aria-label="Butikkens mailgruppe" placeholder="Butikkens mailgruppe: adresser adskilt med komma" value="${esc(mailGrupper[n] || '')}" style="flex:1;min-width:220px;margin:0;font-weight:400"><button type="button" class="knap stille" data-r="mailgem">Gem modtagere</button>${gemt ? '<button type="button" class="knap stille" data-r="mail">✉️ Send rapporten på mail</button>' : ''}</div><div class="rapport-note" id="mailStatus">${gemt ? 'Hver modtager får en kort mail med sit eget link til butikkens side. Linket virker i en måned, og nedenfor kan du se, hvem der har åbnet det.' : 'Rapporten kan sendes på mail, når den er gemt.'} Gemte modtagere står her igen næste gang.</div>` : ''}
+    ${butik ? `<div class="rapport-knapper"><input type="text" id="rapMail" aria-label="Butikkens mailgruppe" placeholder="Butikkens mailgruppe: adresser adskilt med komma" value="${esc(mailGrupper[n] || '')}" style="flex:1;min-width:220px;margin:0;font-weight:400"><button type="button" class="knap stille" data-r="mailgem">Gem modtagere</button>${gemt ? '<button type="button" class="knap stille" data-r="mail">✉️ Send rapporten på mail</button><label class="lille" style="display:flex;align-items:center;gap:4px;font-weight:400"><input type="checkbox" id="rapPersonligt" style="margin:0"> Personligt link uden login</label>' : ''}</div><div class="rapport-note" id="mailStatus">${gemt ? 'Hver modtager får en kort mail med sit eget link til butikkens side. Linket virker i en måned, og nedenfor kan du se, hvem der har åbnet det.' : 'Rapporten kan sendes på mail, når den er gemt.'} Gemte modtagere står her igen næste gang.</div>` : ''}
     <details class="tidligere" id="rapMailLog" hidden></details>
     <details class="tidligere" id="rapTidligere"></details>
   </div>`;
@@ -671,8 +671,8 @@ async function tegnMailLog(hentIgen) {
   boks.innerHTML = `<summary>Sendte mails: ${sum(aabnet)} af ${sum(o => o.length)} har åbnet ${butik ? 'den seneste' : 'butikkernes seneste'}</summary>` + liste.map(o => {
     const udloeb = new Date(o[0].sendt_at); udloeb.setMonth(udloeb.getMonth() + 1);
     return `<div class="tidl">
-      <div class="tidl-hoved"><b>${butik ? '' : esc(butikNavnAf(o[0].butik_id)) + ' – '}sendt ${esc(tidspunkt(o[0].sendt_at))}</b><span class="lille">rapporten for ${esc(periodeNavn(o[0].fra, o[0].til))} – ${udloeb < new Date() ? 'linket er udløbet' : 'linket virker til ' + esc(datoKort(udloeb))}</span><span class="luft"></span><span>${aabnet(o)} af ${o.length} har åbnet</span></div>
-      ${butik ? o.map(r => `<div class="rapport-tekst">${esc(r.modtager)} – ${r.aabninger ? `åbnet ${r.aabninger} ${r.aabninger === 1 ? 'gang' : 'gange'}, senest ${esc(tidspunkt(r.aabnet_sidst))}` : 'ikke åbnet'}</div>`).join('') : ''}
+      <div class="tidl-hoved"><b>${butik ? '' : esc(butikNavnAf(o[0].butik_id)) + ' – '}sendt ${esc(tidspunkt(o[0].sendt_at))}</b><span class="lille">rapporten for ${esc(periodeNavn(o[0].fra, o[0].til))} – ${o[0].via_login ? 'læses efter login' : udloeb < new Date() ? 'linket er udløbet' : 'linket virker til ' + esc(datoKort(udloeb))}</span><span class="luft"></span><span>${o[0].via_login ? 'sendt med login' : aabnet(o) + ' af ' + o.length + ' har åbnet'}</span></div>
+      ${butik ? o.map(r => `<div class="rapport-tekst">${esc(r.modtager)} – ${r.via_login ? 'via login – åbninger står i Aktivitetsloggen' : r.aabninger ? `åbnet ${r.aabninger} ${r.aabninger === 1 ? 'gang' : 'gange'}, senest ${esc(tidspunkt(r.aabnet_sidst))}` : 'ikke åbnet'}</div>`).join('') : ''}
     </div>`; }).join('');
 }
 // Butikkens tidligere rapporter (dem, en nyere har afloest) -- til at se og slette
@@ -719,6 +719,7 @@ async function udkastKontekst(p) {
   ];
   // Hele kaeden i samme periode -- til at se, om butikkens udvikling er dens egen eller alles
   let kaede = null;
+  const tilbagegang = [];   // noegletal, der er faldet tydeligt -- AI-udkastet SKAL naevne dem
   if (butik) {
     const { data: k } = await client.rpc('some_overblik2', { p_fra: p.fra, p_til: p.til, p_butik: null, p_f_fra: p.foerFra, p_f_til: p.foerTil });
     if (k && Array.isArray(k.konti)) { beregnSamlede(k.konti); kaede = k.konti; }
@@ -730,6 +731,7 @@ async function udkastKontekst(p) {
     linjer.push('', '=== ' + PLATFORM[pf].toUpperCase() + ' ===', 'Nøgletal (denne periode | før | ændring):');
     [...SEKTION[pf].indsats, ...SEKTION[pf].resultat, ['Interaktioner på kontoen (reaktioner, kommentarer, delinger og klik)', 'interaktioner'], ['Følgere i alt ved periodens slutning', 'foelgere'], ['Nye følgere i løbet af perioden', 'nye_foelgere']].forEach(([navn, felt]) => {
       const nu = sum(k, 'nu', felt) ?? (FRA_OPSLAG.includes(felt) ? 0 : null), c = sammenlign(k, felt);
+      if (c && c.pct <= -10 && ['samlede_visninger', 'opslag_visninger', 'reel_visninger', 'interaktioner', 'foelgere', 'nye_foelgere'].includes(felt)) tilbagegang.push(PLATFORM[pf] + ': ' + navn.toLowerCase() + ' ' + pct(c.pct) + ' (' + tal(nu) + ' mod ' + tal(c.foer) + ' før)');
       linjer.push(`- ${navn}: ${tal(nu)} | ${c ? tal(c.foer) : '–'} | ${c ? pct(c.pct) : '–'}`);
     });
     const st = sum(k, 'nu', 'stories'), stv = sum(k, 'nu', 'story_visninger'), fst = sum(k, 'foer', 'stories'), fstv = sum(k, 'foer', 'story_visninger');
@@ -800,6 +802,8 @@ async function udkastKontekst(p) {
       linjer.push(`${i + 1}. ${butik ? '' : x.some_konti.navn + ' · '}${formatAf(x)} · ${new Date(x.oprettet_at).toLocaleString('da-DK', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${hel(x.visninger)} · ${x.likes || 0} · ${x.kommentarer || 0} · ${x.delinger || 0} · "${String(x.tekst || '(uden tekst)').replace(/\s+/g, ' ').slice(0, tegn)}"`);
     });
   }
+  // Lige under periode og sammenligning, saa det ikke drukner i opslagene
+  linjer.splice(3, 0, tilbagegang.length ? 'TILBAGEGANG, SOM SKAL NÆVNES (hvert punkt i et 💡-afsnit, roligt og konkret): ' + tilbagegang.join('; ') : 'Ingen tydelig tilbagegang i nøgletallene.');
   return linjer.join('\n');
 }
 $('#rapportKnap').addEventListener('click', () => {
@@ -891,7 +895,7 @@ $('#rapportBoks').addEventListener('click', async e => {
     if (kladder.has(n)) { st.textContent = 'Gem ændringerne først – butikken ser den gemte rapport, når den åbner linket.'; return; }
     k.disabled = true; st.textContent = 'Sender …';
     let r = null;
-    try { r = (await client.functions.invoke('some-mail', { body: { butik: b, til } })).data; } catch (x) {}
+    try { r = (await client.functions.invoke('some-mail', { body: { butik: b, til, personligt: !!($('#rapPersonligt') && $('#rapPersonligt').checked) } })).data; } catch (x) {}
     if (!k.isConnected) return;
     k.disabled = false;
     if (!r || !r.ok) { st.textContent = (r && r.fejl) || 'Mailen kunne ikke sendes lige nu. Prøv igen om lidt.'; return; }

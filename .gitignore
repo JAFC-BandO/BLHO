@@ -24,3 +24,4 @@ supabase/migration_session_oprydning.sql
 supabase/migration_enhed_type_windows.sql
 WINDOWS-KIOSK-SETUP.md
 supabase/migration_vagtplan.sql
+supabase/migration_some_login.sql
