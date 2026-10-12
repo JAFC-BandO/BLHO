@@ -162,6 +162,7 @@ td .lille.op,td .lille.ned{font-weight:600}
 .celle.r3,.rang.r3{background:#bbf7d0;color:#062b14}
 .celle.r1,.celle.r2,.celle.r3{font-weight:700}
 .celle.faa{background:var(--gitter);color:var(--mut)}
+td.mut{color:var(--mut)}
 .rang{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;font-size:11px;font-weight:700;margin-right:8px;vertical-align:1px}
 /* --- Rapporten: tekst fra den SoMe-ansvarlige, laast til en periode --- */
 .rapport{background:color-mix(in srgb,var(--ok) 9%,var(--card));border:1px solid color-mix(in srgb,var(--ok) 32%,var(--bd));border-radius:14px;padding:16px 18px;margin-bottom:18px}
@@ -252,6 +253,7 @@ dialog.tid::backdrop{background:rgba(0,0,0,.5)}
 
   <div id="besked" class="besked" hidden></div>
   <div id="rapportBoks"></div>
+  <div id="samletTider"></div>
   <div id="sektioner"></div>
 
   <div class="kort">
@@ -802,6 +804,7 @@ async function udkastKontekst(p) {
       linjer.push(`${i + 1}. ${butik ? '' : x.some_konti.navn + ' · '}${formatAf(x)} · ${new Date(x.oprettet_at).toLocaleString('da-DK', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${hel(x.visninger)} · ${x.likes || 0} · ${x.kommentarer || 0} · ${x.delinger || 0} · "${String(x.tekst || '(uden tekst)').replace(/\s+/g, ' ').slice(0, tegn)}"`);
     });
   }
+  if (bedsteTider.samlet && bedsteTider.samlet.length) linjer.push('', 'BEDSTE TIDSPUNKTER SAMLET (Facebook og Instagram lagt sammen, med følgere online): ' + bedsteTider.samlet.join('; '));
   // Lige under periode og sammenligning, saa det ikke drukner i opslagene
   linjer.splice(3, 0, tilbagegang.length ? 'TILBAGEGANG, SOM SKAL NÆVNES (hvert punkt i et 💡-afsnit, roligt og konkret): ' + tilbagegang.join('; ') : 'Ingen tydelig tilbagegang i nøgletallene.');
   return linjer.join('\n');
@@ -1266,6 +1269,7 @@ async function hentOpslag() {
 function tegnTider() {
   const blokNavn = ([a, z]) => String(a).padStart(2, '0') + '–' + String(z).padStart(2, '0');
   const gange = s => s.toLocaleString('da-DK', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '×';
+  const pr = {};   // hver platforms felter mv. -- til det samlede kort nedenfor
   document.querySelectorAll('.varmekort[data-p]').forEach(kort => {
     const pf = kort.dataset.p;
     const celler = UGEDAGE.map(() => BLOKKE.map(() => ({ antal: 0, inter: 0, score: null })));
@@ -1344,7 +1348,69 @@ function tegnTider() {
         const s = Math.round(100 * onl(o) / onlMaks);
         return `<div class="celle" style="background:color-mix(in srgb, #15803d ${s}%, #dcfce7);color:${s > 55 ? '#fff' : '#062b14'}" title="${UGEDAGE[d]} kl. ${blokNavn(BLOKKE[b])}: ca. ${tal(Math.round(onl(o)))} følgere online i snit pr. time">${kortTal(Math.round(onl(o)))}</div>`;
       }).join('')).join('') + '</div>';
+    pr[pf] = { celler, online, onl, onlMaks, taeller, placering, score };
   });
+  tegnSamlet(pr);
+}
+
+// ---------- Bedste tidspunkter samlet (begge platforme + foelgere online) ----------
+// Svaret paa "hvornaar skal vi poste?" paa tvaers af kilderne: hvert felt faar gennemsnittet af de
+// signaler, der findes for det -- Facebooks og Instagrams placering (0-1, fra tegnTider) og
+// Instagrams "foelgere online" som andel af det travleste felt. Facebook har kun opslagene
+// (Meta oplyser ikke, hvornaar foelgere er online dér). Felter med kun én kilde vises, men
+// taeller ikke med i top 3.
+function tegnSamlet(pr) {
+  const boks = $('#samletTider'); if (!boks) return;
+  const pfs = RAEKKEFOELGE.filter(p => pr[p]);
+  if (!pfs.length) { boks.innerHTML = ''; return; }
+  const blokNavn = ([a, z]) => String(a).padStart(2, '0') + '–' + String(z).padStart(2, '0');
+  const gange = s => s.toLocaleString('da-DK', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '×';
+  const pctTal = v => Math.round(100 * v) + ' %';
+  const ig = pr.instagram, harOnline = !!(ig && ig.onlMaks > 0);
+  const raekker = [];
+  UGEDAGE.forEach((dag, d) => BLOKKE.forEach((bl, b) => {
+    const r = { d, b, sig: [] };
+    pfs.forEach(pf => { const c = pr[pf].celler[d][b]; r[pf] = c; if (pr[pf].taeller(c)) r.sig.push(pr[pf].placering(c)); });
+    if (harOnline) { r.online = ig.onl(ig.online[d][b]); r.sig.push(r.online / ig.onlMaks); }
+    r.samlet = r.sig.length ? r.sig.reduce((a, x) => a + x, 0) / r.sig.length : null;
+    raekker.push(r);
+  }));
+  const kilder = pfs.length + (harOnline ? 1 : 0);
+  const taeller = r => r.samlet != null && r.sig.length >= Math.min(2, kilder);
+  const top = raekker.filter(taeller).sort((a, z) => z.samlet - a.samlet).slice(0, 3);
+  const rang = r => top.indexOf(r) + 1;
+  const celleAf = r => {
+    const navn = `${UGEDAGE[r.d]} kl. ${blokNavn(BLOKKE[r.b])}`;
+    if (r.samlet == null) return `<div class="celle tom" title="${navn}: ingen opslag og ingen tal for følgere online">–</div>`;
+    const k = rang(r), styrke = Math.round(10 + 60 * r.samlet);
+    const stil = k || !taeller(r) ? '' : ` style="background:color-mix(in srgb, var(--varme) ${styrke}%, var(--card));color:${styrke > 55 ? 'var(--card)' : 'var(--fg)'}"`;
+    return `<button type="button" class="celle har${k ? ' r' + k : ''}${taeller(r) ? '' : ' faa'}" data-i="${r.d * BLOKKE.length + r.b}"${stil} aria-label="${k ? 'Nr. ' + k + '. ' : ''}${navn}: ${pctTal(r.samlet)} samlet${taeller(r) ? '' : ' (kun én kilde, tæller ikke med)'}">${pctTal(r.samlet)}</button>`;
+  };
+  let h = '<div class="varmekort"><div></div>' + BLOKKE.map(b => `<div class="akse top">${blokNavn(b)}</div>`).join('');
+  UGEDAGE.forEach((dag, d) => { h += `<div class="akse">${dag.slice(0, 3)}</div>` + raekker.slice(d * BLOKKE.length, (d + 1) * BLOKKE.length).map(celleAf).join(''); });
+  h += '</div>';
+  const pfKol = (r, pf) => { const c = r[pf]; return !c || !c.antal ? '<td class="mut">–</td>' : `<td${pr[pf].taeller(c) ? '' : ' class="mut"'}>${c.score == null ? '?' : gange(pr[pf].score(c))} <span class="lille">${c.antal} opslag</span></td>`; };
+  const tabel = raekker.filter(taeller).sort((a, z) => z.samlet - a.samlet).slice(0, 10);
+  h += `<ol class="bedst">${top.map((r, i) => `<li><span class="rang r${i + 1}">${i + 1}</span>${UGEDAGE[r.d]} kl. ${blokNavn(BLOKKE[r.b])}: <b>${pctTal(r.samlet)}</b> <span class="lille">(${r.sig.length} af ${kilder} kilder)</span></li>`).join('') || '<li class="lille">For få opslag i perioden til at pege på et tidspunkt.</li>'}</ol>`;
+  h += `<div class="rul" style="margin-top:12px"><table><thead><tr><th>Tidspunkt</th>${pfs.map(pf => `<th>${PLATFORM[pf]}<br><span class="lille">visninger ift. normalt</span></th>`).join('')}${harOnline ? '<th>Følgere online<br><span class="lille">Instagram, pr. time</span></th>' : ''}<th>Samlet</th></tr></thead><tbody>`
+    + tabel.map(r => `<tr><td>${rang(r) ? `<span class="rang r${rang(r)}">${rang(r)}</span>` : ''}${UGEDAGE[r.d]} kl. ${blokNavn(BLOKKE[r.b])}</td>${pfs.map(pf => pfKol(r, pf)).join('')}${harOnline ? `<td>${kortTal(Math.round(r.online))} <span class="lille">${pctTal(r.online / ig.onlMaks)} af flest</span></td>` : ''}<td><b>${pctTal(r.samlet)}</b>${taeller(r) ? '' : ' <span class="lille">kun én kilde</span>'}</td></tr>`).join('')
+    + '</tbody></table></div>';
+  h += `<div class="lille" style="margin-top:8px"><b>Kilder:</b> ${pfs.map(pf => pf === 'facebook' ? 'Facebook – visninger pr. opslag i perioden (Meta oplyser ikke, hvornår følgerne er online på Facebook)' : 'Instagram – visninger pr. opslag i perioden' + (harOnline ? ' og Metas "følgere online" pr. time de seneste 4 uger' : '')).join('. ')}. Samlet = gennemsnittet af kildernes placering, 100 % = bedst på dem alle. Grøn = de tre bedste; grå = kun én kilde. Tabellen viser de 10 bedste felter med mindst to kilder.</div>`;
+  boks.innerHTML = `<div class="kort"><div class="kort-hoved"><h2>Bedste tidspunkter at poste – samlet <small>Facebook og Instagram lagt sammen${harOnline ? ', med følgere online' : ''}</small></h2></div>${h}</div>`;
+  const kort = boks.querySelector('.varmekort');
+  const visCelle = e => {
+    const k = e.target.closest('.celle.har'); if (!k) return;
+    const r = raekker[k.dataset.i], rect = k.getBoundingClientRect();
+    visTip(rect.right - 6, rect.top + rect.height / 2, n => {
+      n.appendChild(el('div', 't-titel', UGEDAGE[r.d] + ' kl. ' + blokNavn(BLOKKE[r.b])));
+      pfs.forEach(pf => { const c = r[pf]; n.appendChild(tipLinje(null, PLATFORM[pf] + ' (visninger ift. normalt)', !c.antal ? 'ingen opslag' : (c.score == null ? '?' : gange(pr[pf].score(c))) + ', ' + c.antal + ' opslag')); });
+      if (harOnline) n.appendChild(tipLinje(null, 'Følgere online på Instagram (pr. time)', kortTal(Math.round(r.online))));
+      n.appendChild(tipLinje(null, 'Samlet', pctTal(r.samlet) + ' (' + r.sig.length + ' af ' + kilder + ' kilder)'));
+    });
+  };
+  kort.onpointerover = visCelle; kort.onfocusin = visCelle;
+  kort.onpointerleave = skjulTip; kort.onfocusout = skjulTip;
+  bedsteTider.samlet = top.map(r => `${UGEDAGE[r.d]} kl. ${blokNavn(BLOKKE[r.b])} (${pctTal(r.samlet)} samlet på tværs af ${r.sig.length} kilder)`);
 }
 
 // Et klik paa et felt viser de opslag, tallet er regnet ud fra (flest interaktioner foerst)
