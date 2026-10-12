@@ -48,6 +48,8 @@ body{font-family: -apple-system, BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
 :root[data-tema="moerk"] #temaKnap:hover{background:#223a4a}
 ::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
 .laeser{text-align:center;color:var(--mut);padding:20vh 20px}
+.login-logo{background:#143546;border-radius:12px;padding:28px 20px;max-width:360px;margin:0 auto 16px}.login-logo img{width:100%;max-width:220px;display:block;margin:0 auto}
+.login-kort{max-width:360px;margin:0 auto;text-align:left;color:var(--fg)}.login-kort label{display:block;font-size:13px;font-weight:600;margin:10px 0 4px}.login-kort input{width:100%;padding:9px 10px;border:1px solid var(--felt);border-radius:8px;background:var(--card);color:var(--fg);font-size:15px}.login-kort .knap{width:100%;margin-top:16px;padding:10px;font-size:15px}
 /* Spinneren ligger OVER siden, saa den ogsaa daekker den tomme side, mens de foerste tal hentes */
 #laeserVis{position:fixed;inset:0;z-index:50;background:var(--bg);padding:0;display:grid;place-content:center;justify-items:center;gap:14px;font-size:13px}
 .spinner{width:44px;height:44px;animation:drej 2s linear infinite}
@@ -214,6 +216,22 @@ dialog.tid::backdrop{background:rgba(0,0,0,.5)}
 <div class="laeser" id="laeserVis" role="status"><svg class="spinner" viewBox="0 0 50 50" aria-hidden="true"><circle cx="25" cy="25" r="20"/><circle class="bue" cx="25" cy="25" r="20"/></svg>Indlæser…</div>
 <div class="laeser" id="ingenAdgangVis" hidden>Din konto har ikke adgang til SoMe-tallene.</div>
 <div class="laeser" id="ugyldigtLinkVis" hidden>Linket virker ikke længere. Bed om et nyt link til din butiks SoMe-tal.</div>
+<!-- Login foran butikslinket: samme konto som butik-redigering (sessionen deles via storageKey),
+     saa det staar i Aktivitetsloggen, hvem der laeser rapporten. -->
+<div class="laeser" id="loginVis" hidden style="padding-top:10vh">
+  <div class="login-logo"><img src="../logo-boerneloppen.svg" alt="Børneloppen"></div>
+  <form class="kort login-kort" id="loginForm">
+    <h2 style="margin:0 0 4px">Log ind</h2>
+    <div class="lille" style="margin-bottom:14px">Log ind med butikkens login for at læse SoMe-rapporten</div>
+    <label for="loginEmail">Email</label>
+    <input type="email" id="loginEmail" autocomplete="username" required>
+    <label for="loginKode">Adgangskode</label>
+    <input type="password" id="loginKode" autocomplete="current-password" required>
+    <button type="submit" class="knap" id="loginKnap">Log ind</button>
+    <div class="lille" style="margin-top:12px"><a href="../butik-redigering/" style="color:var(--brand-tekst)">Glemt adgangskode?</a></div>
+    <div class="lille" id="loginFejl" style="color:var(--bad);margin-top:8px" hidden>Forkert email eller adgangskode.</div>
+  </form>
+</div>
 
 <div class="indhold" id="app" hidden>
   <div class="hoved">
@@ -362,7 +380,7 @@ function skjulLaeser() {
   $('#laeserVis').hidden = true;
   try { if (window.parent !== window && window.parent.someKlar) window.parent.someKlar(); } catch (e) {}
 }
-function vis(id) { ['ingenAdgangVis', 'ugyldigtLinkVis', 'app'].forEach(x => { $('#' + x).hidden = x != id; }); if (id != 'app') skjulLaeser(); }
+function vis(id) { ['ingenAdgangVis', 'ugyldigtLinkVis', 'loginVis', 'app'].forEach(x => { $('#' + x).hidden = x != id; }); if (id != 'app') skjulLaeser(); }
 
 // Perioden slutter i gaar: dagens tal er ikke faerdige foer i morgen. Der sammenlignes med samme
 // datoer aaret foer -- eller, hvis man vaelger det, med perioden lige foer: lige saa mange dage,
@@ -644,7 +662,7 @@ function tegnEditor(status) {
     <div class="emoji-panel"${emojiAaben ? '' : ' hidden'}><div class="rapport-note">Klik på en emoji for at sætte den ind, hvor markøren står. Flere: Windows-tast + punktum.</div>${EMOJIS.map(([navn, liste]) => `<div class="emoji-gruppe"><span>${navn}</span>${liste.split(' ').map(x => `<button type="button" class="emoji" aria-label="Indsæt ${x}">${x}</button>`).join('')}</div>`).join('')}</div>
     <div class="rapport-note" id="rapPeriode"></div>
     <div class="rapport-knapper"><button type="button" class="knap" data-r="gem">Gem rapport</button><span class="rapport-note" id="rapStatus"></span><span class="luft"></span>${gemt ? '<button type="button" class="knap stille fare" data-r="slet">Slet rapport</button>' : ''}</div>
-    ${butik ? `<div class="rapport-knapper"><input type="text" id="rapMail" aria-label="Butikkens mailgruppe" placeholder="Butikkens mailgruppe: adresser adskilt med komma" value="${esc(mailGrupper[n] || '')}" style="flex:1;min-width:220px;margin:0;font-weight:400"><button type="button" class="knap stille" data-r="mailgem">Gem modtagere</button>${gemt ? '<button type="button" class="knap stille" data-r="mail">✉️ Send rapporten på mail</button><label class="lille" style="display:flex;align-items:center;gap:4px;font-weight:400"><input type="checkbox" id="rapPersonligt" style="margin:0"> Personligt link uden login</label>' : ''}</div><div class="rapport-note" id="mailStatus">${gemt ? 'Hver modtager får en kort mail med sit eget link til butikkens side. Linket virker i en måned, og nedenfor kan du se, hvem der har åbnet det.' : 'Rapporten kan sendes på mail, når den er gemt.'} Gemte modtagere står her igen næste gang.</div>` : ''}
+    ${butik ? `<div class="rapport-knapper"><input type="text" id="rapMail" aria-label="Butikkens mailgruppe" placeholder="Butikkens mailgruppe: adresser adskilt med komma" value="${esc(mailGrupper[n] || '')}" style="flex:1;min-width:220px;margin:0;font-weight:400"><button type="button" class="knap stille" data-r="mailgem">Gem modtagere</button>${gemt ? '<button type="button" class="knap stille" data-r="mail">✉️ Send rapporten på mail</button>' : ''}</div><div class="rapport-note" id="mailStatus">${gemt ? 'Hver modtager får en kort mail med sit eget link til butikkens side og logger ind for at læse den. Linket virker i en måned, og nedenfor kan du se, hvem der har åbnet det.' : 'Rapporten kan sendes på mail, når den er gemt.'} Gemte modtagere står her igen næste gang.</div>` : ''}
     <details class="tidligere" id="rapMailLog" hidden></details>
     <details class="tidligere" id="rapTidligere"></details>
   </div>`;
@@ -671,8 +689,8 @@ async function tegnMailLog(hentIgen) {
   boks.innerHTML = `<summary>Sendte mails: ${sum(aabnet)} af ${sum(o => o.length)} har åbnet ${butik ? 'den seneste' : 'butikkernes seneste'}</summary>` + liste.map(o => {
     const udloeb = new Date(o[0].sendt_at); udloeb.setMonth(udloeb.getMonth() + 1);
     return `<div class="tidl">
-      <div class="tidl-hoved"><b>${butik ? '' : esc(butikNavnAf(o[0].butik_id)) + ' – '}sendt ${esc(tidspunkt(o[0].sendt_at))}</b><span class="lille">rapporten for ${esc(periodeNavn(o[0].fra, o[0].til))} – ${o[0].via_login ? 'læses efter login' : udloeb < new Date() ? 'linket er udløbet' : 'linket virker til ' + esc(datoKort(udloeb))}</span><span class="luft"></span><span>${o[0].via_login ? 'sendt med login' : aabnet(o) + ' af ' + o.length + ' har åbnet'}</span></div>
-      ${butik ? o.map(r => `<div class="rapport-tekst">${esc(r.modtager)} – ${r.via_login ? 'via login – åbninger står i Aktivitetsloggen' : r.aabninger ? `åbnet ${r.aabninger} ${r.aabninger === 1 ? 'gang' : 'gange'}, senest ${esc(tidspunkt(r.aabnet_sidst))}` : 'ikke åbnet'}</div>`).join('') : ''}
+      <div class="tidl-hoved"><b>${butik ? '' : esc(butikNavnAf(o[0].butik_id)) + ' – '}sendt ${esc(tidspunkt(o[0].sendt_at))}</b><span class="lille">rapporten for ${esc(periodeNavn(o[0].fra, o[0].til))} – ${udloeb < new Date() ? 'linket er udløbet' : 'linket virker til ' + esc(datoKort(udloeb))}</span><span class="luft"></span><span>${aabnet(o)} af ${o.length} har åbnet</span></div>
+      ${butik ? o.map(r => `<div class="rapport-tekst">${esc(r.modtager)} – ${r.aabninger ? `åbnet ${r.aabninger} ${r.aabninger === 1 ? 'gang' : 'gange'}, senest ${esc(tidspunkt(r.aabnet_sidst))}` : 'ikke åbnet'}</div>`).join('') : ''}
     </div>`; }).join('');
 }
 // Butikkens tidligere rapporter (dem, en nyere har afloest) -- til at se og slette
@@ -895,7 +913,7 @@ $('#rapportBoks').addEventListener('click', async e => {
     if (kladder.has(n)) { st.textContent = 'Gem ændringerne først – butikken ser den gemte rapport, når den åbner linket.'; return; }
     k.disabled = true; st.textContent = 'Sender …';
     let r = null;
-    try { r = (await client.functions.invoke('some-mail', { body: { butik: b, til, personligt: !!($('#rapPersonligt') && $('#rapPersonligt').checked) } })).data; } catch (x) {}
+    try { r = (await client.functions.invoke('some-mail', { body: { butik: b, til } })).data; } catch (x) {}
     if (!k.isConnected) return;
     k.disabled = false;
     if (!r || !r.ok) { st.textContent = (r && r.fejl) || 'Mailen kunne ikke sendes lige nu. Prøv igen om lidt.'; return; }
@@ -1475,7 +1493,10 @@ window.addEventListener('storage', e => { if (e.key === 'blho-tema') tegnTemaKna
 tegnTemaKnap();
 
 async function start() {
-  if (LINK) { vis('app'); await hentRapporter(); vaelgStandardRapport(); await hent(); return; }
+  if (LINK) {
+    if (!(await client.auth.getUser()).data.user) { vis('loginVis'); return; }
+    vis('app'); await hentRapporter(); vaelgStandardRapport(); await hent(); return;
+  }
   const { data: { user } } = await client.auth.getUser();
   if (!user) { vis('ingenAdgangVis'); return; }
   // RLS paa some_adgang viser kun brugerens egen raekke -- findes den ikke, er der ingen adgang.
@@ -1504,6 +1525,17 @@ async function start() {
   if (q.get('sammenlign') === 'foer') { sammenligning = 'foer'; $('#sammenlignValg').value = 'foer'; }
   visDatoer();
 }
+$('#loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const knap = $('#loginKnap'); knap.disabled = true; $('#loginFejl').hidden = true;
+  const { error } = await client.auth.signInWithPassword({ email: $('#loginEmail').value.trim(), password: $('#loginKode').value });
+  knap.disabled = false;
+  if (error) { $('#loginFejl').hidden = false; return; }
+  // Samme logning som butik-redigering, saa det staar i Aktivitetsloggen (fire-and-forget)
+  client.rpc('log_admin_handling', { p_handling: 'login', p_detaljer: 'SoMe-rapport via maillink' }).then(() => {});
+  $('#laeserVis').hidden = false;
+  start().catch(() => vis('ugyldigtLinkVis'));
+});
 if (window.top !== window || LINK) start().catch(() => vis(LINK ? 'ugyldigtLinkVis' : 'ingenAdgangVis'));
 </script>
 </body></html>

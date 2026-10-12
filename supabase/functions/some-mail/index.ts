@@ -3,8 +3,9 @@
 // med "Send rapporten paa mail" i skrivefeltet paa SoMe-siden (BL/some/).
 //
 // Hver modtager faar sin egen mail med et personligt link (en raekke i some_mail_log): linket
-// aabner butikkens side uden login, holder op med at virke en maaned efter afsendelsen, og siden
-// taeller, naar det aabnes -- saa den SoMe-ansvarlige kan se, hvem der har aabnet rapporten.
+// aabner butikkens side (efter login med butikkens konto, saa det ogsaa staar i Aktivitetsloggen),
+// holder op med at virke en maaned efter afsendelsen, og siden taeller, naar det aabnes -- saa den
+// SoMe-ansvarlige kan se, hvem der har aabnet rapporten.
 //
 // Adgang: den, der maa skrive rapporter (RPC'en kan_styre_some, tjekket med brugerens eget login,
 // saa databasen afgoer det) -- eller cron-noeglen i headeren x-some-cron, som i some-sync.
@@ -29,7 +30,6 @@ const svar = (body: unknown, status = 200) =>
 const SB = Deno.env.get('SUPABASE_URL')!;
 const SR = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const SIDE = 'https://jfclabs.dk/BL/some/';
-const LOGIN = 'https://jfclabs.dk/BL/butik-redigering/#some';   // standard: rapporten laeses efter login
 // Logoet som PNG (BL/logo-boerneloppen-mail.png, lavet af logo-boerneloppen.svg): mailprogrammer viser
 // ikke SVG. Resend henter det og laegger det ind i selve mailen (cid:logo) -- et billede, der skal
 // hentes udefra, skjuler Outlook, indtil modtageren trykker "Hent billeder".
@@ -92,9 +92,6 @@ Deno.serve(async (req) => {
   const butik = String(d.butik ?? 'butikken').replace(/^Butik\s+/, 'Børneloppen ');
   const periode = periodeNavn(d.rapport.fra, d.rapport.til);
   const kontakt = typeof d.kontakt === 'string' ? d.kontakt.trim() : '';
-  // Standard: knappen foerer til login (hvem der laeser, staar i Aktivitetsloggen). Vaelger den
-  // SoMe-ansvarlige det, faar hver modtager i stedet sit personlige link uden login.
-  const personligt = body?.personligt === true;
   // Et brev paa Boerneloppens brevpapir: logoet paa den blaa flade som paa login-siden, og under
   // det et almindeligt brev med én knap -- ingen overskrifter, maerkater eller anden skabelon-pynt.
   // Tabeller og faste farver, fordi Outlook hverken kender CSS-variabler eller luft og baggrund paa
@@ -103,21 +100,23 @@ Deno.serve(async (req) => {
   // det ikke staar som en hvid boks, mens Outlook henter det frem. Dag og maaned holdes sammen
   // (&nbsp;), saa en smal telefon ikke deler "9." og "oktober" over to linjer.
   const skrift = `-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif`;
-  const html = (url: string) => `<div style="display:none;max-height:0;overflow:hidden;opacity:0">Jeres SoMe-rapport for ${esc(periode)} er klar.</div>
+  // Hele dokumentet med fast lyst tema: ellers vender mailprogrammer i moerk tilstand baggrund og
+  // tekst om, og det hvide logo paa den blaa flade ser forkert ud.
+  const html = (url: string) => `<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only"><style>:root{color-scheme:light only;supported-color-schemes:light only}</style></head><body style="margin:0;background:#f3f8fc"><div style="display:none;max-height:0;overflow:hidden;opacity:0">Jeres SoMe-rapport for ${esc(periode)} er klar.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f3f8fc" style="background:#f3f8fc"><tr><td align="center" style="padding:32px 12px">
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;text-align:left">
 <tr><td align="center" bgcolor="#143546" style="background:#143546;border-radius:12px 12px 0 0;padding:28px 20px"><img src="cid:logo" width="180" height="108" alt="Børneloppen" style="display:block;width:180px;height:108px;border:0;background:#143546;font-family:${skrift};font-size:22px;font-weight:bold;color:#ffffff"></td></tr>
 <tr><td bgcolor="#ffffff" style="background:#ffffff;border:1px solid #d9e4ec;border-top:0;border-radius:0 0 12px 12px;padding:32px 34px 34px;font-family:${skrift};font-size:16px;line-height:1.6;color:#143546">
 <p style="margin:0 0 16px">Kære ${esc(butik)}</p>
 <p style="margin:0 0 16px">Nedenfor finder I SoMe-rapporten for ${esc(butik)} for perioden <b>${esc(periode).replace(/(\d\.) /g, '$1&nbsp;')}</b>.</p>
-<p style="margin:0 0 26px">${personligt ? 'Følg linket' : 'Log ind med butikkens login og åbn SoMe'} for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.</p>
-<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#33a3dc" style="background:#33a3dc;border-radius:999px;mso-padding-alt:13px 26px"><a href="${esc(url)}" style="display:inline-block;padding:13px 26px;font-family:${skrift};font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none">${personligt ? 'Åbn SoMe-rapporten' : 'Log ind og læs rapporten'}</a></td></tr></table>
+<p style="margin:0 0 26px">Følg linket og log ind med butikkens login for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.</p>
+<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#33a3dc" style="background:#33a3dc;border-radius:999px;mso-padding-alt:13px 26px"><a href="${esc(url)}" style="display:inline-block;padding:13px 26px;font-family:${skrift};font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none">Log ind og læs rapporten</a></td></tr></table>
 ${kontakt ? `<p style="margin:26px 0 0">Har I spørgsmål til rapporten, er I velkomne til at skrive til <a href="mailto:${esc(kontakt)}" style="color:#143546">${esc(kontakt)}</a>.</p>` : ''}
 <p style="margin:${kontakt ? 16 : 26}px 0 0">Med venlig hilsen<br>Børneloppen-teamet</p>
 </td></tr>
 </table>
-</td></tr></table>`;
-  const text = (url: string) => `Kære ${butik}\n\nNedenfor finder I SoMe-rapporten for ${butik} for perioden ${periode}. ${personligt ? 'Følg linket' : 'Log ind med butikkens login og åbn SoMe'} for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.\n\n${url}\n\n`
+</td></tr></table></body></html>`;
+  const text = (url: string) => `Kære ${butik}\n\nNedenfor finder I SoMe-rapporten for ${butik} for perioden ${periode}. Følg linket og log ind med butikkens login for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.\n\n${url}\n\n`
     + (kontakt ? `Har I spørgsmål til rapporten, er I velkomne til at skrive til ${kontakt}.\n\n` : '') + 'Med venlig hilsen\nBørneloppen-teamet';
   const send = (from: string, modtager: string, url: string) => fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -133,7 +132,7 @@ ${kontakt ? `<p style="margin:26px 0 0">Har I spørgsmål til rapporten, er I ve
   // De personlige links oprettes foer afsendelsen, saa linket virker, naar mailen lander
   const ind = await db('some_mail_log', {
     method: 'POST', headers: { Prefer: 'return=representation' },
-    body: JSON.stringify(til.map((modtager) => ({ butik_id: body.butik, modtager, fra: d.rapport.fra, til: d.rapport.til, via_login: !personligt }))),
+    body: JSON.stringify(til.map((modtager) => ({ butik_id: body.butik, modtager, fra: d.rapport.fra, til: d.rapport.til }))),
   });
   const links: Link[] | null = ind && ind.ok ? await ind.json().catch(() => null) : null;
   if (!links || links.length !== til.length) return svar({ fejl: 'Mailen kunne ikke gøres klar. Prøv igen om lidt.' }, 500);
@@ -142,7 +141,7 @@ ${kontakt ? `<p style="margin:26px 0 0">Har I spørgsmål til rapporten, er I ve
   const sendt: string[] = [], fejlet: Link[] = [];
   for (const l of links) {
     if (l !== links[0]) await pause(PAUSE_MS);
-    const url = personligt ? SIDE + '?k=' + l.kode : LOGIN;
+    const url = SIDE + '?k=' + l.kode;
     let res = await send(fra, l.modtager, url);
     // Domaenet er ikke godkendt hos Resend endnu: saa kan der kun sendes fra deres testadresse
     if (res && res.status === 403 && fra === FRA) { fra = TESTFRA; await pause(PAUSE_MS); res = await send(fra, l.modtager, url); }
