@@ -45,11 +45,11 @@
      JS (kortHoejdePct/kortBreddePct paa elementet -- talfelterne i Egenskaber). */
   height: 100%; aspect-ratio: 3 / 4; max-width: 100%; max-height: 100%;
   background: #fff; color: #000; box-sizing: border-box;
-  border: 5px solid #f23297; border-radius: 16px; overflow: hidden;
+  border: 5px solid #e91e63; border-radius: 16px; overflow: hidden;
   container-type: size;
   display: flex; flex-direction: column;
 }
-.miljoeffekt-box1, .miljoeffekt-box2 { border-bottom: 1px solid #f23297; }
+.miljoeffekt-box1, .miljoeffekt-box2 { border-bottom: 1px solid #e91e63; }
 .miljoeffekt-box1, .miljoeffekt-box2, .miljoeffekt-box3 {
   padding: 2cqmin 5cqmin; text-align: center;
   flex: 1; display: flex; flex-direction: column; justify-content: center; min-height: 0;

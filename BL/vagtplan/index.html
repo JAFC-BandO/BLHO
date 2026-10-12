@@ -4,6 +4,7 @@
 <meta name="robots" content="noindex, nofollow">
 <title>Vagtplan</title>
 <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=4">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap">
 <script>
 // Vagtplanen vises inde i butik-redigerings "Vagtplan"-fane (en iframe under samme topbar,
 // saa et fanebyt ikke genindlaeser siden). Aabnes den direkte, sendes man derhen i stedet.
@@ -29,20 +30,20 @@ if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('c
 <style>
 /* Farverne ligger som variabler, saa lys/moerk tilstand styres ét sted. Temaet vaelges med
    knappen i butik-redigerings topbar og deles via localStorage 'blho-tema' (se <head>). */
-:root{--bg:#f4f4f2;--fg:#1a1a1a;--mut:#6c6577;--card:#fff;--bd:#e2e2e2;--felt:#ddd;--L:#7355c7;--S:#1f8f83;--U:#d9822b;--F:#2f7fc1;--bad:#c93a3a;--ok:#2b8a4f;--brand:#040DB1;--brand-tekst:#040DB1;--badge:#eef0fd;--fejl-bg:#fdecea;--fejl:#b92a15;--ok-bg:#e6f4ea;--weekend:#f6f7fd;color-scheme:light}
-:root[data-tema="moerk"]{--bg:#15161b;--fg:#e8e8ee;--mut:#9a9cab;--card:#1e2029;--bd:#3a3d4a;--felt:#4a4d5a;--L:#a68cf0;--S:#4fc4b6;--U:#f0a14f;--F:#6fb3f0;--bad:#ff7a7a;--ok:#6fd49a;--brand:#3d47e0;--brand-tekst:#9aa6ff;--badge:#262b4d;--fejl-bg:#3a2023;--fejl:#ff7b6b;--ok-bg:#1d3326;--weekend:#1b1e2c;color-scheme:dark}
+:root{--bg:#f3f8fc;--fg:#143546;--mut:#6c6577;--card:#fff;--bd:#d9e4ec;--felt:#ddd;--L:#7355c7;--S:#1f8f83;--U:#d9822b;--F:#2f7fc1;--bad:#c93a3a;--ok:#277339;--brand:#33a3dc;--brand-tekst:#143546;--badge:#d6edf8;--fejl-bg:#fdecea;--fejl:#b92a15;--ok-bg:#e7fcdf;--weekend:#e9f3fa;color-scheme:light}
+:root[data-tema="moerk"]{--bg:#15161b;--fg:#e8e8ee;--mut:#9a9cab;--card:#1e2029;--bd:#3a3d4a;--felt:#4a4d5a;--L:#a68cf0;--S:#4fc4b6;--U:#f0a14f;--F:#6fb3f0;--bad:#ff7a7a;--ok:#6fd49a;--brand:#33a3dc;--brand-tekst:#7fc7ea;--badge:#1b3344;--fejl-bg:#3a2023;--fejl:#ff7b6b;--ok-bg:#1d3326;--weekend:#1b1e2c;color-scheme:dark}
 *{box-sizing:border-box}[hidden]{display:none!important}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);margin:0;padding:0;color:var(--fg);font-size:15px;line-height:1.4}
+body{font-family: 'Poppins', -apple-system, BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);margin:0;padding:0;color:var(--fg);font-size:15px;line-height:1.4}
 /* Topbar og login er de samme som i butik-redigering. Inde i butik-redigerings vagtplan-fane
    (indlejret) skjules topbaren -- der er det butik-redigerings egen topbar der ses. */
 .login-wrap{max-width:420px;margin:0 auto;padding:32px 20px;min-height:100vh;display:flex;flex-direction:column;justify-content:center}
-.login-logo-panel{background:#040DB1;border-radius:12px;padding:28px 20px;display:flex;justify-content:center;margin-bottom:16px;box-shadow:0 2px 12px rgba(4,13,177,.25)}
+.login-logo-panel{background:#143546;border-radius:12px;padding:28px 20px;display:flex;justify-content:center;margin-bottom:16px;box-shadow:0 2px 12px rgba(20,53,70,.25)}
 .login-logo-panel img{width:100%;max-width:220px;height:auto;display:block}
 .card{background:var(--card);border-radius:12px;padding:32px 24px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
 .card h1{font-size:20px;margin:0 0 4px;color:var(--brand-tekst)}.subtitle{color:var(--mut);font-size:14px;margin-bottom:24px}
 .card label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;margin-top:16px;color:var(--fg)}
 .card input{width:100%;padding:10px 12px;border:1px solid var(--felt);border-radius:8px;font-size:15px;font-family:inherit;background:var(--card);color:var(--fg)}
-.primary-btn{width:100%;padding:12px;font-size:15px;margin-top:20px;border:none;border-radius:8px;background:var(--brand);color:#fff;font-weight:600;cursor:pointer}
+.primary-btn{width:100%;padding:12px;font-size:15px;margin-top:20px;border:none;border-radius:999px;background:var(--brand);color:#fff;font-weight:600;cursor:pointer}
 .primary-btn:hover{filter:brightness(1.15)}
 .msg{margin-top:14px;font-size:14px;padding:10px 12px;border-radius:8px;display:none}.msg.err{background:var(--fejl-bg);color:var(--fejl);display:block}
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--card);border-bottom:1px solid var(--bd)}
@@ -71,11 +72,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 /* Uge-vaelgeren: samme pill-stil som fanerne i topbaren */
 .uger{display:inline-flex;flex-wrap:wrap;gap:2px;padding:3px;border-radius:20px;background:var(--badge)}
 .indhold .uger .tab{border:0;background:none;border-radius:16px;padding:5px 12px;color:var(--brand-tekst);font-weight:600;font-size:13px}
-.indhold .uger .tab:hover{background:rgba(4,13,177,.08)}
+.indhold .uger .tab:hover{background:rgba(51,163,220,.08)}
 .indhold .uger .tab.on{background:var(--brand);color:#fff}
 /* + / - 3 uger: sidder i enden af uge-vaelgeren, adskilt med en tynd streg */
 .indhold .uger .uge-knap{border:0;background:none;border-radius:16px;padding:5px 10px;color:var(--brand-tekst);font-weight:700;font-size:13px}
-.indhold .uger .uge-knap:hover:not(:disabled){background:rgba(4,13,177,.08)}
+.indhold .uger .uge-knap:hover:not(:disabled){background:rgba(51,163,220,.08)}
 .indhold .uger .uge-knap:disabled{opacity:.35;cursor:default}
 .indhold .uger .uge-knap.fjern-tidl{color:var(--bad)}
 .indhold .uger .tab.nu:not(.on){box-shadow:inset 0 0 0 1.5px var(--brand-tekst)}
@@ -104,7 +105,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .forklaring i.uk{border:1px dashed var(--mut);border-left:4px dashed var(--mut)}
 .to-kol{display:grid;grid-template-columns:1fr;gap:0 32px}
 @media (min-width:980px){.to-kol{grid-template-columns:1fr 1fr}}
-.indhold button,dialog button{font:inherit;font-size:14px;cursor:pointer;border:1px solid var(--bd);background:var(--card);color:var(--fg);border-radius:8px;padding:6px 12px}
+.indhold button,dialog button{font:inherit;font-size:14px;cursor:pointer;border:1px solid var(--bd);background:var(--card);color:var(--fg);border-radius:999px;padding:6px 12px}
 button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--brand-tekst);outline-offset:1px}
 .indhold .tab.on{background:var(--brand);color:#fff;border-color:var(--brand)}.indhold .pri,dialog .pri{background:var(--brand);color:#fff;border-color:var(--brand)}
 .bad{color:var(--bad)}.ok{color:var(--ok)}#stat{margin-left:auto}
@@ -198,8 +199,8 @@ textarea{height:260px;font:12px/1.4 monospace}.row{display:flex;gap:8px;flex-wra
 #andreUgemt{color:var(--brand-tekst)}
 .konflikt{display:none;background:var(--fejl-bg);border-radius:8px;padding:10px 12px;margin:8px 0;color:var(--fejl)}
 /* ---------- Assistenten (assistent-ui.js) ---------- */
-:root{--ai-a:#040DB1;--ai-b:#7b3fe4;--ai-c:#e0338f;--ny-bg:#e5f5ea;--ny:#1e7a43;--fjern-bg:#fdecec;--fjern:#b3261e;--skift-bg:#eef0fd;--fri-bg:#fff3dc;--fri:#8a5300;--ai-skygge:0 12px 40px rgba(12,16,60,.18)}
-:root[data-tema="moerk"]{--ai-a:#3d47e0;--ny-bg:#173222;--ny:#7ad9a0;--fjern-bg:#3a1f22;--fjern:#ff8a80;--skift-bg:#262b4d;--fri-bg:#3a2d14;--fri:#f0c070;--ai-skygge:0 12px 40px rgba(0,0,0,.55)}
+:root{--ai-a:#33a3dc;--ai-b:#71cc4c;--ai-c:#e91e63;--ny-bg:#e7fcdf;--ny:#277339;--fjern-bg:#fdecec;--fjern:#b3261e;--skift-bg:#d6edf8;--fri-bg:#fff3dc;--fri:#8a5300;--ai-skygge:0 12px 40px rgba(51,163,220,.18)}
+:root[data-tema="moerk"]{--ai-a:#33a3dc;--ny-bg:#173222;--ny:#7ad9a0;--fjern-bg:#3a1f22;--fjern:#ff8a80;--skift-bg:#1b3344;--fri-bg:#3a2d14;--fri:#f0c070;--ai-skygge:0 12px 40px rgba(0,0,0,.55)}
 .indhold .ai-aabn,.ai-logo,.ai-avatar,.ai-velkomst-ikon,.ai-send{background:linear-gradient(135deg,var(--ai-a),var(--ai-b) 58%,var(--ai-c))}
 .indhold .ai-aabn{display:inline-flex;align-items:center;gap:7px;padding:6px 14px;border:0;color:#fff;font-weight:600;box-shadow:0 2px 10px rgba(123,63,228,.3);transition:transform .15s,box-shadow .15s,filter .15s}
 .indhold .ai-aabn:hover{filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 4px 14px rgba(123,63,228,.4)}

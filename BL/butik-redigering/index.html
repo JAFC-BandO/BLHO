@@ -17,11 +17,12 @@
   })();
 </script>
 <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=4">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="../render-shared.css?v=2026-07-20-32">
+<link rel="stylesheet" href="../render-shared.css?v=2026-10-12-33">
 <script src="../render-shared.js?v=2026-08-24-38"></script>
 <style>
   * { box-sizing: border-box; }
@@ -33,31 +34,31 @@
      (style="color:var(--ui-tekst-888)" osv.), fordi de ellers ikke kan temaes udefra.
      Skaermindholdet (canvas, Live View, diasshow-panelet) bruger IKKE disse variabler. */
   :root {
-    --ui-side: #f4f4f2; --ui-flade: white; --ui-flade-graa: #f7f7fb; --ui-flade-side: #f4f4f2;
-    --ui-flade-felt: #f4f4f7; --ui-flade-blaa: #eef0fd; --ui-flade-blaa2: #eef2ff; --ui-flade-blaa3: #f4f6ff;
+    --ui-side: #f3f8fc; --ui-flade: white; --ui-flade-graa: #f7f7fb; --ui-flade-side: #f3f8fc;
+    --ui-flade-felt: #f4f4f7; --ui-flade-blaa: #d6edf8; --ui-flade-blaa2: #e9f5fb; --ui-flade-blaa3: #f3f9fd;
     --ui-flade-neutral: #eee; --ui-flade-fejl: #fdecea; --ui-flade-advarsel: #fff7e6;
-    --ui-tekst: #1a1a1a; --ui-tekst-333: #333; --ui-tekst-555: #555; --ui-tekst-666: #666;
+    --ui-tekst: #143546; --ui-tekst-333: #333; --ui-tekst-555: #555; --ui-tekst-666: #666;
     --ui-tekst-888: #888; --ui-tekst-999: #999; --ui-tekst-aaa: #aaa;
-    --ui-brand-tekst: #040DB1; --ui-advarsel-tekst: #7a5c1e; --ui-fejl-moerk-tekst: #7d1c0c;
-    --ui-fejl-tekst: #c0392b; --ui-fejl-tekst2: #b92a15; --ui-orange-tekst: #b96a15; --ui-groen-tekst: #1a9b4b;
-    --ui-kant: #ddd; --ui-kant-mellem: #bbb; --ui-kant-stiplet: #ccc; --ui-kant-blaa: #dde3f7;
+    --ui-brand-tekst: #143546; --ui-advarsel-tekst: #7a5c1e; --ui-fejl-moerk-tekst: #7d1c0c;
+    --ui-fejl-tekst: #c0392b; --ui-fejl-tekst2: #b92a15; --ui-orange-tekst: #b96a15; --ui-groen-tekst: #277339;
+    --ui-kant: #ddd; --ui-kant-mellem: #bbb; --ui-kant-stiplet: #ccc; --ui-kant-blaa: #a8d8f0;
     --ui-kant-advarsel: #ffe0a3; --ui-kant-fejl: #f5c6c0;
   }
   html[data-tema="moerk"] {
     color-scheme: dark; /* moerke scrollbars og formularfelter (select, input, textarea) */
     --ui-side: #15161b; --ui-flade: #1e2029; --ui-flade-graa: #262833; --ui-flade-side: #2a2c37;
-    --ui-flade-felt: #2a2c37; --ui-flade-blaa: #262b4d; --ui-flade-blaa2: #232846; --ui-flade-blaa3: #232846;
+    --ui-flade-felt: #2a2c37; --ui-flade-blaa: #1b3344; --ui-flade-blaa2: #182c3b; --ui-flade-blaa3: #182c3b;
     --ui-flade-neutral: #30323d; --ui-flade-fejl: #3a2023; --ui-flade-advarsel: #3a3020;
     --ui-tekst: #e8e8ee; --ui-tekst-333: #d6d7de; --ui-tekst-555: #c0c2cc; --ui-tekst-666: #b0b2bd;
     --ui-tekst-888: #9a9cab; --ui-tekst-999: #90929f; --ui-tekst-aaa: #80828f;
-    --ui-brand-tekst: #9aa6ff; --ui-advarsel-tekst: #e0bf7a; --ui-fejl-moerk-tekst: #ffb4a8;
+    --ui-brand-tekst: #7fc7ea; --ui-advarsel-tekst: #e0bf7a; --ui-fejl-moerk-tekst: #ffb4a8;
     --ui-fejl-tekst: #ff7b6b; --ui-fejl-tekst2: #ff7b6b; --ui-orange-tekst: #f0a64f; --ui-groen-tekst: #4cc27a;
-    --ui-kant: #3a3d4a; --ui-kant-mellem: #4a4d5a; --ui-kant-stiplet: #4a4d5a; --ui-kant-blaa: #363c63;
+    --ui-kant: #3a3d4a; --ui-kant-mellem: #4a4d5a; --ui-kant-stiplet: #4a4d5a; --ui-kant-blaa: #2a5570;
     --ui-kant-advarsel: #5a4a28; --ui-kant-fejl: #5a2e2a;
   }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #f4f4f2;
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f3f8fc;
     margin: 0;
     padding: 0;
     color: #1a1a1a;
@@ -77,9 +78,9 @@
      baggrund for at kunne ses -- en panel-lockup ovenover login-kortet, i samme brand-blaa
      som resten af appen, i stedet for direkte paa den lyse side-baggrund. */
   .login-logo-panel {
-    background: #040DB1; border-radius: 12px; padding: 28px 20px;
+    background: #143546; border-radius: 12px; padding: 28px 20px;
     display: flex; justify-content: center; margin-bottom: 16px;
-    box-shadow: 0 2px 12px rgba(4,13,177,0.25);
+    box-shadow: 0 2px 12px rgba(20,53,70,0.25);
   }
   .login-logo-panel img { width: 100%; max-width: 220px; height: auto; display: block; }
   .card {
@@ -88,28 +89,28 @@
     padding: 32px 24px;
     box-shadow: 0 2px 12px rgba(0,0,0,0.06);
   }
-  h1 { font-size: 20px; margin: 0 0 4px 0; color: #040DB1; }
+  h1 { font-size: 20px; margin: 0 0 4px 0; color: #143546; }
   .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
   label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; margin-top: 16px; color: #333; }
   input[type=email], input[type=password], input[type=text] {
     width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; font-family: inherit;
   }
-  button { border: none; border-radius: 8px; background: #040DB1; color: white; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button { border: none; border-radius: 999px; background: #33a3dc; color: white; font-size: 14px; font-weight: 600; cursor: pointer; }
   button:hover { background: #0311d4; }
   button:disabled { background: #aaa; cursor: not-allowed; }
   .primary-btn { width: 100%; padding: 12px; font-size: 15px; margin-top: 20px; }
   .msg { margin-top: 14px; font-size: 14px; padding: 10px 12px; border-radius: 8px; display: none; }
-  .msg.ok { background: #e6f4ea; color: #1e7e34; display: block; }
+  .msg.ok { background: #e7fcdf; color: #1e7e34; display: block; }
   .msg.err { background: #fdecea; color: #b92a15; display: block; }
 
   /* --- App shell --- */
   #app { display: none; }
   .topbar {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 20px; background: white; border-bottom: 1px solid #e2e2e2;
+    padding: 10px 20px; background: white; border-bottom: 1px solid #d9e4ec;
   }
   .butik-badge {
-    display: inline-block; background: #eef0fd; color: #040DB1;
+    display: inline-block; background: #d6edf8; color: #143546;
     padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600;
   }
   .topbar-actions { display: flex; align-items: center; gap: 10px; }
@@ -125,11 +126,11 @@
      hele siden (det var det der fik alt til at "blinke"). Begge faner lever videre i
      baggrunden, saa man kommer tilbage til praecis hvor man var. Kun brugere i
      vagtplan_adgang ser fanerne -- se visVagtplanKnap. */
-  .hovedfaner { display: none; margin-left: 12px; background: #eef0fd; border-radius: 20px; padding: 3px; gap: 2px; }
+  .hovedfaner { display: none; margin-left: 12px; background: #d6edf8; border-radius: 20px; padding: 3px; gap: 2px; }
   .hovedfaner.synlig { display: inline-flex; }
-  .hovedfane { background: none; color: #040DB1; font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 20px; }
-  .hovedfane:hover { background: rgba(4,13,177,.08); }
-  .hovedfane.aktiv { background: #040DB1; color: white; }
+  .hovedfane { background: none; color: #143546; font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 20px; }
+  .hovedfane:hover { background: rgba(51,163,220,.08); }
+  .hovedfane.aktiv { background: #33a3dc; color: white; }
   #vagtplanVisning, #someVisning { display: none; }
   body.fane-vagtplan #app, body.fane-some #app { display: flex !important; flex-direction: column; height: 100vh; }
   /* Kun selve redigeringsfladen og dens tilstands-bannere skjules. Topbaren er uaendret
@@ -197,7 +198,7 @@
      blive klemt ned i en fast kolonnebredde hvor teksten braekker over flere linjer. */
   .add-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
   .add-btn {
-    padding: 8px 12px; font-size: 13px; background: #eef0fd; color: #040DB1;
+    padding: 8px 12px; font-size: 13px; background: #d6edf8; color: #143546;
     display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
   }
   .add-btn svg { flex-shrink: 0; }
@@ -208,10 +209,10 @@
      kun viser forklaringen, uden ogsaa at trykke selve knappen og tilfoeje/erstatte elementet. */
   .help-hint {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 15px; height: 15px; border-radius: 50%; background: rgba(4,13,177,.18);
-    color: #040DB1; font-size: 10px; font-weight: 700; cursor: help; flex-shrink: 0;
+    width: 15px; height: 15px; border-radius: 50%; background: rgba(51,163,220,.18);
+    color: #143546; font-size: 10px; font-weight: 700; cursor: help; flex-shrink: 0;
   }
-  .help-hint:hover { background: rgba(4,13,177,.32); }
+  .help-hint:hover { background: rgba(51,163,220,.32); }
 
   .media-banner { display: none; background: #fff4e5; color: #8a5a00; font-size: 12px; padding: 8px 10px; border-radius: 8px; margin-bottom: 10px; }
   .media-banner.active { display: block; }
@@ -220,14 +221,14 @@
     position: relative; border: 2px solid transparent; border-radius: 8px; overflow: hidden;
     cursor: pointer; background: #f0f0f0; aspect-ratio: 1 / 1;
   }
-  .media-item.selectable { border-color: #4d5bff; }
+  .media-item.selectable { border-color: #33a3dc; }
   .media-item img, .media-item video { width: 100%; height: 100%; object-fit: cover; display: block; }
   .media-item .fname { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,.55); color: white; font-size: 9px; padding: 2px 4px; }
   .upload-label {
     display: block; text-align: center; padding: 10px; margin-top: 10px; border: 1px dashed #bbb;
     border-radius: 8px; font-size: 13px; color: #555; cursor: pointer;
   }
-  .upload-label:hover { border-color: #040DB1; color: #040DB1; }
+  .upload-label:hover { border-color: #33a3dc; color: #143546; }
   .upload-label input { display: none; }
 
   /* --- Canvas --- */
@@ -271,8 +272,8 @@
      ogsaa er sat. z-index loefter desuden det valgte element visuelt over sine naboer, saa
      "glow"-effekten ikke bliver klippet af et overlappende element ved siden af. */
   .el.selected {
-    outline: 2px solid #4d5bff;
-    box-shadow: 0 0 0 3px #4d5bff, 0 0 18px 4px rgba(77,91,255,.75);
+    outline: 2px solid #33a3dc;
+    box-shadow: 0 0 0 3px #33a3dc, 0 0 18px 4px rgba(51,163,220,.75);
     z-index: 50;
   }
   .streg-del { display: none; }
@@ -340,7 +341,7 @@
     overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   }
   .faelles-slide-thumb .fs-tekst {
-    font-size: 8px; font-weight: 700; color: #9aa6ff; letter-spacing: .3px; line-height: 1.2;
+    font-size: 8px; font-weight: 700; color: #7fc7ea; letter-spacing: .3px; line-height: 1.2;
   }
   .el-text {
     width: 100%; height: 100%; color: white; padding: 4px 6px; outline: none;
@@ -383,12 +384,12 @@
 
   .side-tab {
     display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 6px;
-    background: #eef0fd; color: #040DB1; font-size: 13px; cursor: pointer; user-select: none;
+    background: #d6edf8; color: #143546; font-size: 13px; cursor: pointer; user-select: none;
   }
-  .side-tab.active { background: #040DB1; color: white; }
+  .side-tab.active { background: #33a3dc; color: white; }
   .side-tab .del { font-size: 12px; opacity: .6; cursor: pointer; }
   .side-tab .del:hover { opacity: 1; }
-  .side-tab-new { padding: 6px 10px; border-radius: 6px; background: #f4f4f2; color: #666; font-size: 13px; cursor: pointer; }
+  .side-tab-new { padding: 6px 10px; border-radius: 6px; background: #f3f8fc; color: #666; font-size: 13px; cursor: pointer; }
   .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #e6342c; margin-right: 5px; vertical-align: middle; }
   /* Samme prik, men tom/klikbar -- til at VAELGE hvilken side der skal vises (se
      renderSiderTabs). Fyldes rød naar den er valgt (samme .live-dot som i forvejen). */
@@ -398,10 +399,10 @@
   .save-row { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
   #saveMsg.msg { margin-top: 0; }
 
-  #feedbackFloatBtn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(4,13,177,0.45); }
+  #feedbackFloatBtn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(51,163,220,0.45); }
   .feedback-type-btn { border-radius: 8px; }
-  .feedback-type-btn:not(.active) { background: #f4f4f2; color: #666; }
-  .feedback-type-btn.active { background: #eef0fd; color: #040DB1; }
+  .feedback-type-btn:not(.active) { background: #f3f8fc; color: #666; }
+  .feedback-type-btn.active { background: #d6edf8; color: #143546; }
   #feedbackBeskrivelse { margin-top: 6px; }
 
   /* Guide-spotlight: en meget stor box-shadow uden blur fylder HELE resten af skaermen med
@@ -416,8 +417,8 @@
     z-index: 3001;
     box-shadow:
       0 0 0 3px #fff,
-      0 0 0 7px #040DB1,
-      0 0 22px 7px rgba(4,13,177,.55),
+      0 0 0 7px #33a3dc,
+      0 0 22px 7px rgba(51,163,220,.55),
       0 0 0 9999px rgba(0,0,0,.6);
     border-radius: 10px;
   }
@@ -427,8 +428,8 @@
      oprettet (se addNewSide). Faerdig-animeret (3 gennemloeb) i stedet for en uendelig loop,
      saa den trraekker opmaerksomhed uden at blive et permanent distraherende blink. */
   @keyframes opmaerksomhedsPuls {
-    0%, 100% { box-shadow: 0 0 0 3px #4d5bff, 0 0 0 rgba(77,91,255,0); }
-    50% { box-shadow: 0 0 0 3px #4d5bff, 0 0 20px 6px rgba(77,91,255,.7); }
+    0%, 100% { box-shadow: 0 0 0 3px #33a3dc, 0 0 0 rgba(51,163,220,0); }
+    50% { box-shadow: 0 0 0 3px #33a3dc, 0 0 20px 6px rgba(51,163,220,.7); }
   }
   .opmaerksomheds-puls { animation: opmaerksomhedsPuls 0.8s ease-in-out 3; border-radius: 6px; }
   /* Uendelig udgave -- bruges KUN paa et "tom"-vindue (endnu intet valgt), saa det bliver ved
@@ -485,11 +486,11 @@
   html[data-tema="moerk"] .add-btn,
   html[data-tema="moerk"] .side-tab,
   html[data-tema="moerk"] .hovedfaner { background: var(--ui-flade-blaa); color: var(--ui-brand-tekst); }
-  html[data-tema="moerk"] .add-btn:hover { background: #313866; }
+  html[data-tema="moerk"] .add-btn:hover { background: #223a4a; }
   html[data-tema="moerk"] .help-hint { background: rgba(154,166,255,.2); color: var(--ui-brand-tekst); }
   html[data-tema="moerk"] .help-hint:hover { background: rgba(154,166,255,.35); }
   html[data-tema="moerk"] .side-tab.active,
-  html[data-tema="moerk"] .hovedfane.aktiv { background: #040DB1; color: white; }
+  html[data-tema="moerk"] .hovedfane.aktiv { background: #33a3dc; color: white; }
   html[data-tema="moerk"] .hovedfane { color: var(--ui-brand-tekst); }
   html[data-tema="moerk"] .hovedfane:hover { background: rgba(154,166,255,.12); }
   html[data-tema="moerk"] .side-tab-new { background: var(--ui-flade-side); color: var(--ui-tekst-666); }
@@ -507,13 +508,13 @@
   /* --- Tema-knap (topbar + login) --- */
   .tema-knap {
     display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;
-    border-radius: 50%; padding: 0; background: #eef0fd; color: #040DB1; line-height: 1;
+    border-radius: 50%; padding: 0; background: #d6edf8; color: #143546; line-height: 1;
   }
   .tema-knap svg { width: 16px; height: 16px; display: block; }
   .tema-knap:hover { background: #dde1fb; }
   /* Samme blaa som "?"-knappen ved siden af, i begge tilstande */
   html[data-tema="moerk"] .tema-knap { background: var(--ui-flade-blaa); color: var(--ui-brand-tekst); }
-  html[data-tema="moerk"] .tema-knap:hover { background: #313866; }
+  html[data-tema="moerk"] .tema-knap:hover { background: #223a4a; }
   .tema-knap-login { position: fixed; top: 16px; right: 16px; z-index: 10; }
   /* Tema-skift: det nye tema vokser ud i en cirkel fra tema-knappen (animeres fra skiftTema) */
   ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
@@ -631,7 +632,7 @@
   <!-- SoMe-performance (BL/some/): samme moenster som vagtplanen. -->
   <div id="someVisning"></div>
 
-  <div id="faellesSlideBanner" style="display:none; align-items:center; justify-content:space-between; background:#4d5bff; color:#fff; font-weight:700; font-size:13px; padding:8px 20px;">
+  <div id="faellesSlideBanner" style="display:none; align-items:center; justify-content:space-between; background:#143546; color:#fff; font-weight:700; font-size:13px; padding:8px 20px;">
     <span id="faellesSlideBannerTekst">Du bygger et FÆLLES SLIDE — byg det som en helt almindelig side.</span>
     <button id="exitFaellesSlideBtn" style="padding:6px 14px; font-size:12px; flex-shrink:0;">← Tilbage til slides</button>
   </div>
@@ -1055,7 +1056,7 @@
   <!-- Feedback: enhver butiks-admin kan sende en fejlrapport eller et ønske om ændring, som
        kun superadmin ser (i admin-menuens "Feedback"). Fast placeret nederst til højre saa
        den altid er let at finde, uden at fylde i selve redigerings-fladen. -->
-  <button id="feedbackFloatBtn" title="Send feedback" style="position:fixed; right:24px; bottom:24px; z-index:1500; display:flex; align-items:center; gap:8px; padding:14px 20px; border-radius:999px; background:#040DB1; color:white; font-size:14px; font-weight:700; box-shadow:0 6px 20px rgba(4,13,177,0.35); transition:transform .15s, box-shadow .15s;">
+  <button id="feedbackFloatBtn" title="Send feedback" style="position:fixed; right:24px; bottom:24px; z-index:1500; display:flex; align-items:center; gap:8px; padding:14px 20px; border-radius:999px; background:#33a3dc; color:white; font-size:14px; font-weight:700; box-shadow:0 6px 20px rgba(51,163,220,0.35); transition:transform .15s, box-shadow .15s;">
     <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5.5C3 4.12 4.12 3 5.5 3h9C15.88 3 17 4.12 17 5.5v6c0 1.38-1.12 2.5-2.5 2.5H9l-3.5 3v-3h-1C3.12 14 3 12.88 3 11.5v-6z" stroke="white" stroke-width="1.4" stroke-linejoin="round"/><circle cx="7" cy="8.3" r=".9" fill="white"/><circle cx="10" cy="8.3" r=".9" fill="white"/><circle cx="13" cy="8.3" r=".9" fill="white"/></svg>
     Feedback
   </button>
@@ -1634,7 +1635,7 @@
         const ramme = document.createElement('iframe');
         ramme.title = 'SoMe-performance';
         // ?v= skal bumpes naar some/index.html aendres (samme grund som for vagtplanen nedenfor)
-        ramme.src = '../some/?indlejret=1&v=2026-10-10-7';
+        ramme.src = '../some/?indlejret=1&v=2026-10-12-8';
         vis.appendChild(ramme);
       }
       updateSlideOverlay();
@@ -1645,7 +1646,7 @@
         ramme.title = 'Vagtplan';
         // ?v= skal bumpes naar vagtplan/index.html aendres -- ellers kan browseren/GitHub
         // Pages' cache (op til 10 min) give den gamle side inde i fanen.
-        ramme.src = '../vagtplan/?indlejret=1&v=2026-10-01-9';
+        ramme.src = '../vagtplan/?indlejret=1&v=2026-10-12-10';
         ramme.addEventListener('load', anvendTema);
         vis.appendChild(ramme);
       }
@@ -2166,7 +2167,7 @@
   function enhedStatusFarve(iso, naesteIso) {
     if (!iso) return '#999';
     const minutter = (Date.now() - new Date(checkinMaalFra(iso, naesteIso)).getTime()) / 60000;
-    if (minutter < 3) return '#1a9b4b';
+    if (minutter < 3) return '#277339';
     if (minutter < 15) return '#c98a1b';
     return '#c0392b';
   }
@@ -2186,7 +2187,7 @@
   function wifiIkonHtml(dBm, str) {
     str = str || 17;
     const niveau = dBm >= -50 ? 4 : dBm >= -60 ? 3 : dBm >= -70 ? 2 : 1;
-    const farve = dBm >= -60 ? '#1a9b4b' : dBm >= -70 ? '#c98a1b' : '#c0392b';
+    const farve = dBm >= -60 ? '#277339' : dBm >= -70 ? '#c98a1b' : '#c0392b';
     const bjaelkeHoejder = [4, 7, 10, 13];
     const bjaelker = bjaelkeHoejder.map((h, i) =>
       '<rect x="' + (i * 4.2) + '" y="' + (13 - h) + '" width="3" height="' + h + '" rx="0.7" ' +
@@ -3849,7 +3850,7 @@
         const maerke = document.createElement('div');
         maerke.textContent = 'DELT';
         maerke.title = 'Delt med alle butikker';
-        maerke.style.cssText = 'position:absolute; top:0; left:0; background:#040DB1; color:#fff; font-size:8px; font-weight:700; letter-spacing:.04em; padding:2px 5px; border-radius:8px 0 8px 0; z-index:2;';
+        maerke.style.cssText = 'position:absolute; top:0; left:0; background:#33a3dc; color:#fff; font-size:8px; font-weight:700; letter-spacing:.04em; padding:2px 5px; border-radius:8px 0 8px 0; z-index:2;';
         item.appendChild(maerke);
       }
 
@@ -5254,7 +5255,7 @@
               '<div style="font-size:20px;">' + (slide.type === 'video' ? '🎬' : slide.type === 'side' ? '📄' : '🖼️') + '</div>' +
               '<div style="font-weight:700; color:#fff;">' + escapeHtml(slide.faellesNavn || 'Uden navn') + '</div>' +
               '<div style="font-size:10px; letter-spacing:.3px;">VISES NU — SLIDE FRA ADMIN</div>' +
-              '<div style="font-size:10px; color:#9aa6ff;">Ligger ikke i jeres indhold og kan ikke redigeres her</div>';
+              '<div style="font-size:10px; color:#7fc7ea;">Ligger ikke i jeres indhold og kan ikke redigeres her</div>';
             preview.appendChild(badge);
             anvendIndholdsSkala(badge, el);
             idx = (idx + 1) % previewSlides.length;

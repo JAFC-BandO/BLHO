@@ -4,6 +4,7 @@
 <meta name="robots" content="noindex, nofollow">
 <title>SoMe-performance</title>
 <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=4">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap">
 <script>
 // SoMe-siden vises inde i butik-redigerings "SoMe"-fane (en iframe under samme topbar, ligesom
 // vagtplanen). Aabnes den direkte, sendes man derhen i stedet -- medmindre adressen er et
@@ -29,10 +30,10 @@ if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('c
 /* Samme farve-variabler som vagtplanen, saa de to faner ligner hinanden i lys og moerk tilstand.
    Platformenes farver (--facebook/--instagram) er valgt saa de kan skelnes ved farveblindhed og
    har kontrast nok mod kortets flade i begge temaer -- skift dem ikke uden at tjekke det igen. */
-:root{--bg:#f4f4f2;--fg:#1a1a1a;--mut:#6c6577;--card:#fff;--bd:#e2e2e2;--gitter:#ececec;--felt:#ddd;--bad:#c93a3a;--ok:#2b8a4f;--brand:#040DB1;--brand-tekst:#040DB1;--badge:#eef0fd;--fejl-bg:#fdecea;--fejl:#b92a15;--facebook:#1877F2;--instagram:#D93175;--tiktok:#241F21;--varme:#040DB1;color-scheme:light}
-:root[data-tema="moerk"]{--bg:#15161b;--fg:#e8e8ee;--mut:#9a9cab;--card:#1e2029;--bd:#3a3d4a;--gitter:#2b2e39;--felt:#4a4d5a;--bad:#ff7a7a;--ok:#6fd49a;--brand:#3d47e0;--brand-tekst:#9aa6ff;--badge:#262b4d;--fejl-bg:#3a2023;--fejl:#ff7b6b;--facebook:#3b82f6;--instagram:#e0508c;--tiktok:#d0d0d8;--varme:#8a97ff;color-scheme:dark}
+:root{--bg:#f3f8fc;--fg:#143546;--mut:#6c6577;--card:#fff;--bd:#d9e4ec;--gitter:#ececec;--felt:#ddd;--bad:#c93a3a;--ok:#277339;--brand:#33a3dc;--brand-tekst:#143546;--badge:#d6edf8;--fejl-bg:#fdecea;--fejl:#b92a15;--facebook:#1877F2;--instagram:#D93175;--tiktok:#241F21;--varme:#33a3dc;color-scheme:light}
+:root[data-tema="moerk"]{--bg:#15161b;--fg:#e8e8ee;--mut:#9a9cab;--card:#1e2029;--bd:#3a3d4a;--gitter:#2b2e39;--felt:#4a4d5a;--bad:#ff7a7a;--ok:#6fd49a;--brand:#33a3dc;--brand-tekst:#7fc7ea;--badge:#1b3344;--fejl-bg:#3a2023;--fejl:#ff7b6b;--facebook:#3b82f6;--instagram:#e0508c;--tiktok:#d0d0d8;--varme:#7fc7ea;color-scheme:dark}
 *{box-sizing:border-box}[hidden]{display:none!important}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);margin:0;color:var(--fg);font-size:15px;line-height:1.4}
+body{font-family: 'Poppins', -apple-system, BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);margin:0;color:var(--fg);font-size:15px;line-height:1.4}
 .indhold{padding:16px 20px 48px;max-width:1320px;margin:0 auto;transition:opacity .15s}
 .indhold.henter{opacity:.55}
 /* Spinner oven paa den udtonede side, mens nye tal hentes (fx naar der skiftes periode) -- kommer
@@ -45,7 +46,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 #temaKnap{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border:none;border-radius:50%;padding:0;background:var(--badge);color:var(--brand-tekst);line-height:1;cursor:pointer}
 #temaKnap svg{width:16px;height:16px;display:block;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 #temaKnap:hover{background:#dde1fb}
-:root[data-tema="moerk"] #temaKnap:hover{background:#313866}
+:root[data-tema="moerk"] #temaKnap:hover{background:#223a4a}
 ::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
 .laeser{text-align:center;color:var(--mut);padding:20vh 20px}
 /* Spinneren ligger OVER siden, saa den ogsaa daekker den tomme side, mens de foerste tal hentes */
@@ -64,7 +65,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .luft{flex:1}
 select,button,input{font-family:inherit;font-size:13px}
 select,input[type=date]{padding:7px 10px;border:1px solid var(--felt);border-radius:8px;background:var(--card);color:var(--fg)}
-.knap{padding:7px 14px;border:none;border-radius:8px;background:var(--brand);color:#fff;font-weight:600;cursor:pointer}
+.knap{padding:7px 14px;border:none;border-radius:999px;background:var(--brand);color:#fff;font-weight:600;cursor:pointer}
 .knap:disabled{opacity:.5;cursor:default}
 .knap.stille{background:var(--badge);color:var(--brand-tekst)}
 :focus-visible{outline:2px solid var(--brand-tekst);outline-offset:2px}

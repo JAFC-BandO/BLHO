@@ -30,11 +30,12 @@
   })();
 </script>
 <link rel="icon" type="image/svg+xml" href="favicon.svg?v=4">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
      10 minutter, selv efter man har aabnet siden med en frisk ?nocache= paa selve HTML'en. -->
-<link rel="stylesheet" href="render-shared.css?v=2026-07-20-32">
+<link rel="stylesheet" href="render-shared.css?v=2026-10-12-33">
 <script src="render-shared.js?v=2026-08-24-38"></script>
 <style>
   * { box-sizing: border-box; }
@@ -45,7 +46,7 @@
     height: 100%;
     background: #0a0a0a;
     color: white;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     overflow: hidden;
   }
   /* .screen fylder altid hele den faktiske skaerm/vindue (ikke laast til 16:9) -- den skal
@@ -66,7 +67,7 @@
     width: 100%; height: 100%; display: flex; flex-direction: column;
     justify-content: center; align-items: center; text-align: center; padding: 6cqw;
   }
-  .accent { width: 64px; height: 6px; background: #4d5bff; border-radius: 3px; margin-bottom: 3cqw; }
+  .accent { width: 64px; height: 6px; background: #33a3dc; border-radius: 3px; margin-bottom: 3cqw; }
   .legacy-titel { font-size: 6cqw; font-weight: 700; line-height: 1.1; margin: 0 0 3cqw 0; }
   .legacy-tekst { font-size: 2.6cqw; line-height: 1.4; color: #d0d0d0; max-width: 70cqw; white-space: pre-wrap; }
   .legacy-billede { max-width: 60cqw; max-height: 40cqw; border-radius: 12px; margin-bottom: 4cqw; object-fit: cover; }
@@ -89,7 +90,7 @@
     <div style="font-size:12px; color:#888; margin-bottom:18px; text-transform:uppercase; letter-spacing:.05em;">Se jeres skærm</div>
     <input type="email" id="skaermLoginEmail" placeholder="Email" autocomplete="username" style="width:100%; padding:11px 12px; margin-bottom:10px; border-radius:8px; border:1px solid #333; background:#1a1a1a; color:white; font-size:14px; box-sizing:border-box;">
     <input type="password" id="skaermLoginPassword" placeholder="Adgangskode" autocomplete="current-password" style="width:100%; padding:11px 12px; margin-bottom:14px; border-radius:8px; border:1px solid #333; background:#1a1a1a; color:white; font-size:14px; box-sizing:border-box;">
-    <button id="skaermLoginBtn" style="width:100%; padding:12px; border-radius:8px; border:none; background:#040DB1; color:white; font-weight:600; font-size:14px; cursor:pointer;">Log ind</button>
+    <button id="skaermLoginBtn" style="width:100%; padding:12px; border-radius:999px; border:none; background:#33a3dc; color:white; font-weight:600; font-size:14px; cursor:pointer;">Log ind</button>
     <div id="skaermLoginMsg" style="display:none; margin-top:12px; font-size:13px; color:#ff8080;"></div>
   </div>
 </div>
