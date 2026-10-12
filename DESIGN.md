@@ -3,7 +3,7 @@
 Afledt af boerneloppen.dk (den aktuelle palet) med designguiden `media/boerneloppen-designguide.pdf` som baggrund. Sitet vinder over guiden, hvor de afviger (guidens pink-primær er den gamle palet).
 
 ## Font
-Poppins fra Google Fonts, vægte 400/600/800, `display=swap`, system-stack som fallback. 700 i koden rendes som 800 (Extrabold = overskrifter, som guiden kræver). Ingen anden skrift.
+System-stack (-apple-system, Segoe UI, Roboto). Poppins blev proevet 12/10-2026 og fravalgt: den er bredere og blev oplevet som traels i daglig brug.
 
 ## Farver (lys)
 | Rolle | Værdi |

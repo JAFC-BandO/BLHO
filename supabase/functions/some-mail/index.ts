@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
   // logoets alt-tekst i hvidt paa den blaa flade. Logoet har fast stoerrelse og blaa baggrund, saa
   // det ikke staar som en hvid boks, mens Outlook henter det frem. Dag og maaned holdes sammen
   // (&nbsp;), saa en smal telefon ikke deler "9." og "oktober" over to linjer.
-  const skrift = `Poppins,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif`;
+  const skrift = `-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif`;
   const html = (url: string) => `<div style="display:none;max-height:0;overflow:hidden;opacity:0">Jeres SoMe-rapport for ${esc(periode)} er klar.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f3f8fc" style="background:#f3f8fc"><tr><td align="center" style="padding:32px 12px">
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;text-align:left">

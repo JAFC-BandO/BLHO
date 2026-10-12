@@ -17,7 +17,6 @@
   })();
 </script>
 <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=4">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- ?v= herunder skal bumpes hver gang render-shared.js/css aendres -- ellers kan disse to
      filer (som har deres egen GitHub Pages-cache) blive vaerende paa en aeldre udgave i op til
@@ -57,7 +56,7 @@
     --ui-kant-advarsel: #5a4a28; --ui-kant-fejl: #5a2e2a;
   }
   body {
-    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: #f3f8fc;
     margin: 0;
     padding: 0;
@@ -1635,7 +1634,7 @@
         const ramme = document.createElement('iframe');
         ramme.title = 'SoMe-performance';
         // ?v= skal bumpes naar some/index.html aendres (samme grund som for vagtplanen nedenfor)
-        ramme.src = '../some/?indlejret=1&v=2026-10-12-8';
+        ramme.src = '../some/?indlejret=1&v=2026-10-12-9';
         vis.appendChild(ramme);
       }
       updateSlideOverlay();
@@ -1646,7 +1645,7 @@
         ramme.title = 'Vagtplan';
         // ?v= skal bumpes naar vagtplan/index.html aendres -- ellers kan browseren/GitHub
         // Pages' cache (op til 10 min) give den gamle side inde i fanen.
-        ramme.src = '../vagtplan/?indlejret=1&v=2026-10-12-10';
+        ramme.src = '../vagtplan/?indlejret=1&v=2026-10-12-11';
         ramme.addEventListener('load', anvendTema);
         vis.appendChild(ramme);
       }
