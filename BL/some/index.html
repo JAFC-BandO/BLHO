@@ -58,6 +58,7 @@ body{font-family: -apple-system, BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
 @keyframes straek{0%{stroke-dasharray:1 150;stroke-dashoffset:0}50%{stroke-dasharray:90 150;stroke-dashoffset:-35}100%{stroke-dasharray:90 150;stroke-dashoffset:-124}}
 .hoved{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-bottom:16px}
 .hoved h1{font-size:20px;margin:0;color:var(--brand-tekst)}
+.hoved-knapper{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:10px 14px;margin-left:auto}
 .hoved #periodeTekst{flex-basis:100%;font-size:12px;margin-top:-4px}
 /* Butik og periode foelger med ned, naar man ruller (ikke paa telefon, hvor det fylder for meget) */
 @media (min-width:761px){.hoved{position:sticky;top:0;z-index:20;background:var(--bg);margin:-16px -20px 16px;padding:12px 20px 10px;border-bottom:1px solid var(--bd)}}
@@ -264,11 +265,13 @@ dialog.tid::backdrop{background:rgba(0,0,0,.5)}
       <option value="aar" selected>Sammenlign med sidste år</option>
       <option value="foer">Sammenlign med perioden før</option>
     </select>
-    <span class="luft"></span>
+    <!-- Knapperne som én gruppe, der bliver til hoejre, naar raekken ombrydes -->
+    <span class="hoved-knapper">
     <span class="status" id="status" data-tip="Automatisk indsamling&#10;Tallene hentes fra Facebook og Instagram én gang i timen.&#10;Opdater nu henter dem med det samme."></span>
     <button class="knap stille" id="rapportKnap" type="button" hidden>Skriv rapport</button>
     <button class="knap" id="opdater" title="Tallene hentes automatisk én gang i timen. Tryk for at hente de nyeste fra Facebook og Instagram nu.">Opdater nu</button>
     <button id="temaKnap" type="button" hidden></button>
+    </span>
     <div class="lille" id="periodeTekst"></div>
   </div>
 
