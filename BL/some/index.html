@@ -29,8 +29,8 @@ if (systemMoerk && systemMoerk.addEventListener) systemMoerk.addEventListener('c
 /* Samme farve-variabler som vagtplanen, saa de to faner ligner hinanden i lys og moerk tilstand.
    Platformenes farver (--facebook/--instagram) er valgt saa de kan skelnes ved farveblindhed og
    har kontrast nok mod kortets flade i begge temaer -- skift dem ikke uden at tjekke det igen. */
-:root{--bg:#f3f8fc;--fg:#143546;--mut:#6c6577;--card:#fff;--bd:#d9e4ec;--gitter:#ececec;--felt:#ddd;--bad:#c93a3a;--ok:#277339;--brand:#33a3dc;--brand-tekst:#143546;--badge:#d6edf8;--fejl-bg:#fdecea;--fejl:#b92a15;--facebook:#1877F2;--instagram:#D93175;--tiktok:#241F21;--varme:#33a3dc;color-scheme:light}
-:root[data-tema="moerk"]{--bg:#15161b;--fg:#e8e8ee;--mut:#9a9cab;--card:#1e2029;--bd:#3a3d4a;--gitter:#2b2e39;--felt:#4a4d5a;--bad:#ff7a7a;--ok:#6fd49a;--brand:#33a3dc;--brand-tekst:#7fc7ea;--badge:#1b3344;--fejl-bg:#3a2023;--fejl:#ff7b6b;--facebook:#3b82f6;--instagram:#e0508c;--tiktok:#d0d0d8;--varme:#7fc7ea;color-scheme:dark}
+:root{--bg:#f3f8fc;--fg:#143546;--mut:#6c6577;--card:#fff;--bd:#d9e4ec;--gitter:#ececec;--felt:#ddd;--bad:#c93a3a;--ok:#277339;--brand:#33a3dc;--brand-tekst:#143546;--badge:#d6edf8;--fejl-bg:#fdecea;--fejl:#b92a15;--facebook:#1877F2;--instagram:#D93175;--tiktok:#241F21;--varme:#33a3dc;--brand-hover:#2a8fc4;--badge-hover:#bfe2f4;color-scheme:light}
+:root[data-tema="moerk"]{--bg:#15161b;--fg:#e8e8ee;--mut:#9a9cab;--card:#1e2029;--bd:#3a3d4a;--gitter:#2b2e39;--felt:#4a4d5a;--bad:#ff7a7a;--ok:#6fd49a;--brand:#33a3dc;--brand-tekst:#7fc7ea;--badge:#1b3344;--fejl-bg:#3a2023;--fejl:#ff7b6b;--facebook:#3b82f6;--instagram:#e0508c;--tiktok:#d0d0d8;--varme:#7fc7ea;--brand-hover:#4db3e5;--badge-hover:#24435a;color-scheme:dark}
 *{box-sizing:border-box}[hidden]{display:none!important}
 body{font-family: -apple-system, BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);margin:0;color:var(--fg);font-size:15px;line-height:1.4;overflow-x:hidden}
 .indhold{padding:16px 20px 48px;max-width:1320px;margin:0 auto;transition:opacity .15s}
@@ -44,8 +44,7 @@ body{font-family: -apple-system, BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
    det nye tema vokser ud i en cirkel fra knappen (animeres fra klikket) */
 #temaKnap{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border:none;border-radius:50%;padding:0;background:var(--badge);color:var(--brand-tekst);line-height:1;cursor:pointer}
 #temaKnap svg{width:16px;height:16px;display:block;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
-#temaKnap:hover{background:#dde1fb}
-:root[data-tema="moerk"] #temaKnap:hover{background:#223a4a}
+#temaKnap:hover{background:var(--badge-hover)}
 ::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
 .laeser{text-align:center;color:var(--mut);padding:20vh 20px}
 .login-logo{background:#143546;border-radius:12px;padding:28px 20px;max-width:360px;margin:0 auto 16px}.login-logo img{width:100%;max-width:220px;display:block;margin:0 auto}
@@ -67,11 +66,14 @@ body{font-family: -apple-system, BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif
 select,button,input{font-family:inherit;font-size:13px}
 select,input[type=date]{padding:7px 10px;border:1px solid var(--felt);border-radius:8px;background:var(--card);color:var(--fg)}
 .knap{padding:7px 14px;border:none;border-radius:999px;background:var(--brand);color:#fff;font-weight:600;cursor:pointer}
+.knap:hover:not(:disabled){background:var(--brand-hover)}
 .knap:disabled{opacity:.5;cursor:default}
 .knap.stille{background:var(--badge);color:var(--brand-tekst)}
+.knap.stille:hover:not(:disabled){background:var(--badge-hover)}
 :focus-visible{outline:2px solid var(--brand-tekst);outline-offset:2px}
 .chips{display:inline-flex;background:var(--badge);border-radius:20px;padding:3px;gap:2px}
 .chip{background:none;border:none;color:var(--brand-tekst);font-weight:700;font-size:12px;padding:4px 12px;border-radius:20px;cursor:pointer;white-space:nowrap}
+.chip:hover:not(.aktiv){background:var(--badge-hover)}
 .chip.aktiv{background:var(--brand);color:#fff}
 .status{font-size:12px;color:var(--mut)}.status.bad{color:var(--bad)}
 .kort{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:16px;min-width:0}
@@ -190,6 +192,7 @@ td .lille.op,td .lille.ned{font-weight:600}
 .emoji{border:0;background:none;font-size:20px;line-height:1;padding:5px;border-radius:6px;cursor:pointer;font-family:inherit}
 .emoji:hover,.emoji:focus-visible{background:var(--badge)}
 .knap.stille.aktiv{background:var(--brand);color:#fff}
+.knap.stille.aktiv:hover:not(:disabled){background:var(--brand-hover)}
 .rapport-note b{color:var(--fg)}
 .emoji-panel .rapport-note{margin:0 0 4px}
 .linkknap.fare{color:var(--bad)}
@@ -199,7 +202,8 @@ td .lille.op,td .lille.ned{font-weight:600}
 .tidl-hoved{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
 .tidl-titel{font-weight:600;margin-top:4px}
 .tidl .rapport-tekst{font-size:13px;line-height:1.5;margin-top:4px;color:var(--mut)}
-.linkknap{background:none;border:0;padding:0;color:var(--brand-tekst);font:inherit;font-weight:600;text-decoration:underline;cursor:pointer}
+.linkknap{background:none;border:0;padding:0;color:var(--brand-tekst);font:inherit;font-weight:600;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.linkknap:hover{text-decoration-thickness:2px}
 /* --- Opslagene bag et felt i "Bedste tidspunkter" --- */
 dialog.tid{border:1px solid var(--bd);border-radius:14px;background:var(--card);color:var(--fg);padding:0;width:min(760px,calc(100vw - 24px));max-height:min(82vh,820px);overflow:auto}
 dialog.tid::backdrop{background:rgba(0,0,0,.5)}

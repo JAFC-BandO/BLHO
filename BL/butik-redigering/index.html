@@ -42,6 +42,8 @@
     --ui-fejl-tekst: #c0392b; --ui-fejl-tekst2: #b92a15; --ui-orange-tekst: #b96a15; --ui-groen-tekst: #277339;
     --ui-kant: #ddd; --ui-kant-mellem: #bbb; --ui-kant-stiplet: #ccc; --ui-kant-blaa: #a8d8f0;
     --ui-kant-advarsel: #ffe0a3; --ui-kant-fejl: #f5c6c0;
+    /* Tilstande: hover et trin moerkere end knappen, stille flader et trin moerkere end --ui-flade-blaa */
+    --ui-brand: #33a3dc; --ui-brand-hover: #2a8fc4; --ui-flade-blaa-hover: #bfe2f4;
   }
   html[data-tema="moerk"] {
     color-scheme: dark; /* moerke scrollbars og formularfelter (select, input, textarea) */
@@ -54,6 +56,8 @@
     --ui-fejl-tekst: #ff7b6b; --ui-fejl-tekst2: #ff7b6b; --ui-orange-tekst: #f0a64f; --ui-groen-tekst: #4cc27a;
     --ui-kant: #3a3d4a; --ui-kant-mellem: #4a4d5a; --ui-kant-stiplet: #4a4d5a; --ui-kant-blaa: #2a5570;
     --ui-kant-advarsel: #5a4a28; --ui-kant-fejl: #5a2e2a;
+    /* Moerkt: hover et trin LYSERE (det laeses som aktivt paa moerk bund), stille flader lidt lysere blaa */
+    --ui-brand: #33a3dc; --ui-brand-hover: #4db3e5; --ui-flade-blaa-hover: #24435a;
   }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -95,7 +99,9 @@
     width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; font-family: inherit;
   }
   button { border: none; border-radius: 999px; background: #33a3dc; color: white; font-size: 14px; font-weight: 600; cursor: pointer; }
-  button:hover { background: #0311d4; }
+  button:hover { background: var(--ui-brand-hover); }
+  /* Tastaturfokus i brand-blaa (ikke browserens standard), udenom selve canvas'et */
+  button:focus-visible:not(.canvas *), a:focus-visible:not(.canvas *), select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--ui-brand); outline-offset: 2px; }
   button:disabled { background: #aaa; cursor: not-allowed; }
   .primary-btn { width: 100%; padding: 12px; font-size: 15px; margin-top: 20px; }
   .msg { margin-top: 14px; font-size: 14px; padding: 10px 12px; border-radius: 8px; display: none; }
@@ -128,7 +134,7 @@
   .hovedfaner { display: none; margin-left: 12px; background: #d6edf8; border-radius: 20px; padding: 3px; gap: 2px; }
   .hovedfaner.synlig { display: inline-flex; }
   .hovedfane { background: none; color: #143546; font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 20px; }
-  .hovedfane:hover { background: rgba(51,163,220,.08); }
+  .hovedfane:hover { background: var(--ui-flade-blaa-hover); }
   .hovedfane.aktiv { background: #33a3dc; color: white; }
   #vagtplanVisning, #someVisning { display: none; }
   body.fane-vagtplan #app, body.fane-some #app { display: flex !important; flex-direction: column; height: 100vh; }
@@ -201,17 +207,17 @@
     display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
   }
   .add-btn svg { flex-shrink: 0; }
-  .add-btn:hover { background: #dde1fb; }
+  .add-btn:hover { background: var(--ui-flade-blaa-hover); }
   /* Lille "?" paa hver "Tilføj element"-knap der forklarer HVAD typen viser og hvornaar man
      skal bruge den -- uden den skal man selv gaette/proeve sig frem for at forstaa forskellen
      paa fx "Boks" og "Diasshow". Egen klik-haandtering (stopPropagation) saa et tryk paa "?"
      kun viser forklaringen, uden ogsaa at trykke selve knappen og tilfoeje/erstatte elementet. */
   .help-hint {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 15px; height: 15px; border-radius: 50%; background: rgba(51,163,220,.18);
-    color: #143546; font-size: 10px; font-weight: 700; cursor: help; flex-shrink: 0;
+    width: 15px; height: 15px; border-radius: 50%; background: var(--ui-kant-blaa);
+    color: var(--ui-brand-tekst); font-size: 10px; font-weight: 700; cursor: help; flex-shrink: 0;
   }
-  .help-hint:hover { background: rgba(51,163,220,.32); }
+  .help-hint:hover { background: var(--ui-brand); color: white; }
 
   .media-banner { display: none; background: #fff4e5; color: #8a5a00; font-size: 12px; padding: 8px 10px; border-radius: 8px; margin-bottom: 10px; }
   .media-banner.active { display: block; }
@@ -310,7 +316,7 @@
     grid-template-columns: repeat(6, 1fr); gap: 2px; max-width: 220px;
   }
   .emoji-picker button { font-size: 16px; padding: 4px; border: none; background: none; cursor: pointer; border-radius: 4px; }
-  .emoji-picker button:hover { background: #eee; }
+  .emoji-picker button:hover { background: var(--ui-flade-neutral); }
   /* INGEN lokale .miljoeffekt-*-regler her: de laa i denne <style>-blok (som kommer EFTER
      render-shared.css-linket og derfor vandt kaskaden) og overskrev den delte CSS's slanke
      3:4-kort med width/height 100% -- saa kortet saa strakt ud i canvas og Live View, men
@@ -485,13 +491,9 @@
   html[data-tema="moerk"] .add-btn,
   html[data-tema="moerk"] .side-tab,
   html[data-tema="moerk"] .hovedfaner { background: var(--ui-flade-blaa); color: var(--ui-brand-tekst); }
-  html[data-tema="moerk"] .add-btn:hover { background: #223a4a; }
-  html[data-tema="moerk"] .help-hint { background: rgba(154,166,255,.2); color: var(--ui-brand-tekst); }
-  html[data-tema="moerk"] .help-hint:hover { background: rgba(154,166,255,.35); }
   html[data-tema="moerk"] .side-tab.active,
   html[data-tema="moerk"] .hovedfane.aktiv { background: #33a3dc; color: white; }
   html[data-tema="moerk"] .hovedfane { color: var(--ui-brand-tekst); }
-  html[data-tema="moerk"] .hovedfane:hover { background: rgba(154,166,255,.12); }
   html[data-tema="moerk"] .side-tab-new { background: var(--ui-flade-side); color: var(--ui-tekst-666); }
   html[data-tema="moerk"] .live-dot-vaelg { border-color: #5a5d6a; }
   html[data-tema="moerk"] .sidebar h2 { color: var(--ui-tekst-888); }
@@ -500,7 +502,6 @@
   html[data-tema="moerk"] .media-item { background: #2a2c37; }
   html[data-tema="moerk"] .upload-label { border-color: var(--ui-kant-mellem); color: var(--ui-tekst-555); }
   html[data-tema="moerk"] .upload-label:hover { border-color: var(--ui-brand-tekst); color: var(--ui-brand-tekst); }
-  html[data-tema="moerk"] .emoji-picker button:hover { background: #30323d; }
   html[data-tema="moerk"] .feedback-type-btn:not(.active) { background: var(--ui-flade-side); color: var(--ui-tekst-666); }
   html[data-tema="moerk"] .feedback-type-btn.active { background: var(--ui-flade-blaa); color: var(--ui-brand-tekst); }
 
@@ -510,10 +511,9 @@
     border-radius: 50%; padding: 0; background: #d6edf8; color: #143546; line-height: 1;
   }
   .tema-knap svg { width: 16px; height: 16px; display: block; }
-  .tema-knap:hover { background: #dde1fb; }
+  .tema-knap:hover { background: var(--ui-flade-blaa-hover); }
   /* Samme blaa som "?"-knappen ved siden af, i begge tilstande */
   html[data-tema="moerk"] .tema-knap { background: var(--ui-flade-blaa); color: var(--ui-brand-tekst); }
-  html[data-tema="moerk"] .tema-knap:hover { background: #223a4a; }
   .tema-knap-login { position: fixed; top: 16px; right: 16px; z-index: 10; }
   /* Tema-skift: det nye tema vokser ud i en cirkel fra tema-knappen (animeres fra skiftTema) */
   ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
@@ -1634,7 +1634,7 @@
         const ramme = document.createElement('iframe');
         ramme.title = 'SoMe-performance';
         // ?v= skal bumpes naar some/index.html aendres (samme grund som for vagtplanen nedenfor)
-        ramme.src = '../some/?indlejret=1&v=2026-10-12-15';
+        ramme.src = '../some/?indlejret=1&v=2026-10-13-1';
         vis.appendChild(ramme);
       }
       updateSlideOverlay();
@@ -1645,7 +1645,7 @@
         ramme.title = 'Vagtplan';
         // ?v= skal bumpes naar vagtplan/index.html aendres -- ellers kan browseren/GitHub
         // Pages' cache (op til 10 min) give den gamle side inde i fanen.
-        ramme.src = '../vagtplan/?indlejret=1&v=2026-10-12-11';
+        ramme.src = '../vagtplan/?indlejret=1&v=2026-10-13-1';
         ramme.addEventListener('load', anvendTema);
         vis.appendChild(ramme);
       }
