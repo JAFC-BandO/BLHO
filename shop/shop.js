@@ -127,22 +127,45 @@ function drejbar(boks, img, start, skyder) {
   });
   return { hent: () => hent(false), nulstil: () => { vinkel = 0; hoejde = MIDT; } };
 }
-// Gør produktkortenes billeder drejbare (efter at kortene er sat ind)
-function drejKort(rod) {
-  rod.querySelectorAll('[data-drej]').forEach((r) => drejbar(r, r.querySelector('img'), () => r.dataset.drej));
-}
+const IKON_360 = '<svg class="ikon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>';
 
-// Produktkort til forsiden og "Du kan også bruge": første farves billede 1, der kan drejes
+// Produktkort til forsiden og "Du kan også bruge". Navnet er linket og dækker hele kortet; farveprikkerne skifter
+// kortets farve, og 360°-knappen slår drejning til (først da hentes rammerne, og et træk åbner ikke produktet)
 function produktkort(p) {
-  const f = p.farver[0] || { billeder: [] };
+  const f = p.farver[0] || { navn: '', billeder: [] };
   const b1 = f.billeder[0];
-  return `<a class="kort" href="/shop/produkt/?id=${encodeURIComponent(p.id)}">
-    <div class="ramme"${b1 ? ` data-drej="${esc(b1)}"` : ''}>${b1 ? `<img src="${billede(b1)}" alt="" width="1000" height="1000" loading="lazy" draggable="false"><span class="tre60" aria-hidden="true"><svg class="ikon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>360°</span>` : ''}</div>
-    <h3>${esc(p.navn)}</h3>
+  const link = (fa) => `/shop/produkt/?id=${encodeURIComponent(p.id)}${fa.navn ? '&farve=' + encodeURIComponent(fa.navn.toLowerCase()) : ''}`;
+  return `<article class="kort">
+    <div class="ramme"${b1 ? ` data-drej="${esc(b1)}"` : ''}>${b1 ? `<img src="${billede(b1)}" alt="" width="1000" height="1000" loading="lazy" draggable="false">
+      <button class="tre60" type="button" aria-pressed="false" aria-label="Drej ${esc(p.navn.toLowerCase())} 360 grader">${IKON_360}360°</button>` : ''}</div>
+    <h3><a href="${link(f)}">${esc(p.navn)}</a></h3>
     <p>${esc(p.kort)}</p>
-    <div class="bund"><span class="pris">${kr(p.pris_oere)}${p.farver.some((f) => paaLager(p, f.navn) > 0) ? '' : ' <span class="udsolgt">Udsolgt</span>'}</span>
-      <span class="prikker" aria-label="${p.farver.length} farver: ${esc(p.farver.map((x) => x.navn).join(', '))}">${p.farver.map((x) => `<span style="background:${esc(x.hex)}"></span>`).join('')}</span></div>
-  </a>`;
+    <div class="bund"><span class="pris">${kr(p.pris_oere)}${p.farver.some((x) => paaLager(p, x.navn) > 0) ? '' : ' <span class="udsolgt">Udsolgt</span>'}</span>
+      <div class="prikker" role="group" aria-label="Farve">${p.farver.map((x, i) => `<button type="button" aria-pressed="${i === 0}" aria-label="${esc(x.navn)}" data-billede="${esc(x.billeder[0] || '')}" data-link="${esc(link(x))}"><span style="background:${esc(x.hex)}"></span></button>`).join('')}</div></div>
+  </article>`;
+}
+// Gør kortene levende, efter at de er sat ind: farvevalg og 360°
+function aktiverKort(rod) {
+  rod.querySelectorAll('.kort').forEach((kort) => {
+    const r = kort.querySelector('[data-drej]');
+    if (!r) return;
+    const img = r.querySelector('img'), knap = r.querySelector('.tre60'), a = kort.querySelector('h3 a');
+    const spin = drejbar(r, img, () => (r.classList.contains('drejer') ? r.dataset.drej : ''));
+    knap.addEventListener('click', () => {
+      const til = r.classList.toggle('drejer');
+      knap.setAttribute('aria-pressed', til);
+      spin.nulstil();
+      if (til) spin.hent(); else img.src = billede(r.dataset.drej);
+    });
+    kort.querySelectorAll('.prikker button').forEach((b) => b.addEventListener('click', () => {
+      kort.querySelectorAll('.prikker button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+      r.dataset.drej = b.dataset.billede;
+      a.href = b.dataset.link;
+      img.src = billede(b.dataset.billede);
+      spin.nulstil();
+      if (r.classList.contains('drejer')) spin.hent();
+    }));
+  });
 }
 
 document.querySelectorAll('[data-firma]').forEach((el) => { el.textContent = FIRMA[el.dataset.firma]; });

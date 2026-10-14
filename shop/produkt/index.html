@@ -9,7 +9,7 @@
 <!-- Fjernes, når shoppen åbner -->
 <meta name="robots" content="noindex">
 <link rel="preload" href="/shop/fonts/schibsted-grotesk.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/shop/shop.css?v=7">
+<link rel="stylesheet" href="/shop/shop.css?v=8">
 </head>
 <body>
 <a class="spring" href="#indhold">Gå til indhold</a>
@@ -35,6 +35,7 @@
   <div class="produktside" id="produkt" hidden>
     <div class="galleri">
       <div class="hoved" id="hoved"><p class="drej" id="drej" aria-hidden="true" hidden><svg class="ikon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg><span id="drej-tekst">Træk for at dreje</span></p></div>
+      <button class="tre60" id="tre60" type="button" aria-pressed="false" hidden><svg class="ikon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>360°</button>
       <div class="miniaturer" id="miniaturer"></div>
     </div>
 
@@ -118,7 +119,7 @@
   </div>
 </footer>
 
-<script src="/shop/shop.js?v=6"></script>
+<script src="/shop/shop.js?v=7"></script>
 <script>
 const q = new URLSearchParams(location.search);
 const $ = (id) => document.getElementById(id);
@@ -145,24 +146,34 @@ function vaelgFarve(f) {
 const hoved = Object.assign(document.createElement('img'), { width: 1000, height: 1000, draggable: false });
 const hovedboks = $('hoved'), hint = $('drej');
 const SLIDER = ['role', 'tabindex', 'aria-label', 'aria-valuemin', 'aria-valuemax', 'aria-valuenow', 'aria-valuetext'];
-let visning = 0;
-// Billede 1 kan drejes 360° og vippes; rammerne hentes, så snart siden er vist
-const spin = drejbar(hovedboks, hoved, () => (visning === 0 ? farve.billeder[0] : ''), true);
+let visning = 0, drej360 = false;
+// Billede 1 kan drejes 360° og vippes, når 360°-knappen er slået til; først da hentes rammerne
+const spin = drejbar(hovedboks, hoved, () => (visning === 0 && drej360 ? farve.billeder[0] : ''), true);
 hovedboks.addEventListener('drejet', () => hint.classList.add('vaek'), { once: true });
 $('drej-tekst').textContent = matchMedia('(hover: hover) and (pointer: fine)').matches ? 'Bevæg musen for at dreje' : 'Træk for at dreje';
 function visBillede(i) {
   if (!hoved.isConnected) hovedboks.append(hoved);
   visning = i;
-  spin.nulstil();
   Object.assign(hoved, { src: billede(farve.billeder[i]), alt: `${p.navn} i ${farve.navn.toLowerCase()}` });
   $('miniaturer').querySelectorAll('button').forEach((b, j) => b.setAttribute('aria-pressed', i === j));
-  // Billede 1 er en 360°-drejning og opfører sig som en skyder (piletasterne drejer)
-  hint.hidden = i !== 0;
-  if (i !== 0) return SLIDER.forEach((a) => hovedboks.removeAttribute(a));
+  $('tre60').hidden = i !== 0;
+  saet360(drej360);   // 360° bliver ved farveskift på billede 1 og slås fra på de andre billeder
+}
+// Slået til er billede 1 en skyder: musen, et træk eller piletasterne drejer og vipper produktet
+function saet360(til) {
+  drej360 = til && visning === 0;
+  $('tre60').setAttribute('aria-pressed', drej360);
+  hint.hidden = !drej360;
+  spin.nulstil();
+  if (!drej360) return SLIDER.forEach((a) => hovedboks.removeAttribute(a));
   Object.entries({ role: 'slider', tabindex: 0, 'aria-label': `Drej ${p.navn.toLowerCase()} i ${farve.navn.toLowerCase()} rundt med pil højre og venstre, vip med pil op og ned`, 'aria-valuemin': 0, 'aria-valuemax': 350, 'aria-valuenow': 0, 'aria-valuetext': '0 grader rundt' })
     .forEach(([a, v]) => hovedboks.setAttribute(a, v));
-  (window.requestIdleCallback || setTimeout)(spin.hent);
+  spin.hent();
 }
+$('tre60').addEventListener('click', () => {
+  saet360(!drej360);
+  if (!drej360) hoved.src = billede(farve.billeder[0]);
+});
 // Lager for den valgte farve: antal kan ikke overstige det, der er på lager
 const maksAntal = () => Math.min(MAKS, paaLager(p, farve.navn));
 function visLager() {
@@ -230,7 +241,7 @@ function visProduktdata() {
     const andre = ps.filter((x) => x.id !== p.id);
     if (andre.length) {
       $('andre').innerHTML = andre.map(produktkort).join('');
-      drejKort($('andre'));
+      aktiverKort($('andre'));
       $('andre-sektion').hidden = false;
     }
   } catch (err) {

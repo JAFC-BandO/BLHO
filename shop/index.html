@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://jfclabs.dk/shop/billeder/forside.webp">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"OnlineStore","name":"JFC Labs","url":"https://jfclabs.dk/shop/","email":"jfclabsshop@gmail.com","vatID":"DK36367571","address":{"@type":"PostalAddress","streetAddress":"Follerupgårdvej 34","postalCode":"7160","addressLocality":"Tørring","addressCountry":"DK"}}</script>
 <link rel="preload" href="/shop/fonts/schibsted-grotesk.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/shop/shop.css?v=7">
+<link rel="stylesheet" href="/shop/shop.css?v=8">
 </head>
 <body>
 <a class="spring" href="#indhold">Gå til indhold</a>
@@ -155,14 +155,14 @@
   </div>
 </footer>
 
-<script src="/shop/shop.js?v=6"></script>
+<script src="/shop/shop.js?v=7"></script>
 <script>
 hentProdukter()
   .then((ps) => {
     document.getElementById('gitter').innerHTML = ps.length
       ? ps.map(produktkort).join('')
       : '<p class="under">Der er ingen produkter i shoppen lige nu.</p>';
-    drejKort(document.getElementById('gitter'));
+    aktiverKort(document.getElementById('gitter'));
   })
   .catch(() => {
     document.getElementById('gitter').innerHTML = '<p class="under">Produkterne kunne ikke hentes. Prøv igen om lidt.</p>';
