@@ -1,0 +1,285 @@
+/* JFC Labs shop: fælles stil for alle sider under /shop/. Designsystemet er beskrevet i shop/DESIGN.md. */
+
+/* Skriften ligger her selv (ikke Google Fonts), så besøgendes IP ikke sendes til Google */
+@font-face {
+  font-family: 'Schibsted Grotesk';
+  src: url('/shop/fonts/schibsted-grotesk.woff2') format('woff2');
+  font-weight: 400 900;
+  font-display: swap;
+}
+
+/* Kun lyst tema: produktbillederne er renderet på billedfladen */
+:root {
+  --side: #ffffff;
+  --flade: #f2f4f1;          /* billedflader og rolige sektioner; samme som renderbaggrunden */
+  --blaek: #17201f;
+  --grafit: #55605d;
+  --linje: #e3e7e3;
+  --kant: #7f8d87;           /* kant på felter og knapper, mindst 3:1 */
+  --accent: #2e7d6b;
+  --accent-moerk: #23624f;
+  --slukket: #b4bfba;
+  --markering: #cde4da;
+  --fejl: #a3271f;
+  --bredde: 72rem;
+  --kant-x: clamp(1rem, 4vw, 2rem);
+  --r-stor: 12px;
+  --r-lille: 8px;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }   /* ellers vinder display: grid/flex over hidden */
+::selection { background: var(--markering); color: var(--blaek); }
+html { -webkit-text-size-adjust: 100%; }
+[id] { scroll-margin-top: 5.5rem; }   /* ankerlinks lander under den klæbende header */
+body {
+  margin: 0;
+  background: var(--side);
+  color: var(--blaek);
+  font: 400 1rem/1.6 'Schibsted Grotesk', system-ui, sans-serif;
+}
+img { max-width: 100%; display: block; }
+a { color: inherit; text-underline-offset: 0.2em; text-decoration-thickness: 1px; }
+a:hover { text-decoration-thickness: 2px; }
+h1, h2, h3 { line-height: 1.1; letter-spacing: -0.025em; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.indhold { max-width: var(--bredde); margin: 0 auto; padding-inline: var(--kant-x); }
+.skjult { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Annoncelinje og header */
+.annonce { background: var(--blaek); color: #fff; text-align: center; font-size: 0.875rem; padding: 0.5rem var(--kant-x); }
+.top { position: sticky; top: 0; z-index: 10; background: var(--side); border-bottom: 1px solid var(--linje); }
+.top .indhold { display: flex; align-items: center; gap: 1.5rem; min-height: 4.25rem; }
+.logo { font-weight: 800; font-size: 1.25rem; letter-spacing: -0.02em; text-decoration: none; margin-right: auto; }
+.menu { display: flex; gap: 1.5rem; }
+.menu a { text-decoration: none; font-weight: 500; }
+.menu a:hover, .menu a[aria-current] { text-decoration: underline; }
+.kurvknap { position: relative; display: grid; place-items: center; width: 2.75rem; height: 2.75rem; margin-right: -0.5rem; border-radius: 999px; text-decoration: none; }
+.kurvknap svg { width: 24px; height: 24px; }
+.kurvknap .tal {
+  position: absolute; top: 0.125rem; right: 0.125rem;
+  min-width: 1.25rem; height: 1.25rem; padding: 0 0.3rem; border-radius: 999px;
+  background: var(--accent); color: #fff; font-size: 0.75rem; font-weight: 700; line-height: 1.25rem; text-align: center;
+}
+.kurvknap .tal:empty { display: none; }
+
+/* Ikoner: tegnet i én stregtykkelse */
+.ikon { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Knapper */
+.knap {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  min-height: 3rem; padding: 0.75rem 1.5rem; border: 1px solid transparent; border-radius: 999px;
+  font: inherit; font-weight: 600; text-decoration: none; cursor: pointer;
+  background: var(--accent); color: #fff;
+}
+.knap:hover { background: var(--accent-moerk); text-decoration: none; }
+.knap:disabled { background: var(--slukket); cursor: default; }
+.knap.sekundaer { background: transparent; color: var(--blaek); border-color: var(--blaek); }
+.knap.sekundaer:hover { background: var(--blaek); color: #fff; }
+.knap.fuld { width: 100%; }
+
+/* Antal */
+.antal { display: inline-flex; align-items: center; border: 1px solid var(--kant); border-radius: 999px; background: var(--side); }
+.antal button { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border: 0; background: none; border-radius: 999px; color: var(--blaek); cursor: pointer; }
+.antal button:disabled { color: var(--slukket); cursor: default; }
+.antal svg { width: 14px; height: 14px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.antal output { min-width: 2rem; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
+@media (hover: hover) { .antal button:not(:disabled):hover { background: var(--flade); } }
+
+/* Sektioner */
+.sektion { padding-block: clamp(3rem, 8vw, 5.5rem); }
+.sektion.flade { background: var(--flade); }
+.sektion h2 { font-size: clamp(1.75rem, 3.5vw, 2.5rem); font-weight: 800; letter-spacing: -0.03em; }
+.sektion .under { color: var(--grafit); margin-top: 0.75rem; max-width: 36rem; }
+.sektionstop { display: flex; justify-content: space-between; align-items: end; gap: 1rem; flex-wrap: wrap; margin-bottom: 2rem; }
+
+/* Tillidslinje */
+.tillid { border-block: 1px solid var(--linje); }
+.tillid ul { list-style: none; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem 2rem; padding-block: 1.25rem; }
+.tillid li { display: flex; align-items: center; gap: 0.75rem; font-size: 0.9375rem; font-weight: 500; }
+.tillid .ikon { color: var(--accent); }
+
+/* Produktkort */
+.gitter { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2rem clamp(1rem, 3vw, 2rem); }
+.kort { text-decoration: none; display: block; }
+.kort .ramme { position: relative; aspect-ratio: 1; border-radius: var(--r-stor); overflow: hidden; background: var(--flade); }
+.kort .ramme img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity 0.35s ease-out; }
+.kort .ramme img + img { opacity: 0; }
+@media (hover: hover) { .kort:hover .ramme img + img { opacity: 1; } }
+.kort h3 { font-size: 1.125rem; font-weight: 600; letter-spacing: -0.01em; margin-top: 1rem; }
+.kort:hover h3 { text-decoration: underline; text-decoration-thickness: 1px; }
+.kort p { color: var(--grafit); margin-top: 0.25rem; }
+.kort .bund { display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; }
+.kort .pris { font-weight: 600; }
+.prikker { display: flex; gap: 0.375rem; }
+.prikker span { width: 0.875rem; height: 0.875rem; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--kant); }
+
+/* Spørgsmål og svar */
+.svar { border-top: 1px solid var(--linje); max-width: 48rem; }
+.svar details { border-bottom: 1px solid var(--linje); }
+.svar summary {
+  list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+  padding: 1.125rem 0; font-weight: 600; font-size: 1.0625rem;
+}
+.svar summary::-webkit-details-marker { display: none; }
+.svar summary svg { width: 16px; height: 16px; flex: none; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; transition: transform 0.25s ease-out; }
+.svar details[open] summary svg { transform: rotate(45deg); }
+.svar details > div { padding: 0 0 1.25rem; color: var(--grafit); max-width: 40rem; }
+.svar details > div p + p { margin-top: 0.75rem; }
+
+/* Brødkrumme */
+.kruemme { font-size: 0.875rem; color: var(--grafit); padding-block: 1.25rem; }
+.kruemme a { color: var(--grafit); }
+
+/* Tekstsider (om os, betingelser, privatliv) */
+.tekst { max-width: 44rem; padding-block: clamp(2.5rem, 6vw, 4rem) clamp(3rem, 8vw, 5rem); }
+.tekst h1 { font-size: clamp(2.25rem, 5vw, 3.25rem); font-weight: 800; letter-spacing: -0.035em; }
+.tekst .dato { color: var(--grafit); margin-top: 0.75rem; }
+.tekst h2 { font-size: 1.375rem; font-weight: 700; margin-top: 2.75rem; }
+.tekst h3 { font-size: 1.0625rem; font-weight: 700; margin-top: 1.75rem; }
+.tekst p, .tekst ul, .tekst ol { margin-top: 0.875rem; }
+.tekst ul, .tekst ol { padding-left: 1.25rem; }
+.tekst li + li { margin-top: 0.375rem; }
+.tekst .indledning { font-size: 1.1875rem; color: var(--grafit); margin-top: 1.25rem; }
+.tekst .boks { background: var(--flade); border-radius: var(--r-stor); padding: 1.25rem 1.5rem; margin-top: 1.25rem; }
+.tekst .boks p:first-child { margin-top: 0; }
+.tekst nav ul { list-style: none; padding: 0; columns: 2; column-gap: 2rem; }
+
+/* Footer */
+.fod { background: var(--flade); margin-top: 0; font-size: 0.9375rem; }
+.fod .kolonner { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1.2fr; gap: 2rem; padding-block: 3.5rem 2.5rem; }
+.fod h2 { font-size: 0.9375rem; font-weight: 700; letter-spacing: 0; margin-bottom: 0.75rem; }
+.fod ul { list-style: none; margin: 0; padding: 0; }
+.fod li + li { margin-top: 0.5rem; }
+.fod a { text-decoration: none; }
+.fod a:hover { text-decoration: underline; }
+.fod .om { color: var(--grafit); max-width: 22rem; margin-top: 0.75rem; }
+/* Betalingsmåder som neutrale mærker med navn (ikke efterlignede logoer) */
+.betaling { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; }
+.betaling ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.375rem; }
+.betaling li { padding: 0.125rem 0.5rem; border: 1px solid var(--kant); border-radius: 4px; background: var(--side); color: var(--blaek); font-size: 0.75rem; font-weight: 600; }
+.fod .bundlinje { border-top: 1px solid var(--linje); padding-block: 1.5rem 2rem; color: var(--grafit); font-size: 0.875rem; display: grid; gap: 0.5rem; }
+
+@media (max-width: 56rem) {
+  .tillid ul { grid-template-columns: repeat(2, 1fr); }
+  .fod .kolonner { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 40rem) {
+  .menu { gap: 1rem; }
+  .gitter { grid-template-columns: 1fr; }
+  .tillid ul { grid-template-columns: 1fr; gap: 0.75rem; }
+  .fod .kolonner { grid-template-columns: 1fr; gap: 1.75rem; }
+  .tekst nav ul { columns: 1; }
+}
+/* Spring til indhold (synlig ved tastaturfokus) */
+.spring { position: absolute; left: -999px; top: 0.5rem; z-index: 20; background: var(--side); padding: 0.5rem 1rem; border-radius: var(--r-lille); }
+.spring:focus { left: 0.5rem; }
+
+/* Fælles småting */
+.under { color: var(--grafit); }
+.smaat { font-size: 0.875rem; color: var(--grafit); }
+.fejl { color: var(--fejl); }
+.fejl:empty { display: none; }
+.fordele { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.625rem; font-size: 0.9375rem; }
+.fordele li { display: flex; align-items: center; gap: 0.75rem; }
+.fordele .ikon { color: var(--accent); }
+.sektion .svar { margin-top: 2rem; }
+.sektion.graense { border-top: 1px solid var(--linje); }
+
+/* Forside */
+.helt { padding-block: clamp(1.5rem, 4vw, 3rem) clamp(2.5rem, 6vw, 4rem); }
+.helt-gitter { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(1.5rem, 4vw, 3.5rem); align-items: center; }
+.helt h1 { font-size: clamp(2.5rem, 5.5vw, 4.25rem); font-weight: 800; letter-spacing: -0.04em; line-height: 1.02; }
+.helt .lead { font-size: clamp(1.0625rem, 1.6vw, 1.25rem); color: var(--grafit); margin-top: 1.25rem; max-width: 30rem; }
+.handlinger { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 2rem; }
+.helt-billede { width: 100%; height: auto; border-radius: var(--r-stor); }
+
+.saadan { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(2rem, 5vw, 4rem); align-items: center; }
+.saadan img { border-radius: var(--r-stor); width: 100%; height: auto; }
+.trin { list-style: none; counter-reset: trin; margin: 2rem 0 0; padding: 0; display: grid; gap: 1.75rem; }
+.trin li { counter-increment: trin; display: grid; grid-template-columns: 2.5rem 1fr; column-gap: 1rem; }
+.trin li::before {
+  content: counter(trin); grid-row: span 2;
+  display: grid; place-items: center; width: 2.5rem; height: 2.5rem;
+  border-radius: 999px; background: var(--flade); font-weight: 700;
+}
+.trin h3 { font-size: 1.125rem; font-weight: 700; align-self: center; }
+.trin p { color: var(--grafit); margin-top: 0.25rem; }
+
+.omkort { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem 4rem; }
+.omkort p + p { margin-top: 1rem; }
+.omkort p { font-size: 1.0625rem; }
+.omkort .knap { margin-top: 1.75rem; }
+
+/* Produktside */
+.produktside { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: clamp(1.5rem, 4vw, 4rem); align-items: start; padding-bottom: clamp(3rem, 8vw, 5rem); }
+.galleri .hoved { aspect-ratio: 1; border-radius: var(--r-stor); overflow: hidden; background: var(--flade); }
+.galleri .hoved img { width: 100%; height: 100%; object-fit: cover; }
+.miniaturer { display: flex; gap: 0.625rem; margin-top: 0.75rem; }
+.miniaturer button { width: 4.5rem; height: 4.5rem; padding: 0; border: 1px solid transparent; border-radius: var(--r-lille); background: var(--flade); overflow: hidden; cursor: pointer; }
+.miniaturer button[aria-pressed="true"] { border-color: var(--blaek); box-shadow: inset 0 0 0 1px var(--blaek); }
+.miniaturer img { width: 100%; height: 100%; object-fit: cover; }
+.kob { position: sticky; top: 6rem; display: grid; gap: 1.25rem; }
+.kob h1 { font-size: clamp(1.875rem, 3.5vw, 2.5rem); font-weight: 800; letter-spacing: -0.03em; }
+.prislinje { font-size: 1.375rem; font-weight: 600; margin-top: -0.5rem; }
+.prislinje .moms { font-size: 0.875rem; font-weight: 400; color: var(--grafit); }
+.korttekst { color: var(--grafit); font-size: 1.0625rem; }
+.farvevalg { border: 0; margin: 0; padding: 0; }
+.farvevalg legend { padding: 0; margin-bottom: 0.625rem; }
+.farver { display: flex; gap: 0.5rem; }
+.farve { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; cursor: pointer; }
+.farve span:not(.skjult) { width: 2rem; height: 2rem; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--kant); }
+.farve input:checked + span { box-shadow: inset 0 0 0 1px var(--kant), 0 0 0 2px var(--side), 0 0 0 4px var(--blaek); }
+.farve input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 5px; }
+.kobraekke { display: flex; gap: 0.75rem; }
+.kobraekke .knap { flex: 1; }
+.besked { font-size: 0.9375rem; }
+.besked:empty { display: none; }
+.kob .fordele { padding-block: 1.25rem; border-block: 1px solid var(--linje); }
+.kob .svar { border-top: 0; }
+.andre { grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr)); }
+
+/* Kurv */
+.kurvside { padding-block: clamp(2rem, 5vw, 3.5rem) clamp(3rem, 8vw, 5rem); }
+.kurvside > h1 { font-size: clamp(2rem, 4vw, 2.75rem); font-weight: 800; letter-spacing: -0.03em; margin-bottom: 2rem; }
+.tak { background: var(--flade); border-radius: var(--r-stor); padding: clamp(1.25rem, 3vw, 2rem); display: grid; gap: 0.75rem; justify-items: start; max-width: 40rem; }
+.tak h2 { font-size: 1.5rem; font-weight: 800; }
+.tomkurv { display: grid; gap: 1.25rem; justify-items: start; }
+.kurvgitter { display: grid; grid-template-columns: minmax(0, 1fr) 22rem; gap: clamp(1.5rem, 4vw, 3.5rem); align-items: start; }
+.linjer { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--linje); }
+.linje { display: grid; grid-template-columns: 6rem minmax(0, 1fr) auto auto; gap: 1rem 1.5rem; align-items: center; padding-block: 1.25rem; border-bottom: 1px solid var(--linje); }
+.linje img { width: 6rem; height: 6rem; border-radius: var(--r-lille); background: var(--flade); object-fit: cover; }
+.linjeinfo p { color: var(--grafit); font-size: 0.9375rem; }
+.linjenavn { font-weight: 600; text-decoration: none; }
+.linjenavn:hover { text-decoration: underline; }
+.linjeantal { display: grid; justify-items: center; gap: 0.25rem; }
+.fjern { border: 0; background: none; padding: 0.5rem; font: inherit; font-size: 0.875rem; color: var(--grafit); text-decoration: underline; cursor: pointer; }
+.linjepris { font-weight: 600; min-width: 5.5rem; text-align: right; }
+.oversigt { background: var(--flade); border-radius: var(--r-stor); padding: 1.5rem; display: grid; gap: 1rem; position: sticky; top: 6rem; }
+.oversigt h2 { font-size: 1.25rem; font-weight: 700; }
+.oversigt dl { margin: 0; display: grid; gap: 0.5rem; }
+.oversigt dl div { display: flex; justify-content: space-between; gap: 1rem; }
+.oversigt dd { margin: 0; }
+.oversigt .ialt { border-top: 1px solid var(--linje); padding-top: 0.75rem; margin-top: 0.25rem; font-weight: 700; font-size: 1.125rem; }
+.login { display: grid; gap: 0.75rem; }
+.login p { color: var(--grafit); }
+.login label { display: grid; gap: 0.25rem; font-weight: 600; font-size: 0.9375rem; }
+.login input { font: inherit; padding: 0.625rem 0.75rem; border: 1px solid var(--kant); border-radius: var(--r-lille); background: var(--side); color: var(--blaek); caret-color: var(--accent); }
+
+@media (max-width: 56rem) {
+  .helt-gitter, .saadan, .omkort, .produktside, .kurvgitter { grid-template-columns: 1fr; }
+  .kob, .oversigt { position: static; }
+}
+@media (max-width: 40rem) {
+  .linje { grid-template-columns: 5rem minmax(0, 1fr); }
+  .linje img { width: 5rem; height: 5rem; }
+  .linjeantal { grid-column: 2; justify-items: start; grid-auto-flow: column; align-items: center; }
+  .linjepris { grid-column: 2; text-align: left; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kort .ramme img, .svar summary svg { transition: none; }
+}

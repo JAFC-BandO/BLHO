@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kurv – JFC Labs</title>
+<!-- Fjernes, når shoppen åbner -->
+<meta name="robots" content="noindex">
+<link rel="preload" href="/shop/fonts/schibsted-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/shop/shop.css?v=3">
+</head>
+<body>
+<a class="spring" href="#indhold">Gå til indhold</a>
+<div class="annonce">Sendes med PostNord inden for 2-4 hverdage</div>
+<header class="top">
+  <div class="indhold">
+    <a class="logo" href="/shop/">JFC Labs</a>
+    <nav class="menu" aria-label="Hovedmenu">
+      <a href="/shop/#produkter">Shop</a>
+      <a href="/shop/om/">Om os</a>
+    </nav>
+    <a class="kurvknap" href="/shop/kurv/" aria-label="Kurv" aria-current="page">
+      <svg class="ikon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 11.1a2 2 0 0 1-2 1.9H8.2a2 2 0 0 1-2-1.9L5 8Z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg>
+      <span class="tal" data-kurv-antal></span>
+    </a>
+  </div>
+</header>
+
+<main id="indhold" class="indhold kurvside">
+  <h1>Kurv</h1>
+
+  <div class="tak" id="tak" hidden>
+    <h2>Tak for din bestilling</h2>
+    <p>Du får en kvittering på mail. Pakken sendes med PostNord inden for 2-4 hverdage, og beløbet trækkes først, når den sendes.</p>
+    <a class="knap sekundaer" href="/shop/">Tilbage til shoppen</a>
+  </div>
+
+  <p class="under" id="status">Henter kurven …</p>
+
+  <div class="tomkurv" id="tom" hidden>
+    <p>Kurven er tom.</p>
+    <a class="knap" href="/shop/#produkter">Se produkterne</a>
+  </div>
+
+  <div class="kurvgitter" id="fyldt" hidden>
+    <ul class="linjer" id="linjer" aria-label="Varer i kurven"></ul>
+
+    <aside class="oversigt" aria-labelledby="oversigt-titel">
+      <h2 id="oversigt-titel">Oversigt</h2>
+      <dl>
+        <div><dt>Varer</dt><dd id="subtotal"></dd></div>
+        <div><dt>Fragt med PostNord</dt><dd data-fragt></dd></div>
+        <div class="ialt"><dt>I alt</dt><dd id="ialt"></dd></div>
+      </dl>
+      <p class="smaat" id="moms"></p>
+      <button class="knap fuld" id="betal" type="button">Gå til betaling</button>
+      <p class="fejl" id="fejl" role="alert"></p>
+      <div class="betaling"><ul aria-label="Betalingsmåder"><li>Visa</li><li>Mastercard</li><li>MobilePay</li><li>Apple Pay</li></ul></div>
+
+      <form class="login" id="login" hidden>
+        <p>Shoppen er ikke åben endnu. Log ind for at købe.</p>
+        <label>E-mail <input type="email" name="mail" autocomplete="username" required></label>
+        <label>Adgangskode <input type="password" name="kode" autocomplete="current-password" required></label>
+        <p class="fejl" id="login-fejl" role="alert"></p>
+        <button class="knap fuld">Log ind og betal</button>
+      </form>
+
+      <p class="smaat">Ved at gå til betaling accepterer du <a href="/shop/handelsbetingelser/">handelsbetingelserne</a>. Beløbet reserveres, når du bestiller, og trækkes først, når pakken sendes.</p>
+      <ul class="fordele">
+        <li><svg class="ikon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Sikker betaling med kort, MobilePay og Apple Pay via Stripe</li>
+        <li><svg class="ikon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h11a5 5 0 0 1 0 10H9"/><path d="M8 5 4 9l4 4"/></svg>14 dages fortrydelsesret</li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<footer class="fod">
+  <div class="indhold kolonner">
+    <div>
+      <a class="logo" href="/shop/">JFC Labs</a>
+      <p class="om">Tilbehør til højstolen, designet og 3D-printet i Danmark.</p>
+    </div>
+    <nav aria-labelledby="fod-shop">
+      <h2 id="fod-shop">Shop</h2>
+      <ul><li><a href="/shop/produkt/?id=benholder">Benholder med håndtag</a></li><li><a href="/shop/produkt/?id=benclips">Benclips</a></li><li><a href="/shop/kurv/">Kurv</a></li></ul>
+    </nav>
+    <nav aria-labelledby="fod-info">
+      <h2 id="fod-info">Information</h2>
+      <ul><li><a href="/shop/om/">Om os</a></li><li><a href="/shop/handelsbetingelser/#levering">Levering</a></li><li><a href="/shop/handelsbetingelser/#fortrydelse">Fortrydelse og retur</a></li><li><a href="/shop/handelsbetingelser/">Handelsbetingelser</a></li><li><a href="/shop/privatlivspolitik/">Privatlivspolitik</a></li></ul>
+    </nav>
+    <div>
+      <h2>Kontakt</h2>
+      <ul><li><a data-firma-mail href="#"></a></li><li data-firma="adresse"></li><li>CVR <span data-firma="cvr"></span></li></ul>
+    </div>
+  </div>
+  <div class="indhold bundlinje">
+    <div class="betaling"><ul aria-label="Betalingsmåder"><li>Visa</li><li>Mastercard</li><li>MobilePay</li><li>Apple Pay</li></ul><p>Betalingen håndteres sikkert af Stripe.</p></div>
+    <p>IKEA og ANTILOP er varemærker tilhørende Inter IKEA Systems B.V. JFC Labs har ingen forbindelse til IKEA, og produkterne er ikke godkendt af IKEA.</p>
+    <p>© 2026 JFC Labs</p>
+  </div>
+</footer>
+
+<script src="/shop/shop.js?v=3"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+let produkter = [];
+
+// Efter betaling sender Stripe kunden hertil med ?tak=1: kurven tømmes
+if (new URLSearchParams(location.search).has('tak')) {
+  gemKurv([]);
+  $('tak').hidden = false;
+}
+
+const minusIkon = '<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 7h10"/></svg>';
+const plusIkon = '<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 7h10M7 2v10"/></svg>';
+
+function tegn() {
+  // Linjer med produkter eller farver, der ikke findes længere, fjernes
+  const kurv = hentKurv().filter((l) => produkter.some((p) => p.id === l.id && p.farver.some((f) => f.navn === l.farve)));
+  gemKurv(kurv);
+  $('status').hidden = true;
+  $('tom').hidden = kurv.length > 0 || !$('tak').hidden;
+  $('fyldt').hidden = !kurv.length;
+  if (!kurv.length) return;
+
+  let sum = 0;
+  $('linjer').innerHTML = kurv.map((l, i) => {
+    const p = produkter.find((x) => x.id === l.id);
+    const f = p.farver.find((x) => x.navn === l.farve);
+    const link = `/shop/produkt/?id=${encodeURIComponent(p.id)}&farve=${encodeURIComponent(f.navn.toLowerCase())}`;
+    sum += p.pris_oere * l.antal;
+    return `<li class="linje">
+      <a href="${link}" tabindex="-1" aria-hidden="true"><img src="${billede(f.billeder[0])}" alt="" width="1000" height="1000"></a>
+      <div class="linjeinfo">
+        <a class="linjenavn" href="${link}">${esc(p.navn)}</a>
+        <p>Farve: ${esc(f.navn)}</p>
+        <p>${kr(p.pris_oere)}</p>
+      </div>
+      <div class="linjeantal">
+        <div class="antal">
+          <button type="button" data-i="${i}" data-d="-1" aria-label="Færre: ${esc(p.navn)}, ${esc(f.navn.toLowerCase())}" ${l.antal <= 1 ? 'disabled' : ''}>${minusIkon}</button>
+          <output aria-label="Antal">${l.antal}</output>
+          <button type="button" data-i="${i}" data-d="1" aria-label="Flere: ${esc(p.navn)}, ${esc(f.navn.toLowerCase())}" ${l.antal >= MAKS ? 'disabled' : ''}>${plusIkon}</button>
+        </div>
+        <button class="fjern" type="button" data-i="${i}">Fjern</button>
+      </div>
+      <p class="linjepris">${kr(p.pris_oere * l.antal)}</p>
+    </li>`;
+  }).join('');
+  const ialt = sum + FRAGT_OERE;
+  $('subtotal').textContent = kr(sum);
+  $('ialt').textContent = kr(ialt);
+  $('moms').textContent = `Heraf moms ${kr(Math.round(ialt / 5))}`;   // 25 % moms = 1/5 af beløbet inkl. moms
+}
+
+$('linjer').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const kurv = hentKurv();
+  const l = kurv[+b.dataset.i];
+  if (!l) return;
+  if (b.classList.contains('fjern')) kurv.splice(+b.dataset.i, 1);
+  else l.antal = Math.min(MAKS, Math.max(1, l.antal + +b.dataset.d));
+  gemKurv(kurv);
+  tegn();
+});
+
+hentProdukter()
+  .then((ps) => { produkter = ps; tegn(); })
+  .catch(() => { $('status').textContent = 'Kurven kunne ikke hentes. Prøv igen om lidt.'; });
+
+// Betaling. Login, så længe shoppen er lukket (tabellen kun_koebere); adgangsnøglen gemmes i fanen,
+// så den overlever turen til Stripe og tilbage.
+const knap = $('betal'), form = $('login');
+const fejltekst = (err) => err instanceof TypeError ? 'Ingen forbindelse. Prøv igen.' : err.message;
+let login = null;
+try { login = JSON.parse(sessionStorage.getItem('shop-login')); } catch {}
+function nulstil() { knap.disabled = false; knap.textContent = 'Gå til betaling'; }
+// Tilbage-knappen fra Stripe viser siden fra cachen med knappen stadig i "Åbner betaling …"
+addEventListener('pageshow', (e) => { if (e.persisted) nulstil(); });
+
+async function betal() {
+  knap.disabled = true;
+  knap.textContent = 'Åbner betaling …';
+  $('fejl').textContent = '';
+  try {
+    const headers = { apikey: KEY, 'Content-Type': 'application/json' };
+    if (login && login.udloeber > Date.now()) headers.Authorization = 'Bearer ' + login.token;
+    const r = await fetch(`${SB}/functions/v1/checkout`, { method: 'POST', headers, body: JSON.stringify({ varer: hentKurv() }) });
+    const d = await r.json().catch(() => ({}));
+    if (d.login) {
+      form.hidden = false;
+      form.elements.mail.focus();
+      return nulstil();
+    }
+    if (!r.ok || !d.url) throw new Error(d.fejl || 'Betalingen kunne ikke startes.');
+    location.href = d.url;
+  } catch (err) {
+    $('fejl').textContent = fejltekst(err);
+    nulstil();
+  }
+}
+knap.addEventListener('click', betal);
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const send = form.querySelector('button');
+  send.disabled = true;
+  $('login-fejl').textContent = '';
+  try {
+    const r = await fetch(`${SB}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { apikey: KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: form.elements.mail.value, password: form.elements.kode.value }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error('Forkert e-mail eller adgangskode.');
+    login = { token: d.access_token, udloeber: Date.now() + (d.expires_in - 60) * 1000 };
+    try { sessionStorage.setItem('shop-login', JSON.stringify(login)); } catch {}
+    form.reset();
+    form.hidden = true;
+    betal();
+  } catch (err) {
+    $('login-fejl').textContent = fejltekst(err);
+  } finally {
+    send.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

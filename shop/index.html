@@ -4,342 +4,160 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>JFC Labs – benholder og clips til højstolen</title>
-<meta name="description" content="3D-printet benholder og clips, der passer til IKEA Antilop-højstolen.">
+<meta name="description" content="Benholder og clips til stolebenene, når højstolen er skilt ad. Passer til IKEA Antilop. Designet og 3D-printet i Danmark.">
 <!-- Fjernes, når shoppen åbner -->
 <meta name="robots" content="noindex">
-<link rel="preload" href="fonts/schibsted-grotesk.woff2" as="font" type="font/woff2" crossorigin>
-<style>
-  /* Skriften ligger her selv (ikke Google Fonts), så besøgendes IP ikke sendes til Google */
-  @font-face {
-    font-family: 'Schibsted Grotesk';
-    src: url('fonts/schibsted-grotesk.woff2') format('woff2');
-    font-weight: 400 900;
-    font-display: swap;
-  }
-  /* Kun lyst tema: produktbillederne er renderet på hvid */
-  :root {
-    --papir: #f5f7f4;
-    --hvid: #fff;
-    --blaek: #1c2b2a;
-    --grafit: #5b6b69;
-    --filament: #2e7d6b;
-    --filament-moerk: #23624f;
-    --lag: #e2e9e4;          /* skillelinjer */
-    --kant: #7f8d87;         /* kant på felter og knapper, mindst 3:1 */
-    --slukket: #b4bfba;
-    --markering: #cde4da;
-    --fejl: #a3271f;
-    color-scheme: light;
-  }
-  * { box-sizing: border-box; }
-  ::selection { background: var(--markering); color: var(--blaek); }
-  body {
-    margin: 0;
-    background: var(--papir);
-    color: var(--blaek);
-    font: 400 1.0625rem/1.55 'Schibsted Grotesk', system-ui, sans-serif;
-  }
-  header, main, footer { max-width: 54rem; margin: 0 auto; padding: 0 1rem; }
-  header { padding-top: 1.25rem; font-weight: 800; letter-spacing: -0.01em; }
-  h1 {
-    font-size: clamp(2.25rem, 7.5vw, 4rem);
-    line-height: 1.02;
-    letter-spacing: -0.035em;
-    font-weight: 800;
-    margin: 3.5rem 0 1rem;
-    max-width: 16ch;
-    text-wrap: balance;
-  }
-  .intro { color: var(--grafit); margin: 0 0 3rem; max-width: 36rem; }
-
-  .produkt {
-    display: grid;
-    grid-template-columns: minmax(0, 20rem) 1fr;
-    gap: 2rem;
-    align-items: start;
-    padding: 2rem 0;
-    border-top: 1px solid var(--lag);
-  }
-  .ramme { aspect-ratio: 1; background: var(--hvid); border-radius: 8px; overflow: hidden; }
-  .ramme img { display: block; width: 100%; height: 100%; object-fit: contain; }
-  .miniaturer { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
-  .miniaturer:empty { display: none; }
-  .miniaturer button {
-    width: 3.5rem; height: 3.5rem; padding: 0;
-    border: 1px solid var(--lag); border-radius: 6px; background: var(--hvid);
-    overflow: hidden; cursor: pointer;
-  }
-  @media (hover: hover) { .miniaturer button:hover { border-color: var(--kant); } }
-  .miniaturer button[aria-pressed="true"] { border-color: var(--blaek); box-shadow: inset 0 0 0 1px var(--blaek); }
-  .miniaturer img { display: block; width: 100%; height: 100%; object-fit: contain; }
-
-  .info h2 { font-size: 1.5rem; line-height: 1.2; letter-spacing: -0.015em; margin: 0.25rem 0 0.5rem; }
-  .info p { margin: 0 0 1.25rem; color: var(--grafit); max-width: 34rem; }
-  .linje { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-  .pris { font-weight: 600; font-size: 1.125rem; }
-
-  .antal { display: inline-flex; align-items: center; border: 1px solid var(--kant); border-radius: 999px; background: var(--hvid); }
-  .antal button {
-    display: grid; place-items: center;
-    width: 2.75rem; height: 2.75rem;
-    border: 0; background: none; border-radius: 999px;
-    color: var(--blaek); cursor: pointer;
-  }
-  @media (hover: hover) { .antal button:hover { background: var(--lag); } }
-  .antal button:disabled { color: var(--slukket); cursor: default; background: none; }
-  .antal svg { width: 14px; height: 14px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
-  .antal output { min-width: 1.75rem; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
-
-  .kurv {
-    position: sticky; bottom: 0;
-    margin: 0 -1rem; padding: 1rem;
-    background: var(--papir);
-    border-top: 1px solid var(--lag);
-    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem 1rem; flex-wrap: wrap;
-  }
-  .kurv .sum { font-weight: 600; }
-  .kurv .fragt { color: var(--grafit); font-size: 0.9375rem; }
-  .betal {
-    font: inherit; font-weight: 600;
-    padding: 0.875rem 1.5rem; border: 0; border-radius: 999px;
-    background: var(--filament); color: var(--hvid); cursor: pointer;
-  }
-  .betal:hover { background: var(--filament-moerk); }
-  .betal:disabled { background: var(--slukket); cursor: default; }
-  .fejl { color: var(--fejl); margin: 0; flex-basis: 100%; }
-  .fejl:empty { display: none; }
-
-  .login { display: grid; gap: 0.75rem; max-width: 22rem; margin: 1rem 0 0; }
-  .login[hidden] { display: none; }
-  .login p { margin: 0; color: var(--grafit); }
-  .login label { display: grid; gap: 0.25rem; font-weight: 600; font-size: 0.9375rem; }
-  .login input {
-    font: inherit; font-weight: 400;
-    padding: 0.625rem 0.75rem; border: 1px solid var(--kant); border-radius: 6px;
-    background: var(--hvid); color: var(--blaek); caret-color: var(--filament);
-  }
-  .login .betal { justify-self: start; }
-
-  .tak {
-    background: var(--hvid); border: 1px solid var(--lag);
-    padding: 1rem 1.25rem; margin: 0 0 2rem; border-radius: 8px;
-  }
-  .tak p { margin: 0; }
-
-  footer { color: var(--grafit); font-size: 0.9375rem; padding-top: 3rem; padding-bottom: 3rem; }
-  footer p { margin: 0 0 0.5rem; max-width: 40rem; }
-
-  :focus-visible { outline: 3px solid var(--filament); outline-offset: 2px; }
-
-  @media (max-width: 40rem) {
-    .produkt { grid-template-columns: 1fr; gap: 1.25rem; }
-    .galleri { max-width: 26rem; }
-  }
-</style>
+<link rel="preload" href="/shop/fonts/schibsted-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/shop/shop.css?v=3">
 </head>
 <body>
-<header>JFC Labs</header>
-
-<main>
-  <h1>Benholder og clips til højstolen</h1>
-  <p class="intro">Passer til IKEA Antilop. Designet og 3D-printet i Danmark og sendt med PostNord.</p>
-
-  <div class="tak" id="tak" hidden><p>Tak for din bestilling. Kvitteringen kommer på mail.</p></div>
-
-  <section id="produkter" aria-label="Produkter"><p class="intro">Henter produkter …</p></section>
-
-  <div class="kurv">
-    <div>
-      <div class="sum" id="sum">Kurven er tom</div>
-      <div class="fragt">Fragt lægges til ved betaling</div>
-    </div>
-    <button class="betal" id="betal" disabled>Til betaling</button>
-    <p class="fejl" id="fejl" role="alert"></p>
+<a class="spring" href="#indhold">Gå til indhold</a>
+<div class="annonce">Sendes med PostNord inden for 2-4 hverdage</div>
+<header class="top">
+  <div class="indhold">
+    <a class="logo" href="/shop/">JFC Labs</a>
+    <nav class="menu" aria-label="Hovedmenu">
+      <a href="/shop/#produkter">Shop</a>
+      <a href="/shop/om/">Om os</a>
+    </nav>
+    <a class="kurvknap" href="/shop/kurv/" aria-label="Kurv">
+      <svg class="ikon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 11.1a2 2 0 0 1-2 1.9H8.2a2 2 0 0 1-2-1.9L5 8Z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg>
+      <span class="tal" data-kurv-antal></span>
+    </a>
   </div>
+</header>
 
-  <form class="login" id="login" hidden>
-    <p>Shoppen er ikke åben endnu. Log ind for at købe.</p>
-    <label>E-mail <input type="email" name="mail" autocomplete="username" required></label>
-    <label>Adgangskode <input type="password" name="kode" autocomplete="current-password" required></label>
-    <p class="fejl" id="login-fejl" role="alert"></p>
-    <button class="betal">Log ind og betal</button>
-  </form>
-</main>
-
-<footer>
-  <!-- Før åbning: navn, adresse, CVR og kontaktmail her (lovkrav for webshops) -->
-  <p>JFC Labs</p>
-  <p>14 dages fortrydelsesret.</p>
-  <p>IKEA og ANTILOP er varemærker tilhørende Inter IKEA Systems B.V. JFC Labs har ingen forbindelse til IKEA, og produkterne er ikke godkendt af IKEA.</p>
-</footer>
-
-<template id="produkt-skabelon">
-  <article class="produkt">
-    <div class="galleri">
-      <div class="ramme"></div>
-      <div class="miniaturer"></div>
+<main id="indhold">
+  <section class="helt">
+    <div class="indhold helt-gitter">
+      <div>
+        <h1>Tag højstolen med uden løse ben</h1>
+        <p class="lead">Benholder og clips til de fire stoleben, når højstolen er skilt ad. Passer til IKEA Antilop og er designet og 3D-printet i Danmark.</p>
+        <div class="handlinger">
+          <a class="knap" href="#produkter">Se produkterne</a>
+          <a class="knap sekundaer" href="#saadan">Sådan virker det</a>
+        </div>
+      </div>
+      <img class="helt-billede" src="/shop/billeder/forside.webp?v=2" alt="Benholderen i sort, hvid og grå" width="1600" height="1100" fetchpriority="high">
     </div>
-    <div class="info">
-      <h2></h2>
-      <p></p>
-      <div class="linje">
-        <span class="pris"></span>
-        <span class="antal">
-          <button type="button" data-d="-1"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 7h10"/></svg></button>
-          <output>0</output>
-          <button type="button" data-d="1"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 7h10M7 2v10"/></svg></button>
-        </span>
+  </section>
+
+  <section class="tillid" aria-label="Køb trygt">
+    <ul class="indhold">
+      <li><svg class="ikon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17 17 3l4 4L7 21H3v-4Z"/><path d="m13 7 1.5 1.5M10 10l1.5 1.5M7 13l1.5 1.5"/></svg>Passer til IKEA Antilop</li>
+      <li><svg class="ikon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Designet og printet i Danmark</li>
+      <li><svg class="ikon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 6h11v10H2zM13 9h4.5L21 12.5V16h-8z"/><circle cx="6" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg>Sendes inden for 2-4 hverdage</li>
+      <li><svg class="ikon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h11a5 5 0 0 1 0 10H9"/><path d="M8 5 4 9l4 4"/></svg>14 dages fortrydelsesret</li>
+    </ul>
+  </section>
+
+  <section class="sektion" id="produkter" aria-labelledby="produkter-titel">
+    <div class="indhold">
+      <div class="sektionstop">
+        <div>
+          <h2 id="produkter-titel">Produkter</h2>
+          <p class="under">Fås i sort, hvid og grå. Alle priser er inkl. moms.</p>
+        </div>
+      </div>
+      <div class="gitter" id="gitter"><p class="under">Henter produkter …</p></div>
+    </div>
+  </section>
+
+  <section class="sektion graense" id="saadan" aria-labelledby="saadan-titel">
+    <div class="indhold saadan">
+      <img src="/shop/billeder/benholder-sort-2.webp" alt="Benholderen med de fire stoleben trykket ned i stjernerne" width="1000" height="1000" loading="lazy">
+      <div>
+        <h2 id="saadan-titel">Sådan virker det</h2>
+        <ol class="trin">
+          <li><h3>Tag benene af</h3><p>Skil højstolen ad, som når den skal pakkes ned.</p></li>
+          <li><h3>Tryk dem på plads</h3><p>De fire ben trykkes ned i holderens to stjerner, så de ligger samlet.</p></li>
+          <li><h3>Tag dem med</h3><p>Bær benene i håndtaget, eller læg dem i bilen, tasken eller skabet. Clipsen holder dem samlet uden håndtag.</p></li>
+        </ol>
       </div>
     </div>
-  </article>
-</template>
+  </section>
 
+  <section class="sektion flade" aria-labelledby="om-titel">
+    <div class="indhold omkort">
+      <h2 id="om-titel">Lavet af Jacob i Danmark</h2>
+      <div>
+        <p>JFC Labs er mig, Jacob. Jeg tegner og 3D-printer tilbehør til ting, vi bruger i hverdagen, og pakker og sender hver ordre selv.</p>
+        <p>Benholderen og clipsen er lavet efter benene på IKEA Antilop-højstolen, så de sidder godt fast.</p>
+        <a class="knap sekundaer" href="/shop/om/">Mere om JFC Labs</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="sektion" aria-labelledby="svar-titel">
+    <div class="indhold">
+      <h2 id="svar-titel">Spørgsmål og svar</h2>
+      <div class="svar">
+        <details>
+          <summary>Passer den til min højstol?<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M2 8h12"/></svg></summary>
+          <div><p>Benholderen og clipsen er lavet til benene på IKEA Antilop-højstolen. Har du en anden højstol, så skriv til <a data-firma-mail href="#"></a> med benenes mål, før du bestiller.</p></div>
+        </details>
+        <details>
+          <summary>Hvad er de lavet af?<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M2 8h12"/></svg></summary>
+          <div><p>De er 3D-printet i PLA og PETG. Fordi de printes lag for lag, kan overfladen have fine linjer, og farven kan variere en anelse.</p><p>Plast kan blive blødt ved høj varme, så lad dem ikke ligge i bagruden på en varm sommerdag.</p></div>
+        </details>
+        <details>
+          <summary>Hvornår får jeg min pakke?<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M2 8h12"/></svg></summary>
+          <div><p>Ordrer sendes med PostNord inden for 2-4 hverdage. Bestiller du mange på én gang (fx over 50 stk.), kan det tage længere, og så skriver jeg til dig.</p></div>
+        </details>
+        <details>
+          <summary>Hvordan betaler jeg?<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M2 8h12"/></svg></summary>
+          <div><p>Med kort, MobilePay eller Apple Pay. Betalingen håndteres af Stripe, så dine kortoplysninger kommer aldrig til mig. Beløbet reserveres, når du bestiller, og trækkes først, når pakken sendes.</p></div>
+        </details>
+        <details>
+          <summary>Kan jeg fortryde mit køb?<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M2 8h12"/></svg></summary>
+          <div><p>Ja. Du har 14 dages fortrydelsesret fra den dag, du modtager pakken. Læs hvordan i <a href="/shop/handelsbetingelser/#fortrydelse">handelsbetingelserne</a>.</p></div>
+        </details>
+        <details>
+          <summary>Er det legetøj?<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M2 8h12"/></svg></summary>
+          <div><p>Nej. Det er tilbehør til at opbevare og bære stolebenene. Hold det væk fra små børn.</p></div>
+        </details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="fod">
+  <div class="indhold kolonner">
+    <div>
+      <a class="logo" href="/shop/">JFC Labs</a>
+      <p class="om">Tilbehør til højstolen, designet og 3D-printet i Danmark.</p>
+    </div>
+    <nav aria-labelledby="fod-shop">
+      <h2 id="fod-shop">Shop</h2>
+      <ul><li><a href="/shop/produkt/?id=benholder">Benholder med håndtag</a></li><li><a href="/shop/produkt/?id=benclips">Benclips</a></li><li><a href="/shop/kurv/">Kurv</a></li></ul>
+    </nav>
+    <nav aria-labelledby="fod-info">
+      <h2 id="fod-info">Information</h2>
+      <ul><li><a href="/shop/om/">Om os</a></li><li><a href="/shop/handelsbetingelser/#levering">Levering</a></li><li><a href="/shop/handelsbetingelser/#fortrydelse">Fortrydelse og retur</a></li><li><a href="/shop/handelsbetingelser/">Handelsbetingelser</a></li><li><a href="/shop/privatlivspolitik/">Privatlivspolitik</a></li></ul>
+    </nav>
+    <div>
+      <h2>Kontakt</h2>
+      <ul><li><a data-firma-mail href="#"></a></li><li data-firma="adresse"></li><li>CVR <span data-firma="cvr"></span></li></ul>
+    </div>
+  </div>
+  <div class="indhold bundlinje">
+    <div class="betaling"><ul aria-label="Betalingsmåder"><li>Visa</li><li>Mastercard</li><li>MobilePay</li><li>Apple Pay</li></ul><p>Betalingen håndteres sikkert af Stripe.</p></div>
+    <p>IKEA og ANTILOP er varemærker tilhørende Inter IKEA Systems B.V. JFC Labs har ingen forbindelse til IKEA, og produkterne er ikke godkendt af IKEA.</p>
+    <p>© 2026 JFC Labs</p>
+  </div>
+</footer>
+
+<script src="/shop/shop.js?v=3"></script>
 <script>
-const SB = 'https://swmugtukacirgopjstdx.supabase.co';
-// Offentlig nøgle (beskyttet af RLS)
-const KEY = 'sb_publishable_izWXG-2mphLXS40f4eXwKg_pakWAUPi';
-const MAKS = 20;   // samme grænse som checkout-funktionen
-
-const kr = (oere) => (oere / 100).toLocaleString('da-DK') + ' kr.';
-const kurv = {};   // id -> antal
-let produkter = [];
-
-if (new URLSearchParams(location.search).has('tak')) document.getElementById('tak').hidden = false;
-
-function opdaterKurv() {
-  const stk = Object.values(kurv).reduce((a, n) => a + n, 0);
-  const sum = produkter.reduce((a, p) => a + (kurv[p.id] || 0) * p.pris_oere, 0);
-  document.getElementById('sum').textContent = stk ? `${stk} ${stk === 1 ? 'vare' : 'varer'}, ${kr(sum)}` : 'Kurven er tom';
-  document.getElementById('betal').disabled = !stk;
-}
-
-// Hovedbillede + miniaturer, der skifter det (første billede er hovedbilledet)
-function galleri(el, p, foerst) {
-  const billeder = p.billeder || [];
-  if (!billeder.length) return;
-  const img = Object.assign(document.createElement('img'), { src: billeder[0], alt: p.navn, width: 800, height: 800, loading: foerst ? 'eager' : 'lazy' });
-  el.querySelector('.ramme').append(img);
-  if (billeder.length < 2) return;
-  const knapper = billeder.map((src, i) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.setAttribute('aria-label', `Vis billede ${i + 1} af ${billeder.length}: ${p.navn}`);
-    b.setAttribute('aria-pressed', i === 0);
-    b.append(Object.assign(document.createElement('img'), { src, alt: '', loading: 'lazy' }));
-    b.addEventListener('click', () => {
-      img.src = src;
-      knapper.forEach((k) => k.setAttribute('aria-pressed', k === b));
-    });
-    return b;
+hentProdukter()
+  .then((ps) => {
+    document.getElementById('gitter').innerHTML = ps.length
+      ? ps.map(produktkort).join('')
+      : '<p class="under">Der er ingen produkter i shoppen lige nu.</p>';
+  })
+  .catch(() => {
+    document.getElementById('gitter').innerHTML = '<p class="under">Produkterne kunne ikke hentes. Prøv igen om lidt.</p>';
   });
-  el.querySelector('.miniaturer').replaceChildren(...knapper);
-}
-
-async function hentProdukter() {
-  const liste = document.getElementById('produkter');
-  try {
-    const r = await fetch(`${SB}/rest/v1/produkter?select=id,navn,beskrivelse,pris_oere,billeder&order=sortering`, { headers: { apikey: KEY }, cache: 'no-cache' });
-    if (!r.ok) throw new Error(r.status);
-    produkter = await r.json();
-  } catch {
-    liste.innerHTML = '<p class="intro">Produkterne kunne ikke hentes. Prøv igen om lidt.</p>';
-    return;
-  }
-  if (!produkter.length) {
-    liste.innerHTML = '<p class="intro">Der er ingen produkter i shoppen lige nu.</p>';
-    return;
-  }
-  liste.replaceChildren(...produkter.map((p, i) => {
-    const el = document.getElementById('produkt-skabelon').content.firstElementChild.cloneNode(true);
-    galleri(el, p, i === 0);
-    el.querySelector('h2').textContent = p.navn;
-    el.querySelector('.info p').textContent = p.beskrivelse;
-    el.querySelector('.pris').textContent = kr(p.pris_oere);
-    const ud = el.querySelector('output');
-    const [minus, plus] = el.querySelectorAll('.antal button');
-    minus.setAttribute('aria-label', `Færre: ${p.navn}`);
-    plus.setAttribute('aria-label', `Flere: ${p.navn}`);
-    ud.setAttribute('aria-label', `Antal: ${p.navn}`);
-    const vis = () => {
-      const n = kurv[p.id] || 0;
-      ud.textContent = n;
-      minus.disabled = !n;
-      plus.disabled = n >= MAKS;
-      opdaterKurv();
-    };
-    [minus, plus].forEach((b) => b.addEventListener('click', () => {
-      const n = Math.min(MAKS, Math.max(0, (kurv[p.id] || 0) + +b.dataset.d));
-      if (n) kurv[p.id] = n; else delete kurv[p.id];
-      vis();
-    }));
-    vis();
-    return el;
-  }));
-}
-
-const knap = document.getElementById('betal');
-const fejl = document.getElementById('fejl');
-const form = document.getElementById('login');
-const loginFejl = document.getElementById('login-fejl');
-const fejltekst = (err) => err instanceof TypeError ? 'Ingen forbindelse. Prøv igen.' : err.message;
-function nulstil() { knap.textContent = 'Til betaling'; opdaterKurv(); }
-// Tilbage-knappen fra Stripe viser siden fra cachen med knappen stadig i "Åbner betaling …"
-addEventListener('pageshow', (e) => { if (e.persisted) nulstil(); });
-
-// Login, så længe shoppen er lukket (tabellen kun_koebere). Adgangsnøglen gemmes i fanen,
-// så den overlever turen til Stripe og tilbage.
-let login = null;
-try { login = JSON.parse(sessionStorage.getItem('shop-login')); } catch {}
-
-async function betal() {
-  knap.disabled = true;
-  knap.textContent = 'Åbner betaling …';
-  fejl.textContent = '';
-  try {
-    const headers = { apikey: KEY, 'Content-Type': 'application/json' };
-    if (login && login.udloeber > Date.now()) headers.Authorization = 'Bearer ' + login.token;
-    const r = await fetch(`${SB}/functions/v1/checkout`, { method: 'POST', headers, body: JSON.stringify({ varer: kurv }) });
-    const d = await r.json().catch(() => ({}));
-    if (d.login) {
-      form.hidden = false;
-      form.elements.mail.focus();
-      return nulstil();
-    }
-    if (!r.ok || !d.url) throw new Error(d.fejl || 'Betalingen kunne ikke startes.');
-    location.href = d.url;
-  } catch (err) {
-    fejl.textContent = fejltekst(err);
-    nulstil();
-  }
-}
-knap.addEventListener('click', betal);
-
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const send = form.querySelector('button');
-  send.disabled = true;
-  loginFejl.textContent = '';
-  try {
-    const r = await fetch(`${SB}/auth/v1/token?grant_type=password`, {
-      method: 'POST',
-      headers: { apikey: KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: form.elements.mail.value, password: form.elements.kode.value }),
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error('Forkert e-mail eller adgangskode.');
-    login = { token: d.access_token, udloeber: Date.now() + (d.expires_in - 60) * 1000 };
-    try { sessionStorage.setItem('shop-login', JSON.stringify(login)); } catch {}
-    form.reset();
-    form.hidden = true;
-    betal();
-  } catch (err) {
-    loginFejl.textContent = fejltekst(err);
-  } finally {
-    send.disabled = false;
-  }
-});
-
-hentProdukter();
 </script>
 </body>
 </html>

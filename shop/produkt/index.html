@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Produkt – JFC Labs</title>
+<meta name="description" content="Tilbehør til stolebenene, når højstolen er skilt ad. Passer til IKEA Antilop.">
+<!-- Fjernes, når shoppen åbner -->
+<meta name="robots" content="noindex">
+<link rel="preload" href="/shop/fonts/schibsted-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/shop/shop.css?v=3">
+</head>
+<body>
+<a class="spring" href="#indhold">Gå til indhold</a>
+<div class="annonce">Sendes med PostNord inden for 2-4 hverdage</div>
+<header class="top">
+  <div class="indhold">
+    <a class="logo" href="/shop/">JFC Labs</a>
+    <nav class="menu" aria-label="Hovedmenu">
+      <a href="/shop/#produkter">Shop</a>
+      <a href="/shop/om/">Om os</a>
+    </nav>
+    <a class="kurvknap" href="/shop/kurv/" aria-label="Kurv">
+      <svg class="ikon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 11.1a2 2 0 0 1-2 1.9H8.2a2 2 0 0 1-2-1.9L5 8Z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg>
+      <span class="tal" data-kurv-antal></span>
+    </a>
+  </div>
+</header>
+
+<main id="indhold" class="indhold">
+  <nav class="kruemme" aria-label="Brødkrumme"><a href="/shop/#produkter">Shop</a> / <span id="kr-navn">Produkt</span></nav>
+  <p class="under" id="status">Henter produktet …</p>
+
+  <div class="produktside" id="produkt" hidden>
+    <div class="galleri">
+      <div class="hoved" id="hoved"></div>
+      <div class="miniaturer" id="miniaturer"></div>
+    </div>
+
+    <div class="kob">
+      <h1 id="navn"></h1>
+      <p class="prislinje"><span id="pris"></span> <span class="moms">inkl. moms</span></p>
+      <p class="korttekst" id="kort"></p>
+
+      <fieldset class="farvevalg">
+        <legend>Farve: <strong id="farvenavn"></strong></legend>
+        <div class="farver" id="farver"></div>
+      </fieldset>
+
+      <div class="kobraekke">
+        <div class="antal">
+          <button type="button" data-d="-1" aria-label="Færre"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 7h10"/></svg></button>
+          <output id="antal" aria-label="Antal">1</output>
+          <button type="button" data-d="1" aria-label="Flere"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 7h10M7 2v10"/></svg></button>
+        </div>
+        <button class="knap" id="laeg" type="button">Læg i kurven</button>
+      </div>
+      <p class="besked" id="besked" role="status"></p>
+
+      <ul class="fordele">
+        <li><svg class="ikon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 6h11v10H2zM13 9h4.5L21 12.5V16h-8z"/><circle cx="6" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg>Sendes inden for 2-4 hverdage med PostNord</li>
+        <li><svg class="ikon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h11a5 5 0 0 1 0 10H9"/><path d="M8 5 4 9l4 4"/></svg>14 dages fortrydelsesret</li>
+        <li><svg class="ikon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Sikker betaling med kort, MobilePay og Apple Pay</li>
+      </ul>
+
+      <div class="svar">
+        <details open>
+          <summary>Beskrivelse<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M2 8h12"/></svg></summary>
+          <div><p id="beskrivelse"></p><p>Passer til benene på IKEA Antilop-højstolen.</p></div>
+        </details>
+        <details>
+          <summary>Mål og materiale<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M2 8h12"/></svg></summary>
+          <div><p>Mål: <span id="maal"></span></p><p>Materiale: <span id="materiale"></span></p><p>Fordi delene printes lag for lag, kan overfladen have fine linjer, og farven kan variere en anelse.</p><p>Ikke legetøj. Opbevares utilgængeligt for små børn.</p></div>
+        </details>
+        <details>
+          <summary>Levering og retur<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M2 8h12"/></svg></summary>
+          <div><p>Sendes med PostNord inden for 2-4 hverdage. Fragten er <span data-fragt></span> pr. ordre.</p><p>Du har 14 dages fortrydelsesret fra den dag, du modtager pakken. <a href="/shop/handelsbetingelser/#fortrydelse">Læs mere om fortrydelse og retur</a></p></div>
+        </details>
+      </div>
+    </div>
+  </div>
+</main>
+
+<section class="sektion flade" id="andre-sektion" aria-labelledby="andre-titel" hidden>
+  <div class="indhold">
+    <h2 id="andre-titel">Du kan også bruge</h2>
+    <div class="gitter andre" id="andre"></div>
+  </div>
+</section>
+
+<footer class="fod">
+  <div class="indhold kolonner">
+    <div>
+      <a class="logo" href="/shop/">JFC Labs</a>
+      <p class="om">Tilbehør til højstolen, designet og 3D-printet i Danmark.</p>
+    </div>
+    <nav aria-labelledby="fod-shop">
+      <h2 id="fod-shop">Shop</h2>
+      <ul><li><a href="/shop/produkt/?id=benholder">Benholder med håndtag</a></li><li><a href="/shop/produkt/?id=benclips">Benclips</a></li><li><a href="/shop/kurv/">Kurv</a></li></ul>
+    </nav>
+    <nav aria-labelledby="fod-info">
+      <h2 id="fod-info">Information</h2>
+      <ul><li><a href="/shop/om/">Om os</a></li><li><a href="/shop/handelsbetingelser/#levering">Levering</a></li><li><a href="/shop/handelsbetingelser/#fortrydelse">Fortrydelse og retur</a></li><li><a href="/shop/handelsbetingelser/">Handelsbetingelser</a></li><li><a href="/shop/privatlivspolitik/">Privatlivspolitik</a></li></ul>
+    </nav>
+    <div>
+      <h2>Kontakt</h2>
+      <ul><li><a data-firma-mail href="#"></a></li><li data-firma="adresse"></li><li>CVR <span data-firma="cvr"></span></li></ul>
+    </div>
+  </div>
+  <div class="indhold bundlinje">
+    <div class="betaling"><ul aria-label="Betalingsmåder"><li>Visa</li><li>Mastercard</li><li>MobilePay</li><li>Apple Pay</li></ul><p>Betalingen håndteres sikkert af Stripe.</p></div>
+    <p>IKEA og ANTILOP er varemærker tilhørende Inter IKEA Systems B.V. JFC Labs har ingen forbindelse til IKEA, og produkterne er ikke godkendt af IKEA.</p>
+    <p>© 2026 JFC Labs</p>
+  </div>
+</footer>
+
+<script src="/shop/shop.js?v=3"></script>
+<script>
+const q = new URLSearchParams(location.search);
+const $ = (id) => document.getElementById(id);
+let p, farve, antal = 1;
+
+// Skift farve: billeder, navn og adresse (så linket kan deles med farven valgt)
+function vaelgFarve(f) {
+  farve = f;
+  $('farvenavn').textContent = f.navn;
+  visBillede(0);
+  $('miniaturer').replaceChildren(...f.billeder.map((src, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('aria-label', `Vis billede ${i + 1} af ${f.billeder.length}`);
+    b.setAttribute('aria-pressed', i === 0);
+    b.append(Object.assign(document.createElement('img'), { src: billede(src), alt: '', width: 1000, height: 1000 }));
+    b.addEventListener('click', () => visBillede(i));
+    return b;
+  }));
+  q.set('farve', f.navn.toLowerCase());
+  history.replaceState(null, '', '?' + q);
+}
+const hoved = Object.assign(document.createElement('img'), { width: 1000, height: 1000 });
+function visBillede(i) {
+  if (!hoved.isConnected) $('hoved').append(hoved);
+  Object.assign(hoved, { src: billede(farve.billeder[i]), alt: `${p.navn} i ${farve.navn.toLowerCase()}` });
+  $('miniaturer').querySelectorAll('button').forEach((b, j) => b.setAttribute('aria-pressed', i === j));
+}
+function visAntal() {
+  $('antal').textContent = antal;
+  const [minus, plus] = document.querySelectorAll('.kobraekke .antal button');
+  minus.disabled = antal <= 1;
+  plus.disabled = antal >= MAKS;
+}
+
+(async () => {
+  try {
+    const ps = await hentProdukter();
+    p = ps.find((x) => x.id === q.get('id'));
+    if (!p) throw new Error('Produktet findes ikke. Se alle produkter i shoppen.');
+    document.title = `${p.navn} – JFC Labs`;
+    $('kr-navn').textContent = p.navn;
+    $('navn').textContent = p.navn;
+    $('pris').textContent = kr(p.pris_oere);
+    $('kort').textContent = p.kort;
+    $('beskrivelse').textContent = p.beskrivelse;
+    $('maal').textContent = p.maal;
+    $('materiale').textContent = p.materiale;
+    $('farver').replaceChildren(...p.farver.map((f) => {
+      const l = document.createElement('label');
+      l.className = 'farve';
+      l.innerHTML = `<input type="radio" name="farve" class="skjult"><span style="background:${esc(f.hex)}"></span><span class="skjult">${esc(f.navn)}</span>`;
+      l.querySelector('input').addEventListener('change', () => vaelgFarve(f));
+      return l;
+    }));
+    const start = Math.max(0, p.farver.findIndex((f) => f.navn.toLowerCase() === q.get('farve')));
+    $('farver').querySelectorAll('input')[start].checked = true;
+    vaelgFarve(p.farver[start]);
+    visAntal();
+    $('status').hidden = true;
+    $('produkt').hidden = false;
+
+    const andre = ps.filter((x) => x.id !== p.id);
+    if (andre.length) {
+      $('andre').innerHTML = andre.map(produktkort).join('');
+      $('andre-sektion').hidden = false;
+    }
+  } catch (err) {
+    $('status').innerHTML = `${esc(err.message)} <a href="/shop/#produkter">Til shoppen</a>`;
+  }
+})();
+
+document.querySelectorAll('.kobraekke .antal button').forEach((b) => b.addEventListener('click', () => {
+  antal = Math.min(MAKS, Math.max(1, antal + +b.dataset.d));
+  visAntal();
+}));
+
+$('laeg').addEventListener('click', () => {
+  laegIKurv(p.id, farve.navn, antal);
+  $('besked').innerHTML = `${antal} × ${esc(p.navn)} (${esc(farve.navn.toLowerCase())}) er lagt i kurven. <a href="/shop/kurv/">Gå til kurven</a>`;
+});
+</script>
+</body>
+</html>
