@@ -32,5 +32,5 @@ Forældre med en IKEA Antilop-højstol, der vil have stolen med i bil eller somm
 - **Lukket test:** siderne har `noindex`, og kun mails i tabellen `kun_koebere` kan købe, indtil shoppen åbner.
 
 ## Uafklaret
-- Priser og fragt (i dag 49 kr. i shop.js og checkout-funktionen) er pladsholdere.
+- Fragten (i dag 49 kr. i shop.js og checkout-funktionen) er en pladsholder. Priserne er sat 14/10-2026 i databasen: benholder 69 kr., benclips 39 kr.
 - Fotos i stedet for renders før åbning.
