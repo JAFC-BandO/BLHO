@@ -14,7 +14,9 @@ const FIRMA = {
 };
 
 const kr = (oere) => (oere / 100).toLocaleString('da-DK', { minimumFractionDigits: oere % 100 ? 2 : 0, maximumFractionDigits: 2 }) + ' kr.';
-const billede = (sti) => '/shop/' + sti;
+// Bump BILLED_V, når billederne renderes om; så henter browserne de nye i stedet for dem i deres cache
+const BILLED_V = 2;
+const billede = (sti) => `/shop/${sti}?v=${BILLED_V}`;
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // Kurven ligger i browserens lokale lager: [{ id, farve, antal }]. Virker siden uden, er kurven bare tom.
@@ -59,20 +61,23 @@ async function hentProdukter(id) {
 const HOEJDER = 5, MIDT = 2, RUNDT = 36;
 const HOEJDE_TEKST = ['set 20 grader lavere', 'set 10 grader lavere', '', 'set 10 grader højere', 'set 20 grader højere'];
 function drejbar(boks, img, start, skyder) {
-  let vinkel = 0, hoejde = MIDT, fra = null, flyttet = 0;
+  let vinkel = 0, hoejde = MIDT, fra = null, sidst = null, flyttet = 0;
   const rammer = {};
   const url = (h, k) => billede(start().replace('billeder/', 'billeder/360/').replace(/-1\.webp$/, `-${h}-${String(((k % RUNDT) + RUNDT) % RUNDT).padStart(2, '0')}.webp`));
   const klar = (u) => rammer[u]?.complete && rammer[u].naturalWidth;
-  // Hent en hel højde; rammerne vises, efterhånden som de kommer
-  function hent(h) {
+  // Hent højderne (midterhøjden alene, eller alle); rammerne nærmest den aktuelle vinkel bestilles først
+  function hent(alle) {
     if (!start()) return;
-    for (let k = 0; k < RUNDT; k++) { const u = url(h, k); rammer[u] ||= Object.assign(new Image(), { src: u, onload: vis }); }
+    const k0 = Math.round(vinkel / 10);
+    for (const h of alle ? [MIDT, 1, 3, 0, 4] : [MIDT]) for (let d = 0; d <= RUNDT / 2; d++) for (const k of [k0 + d, k0 - d]) {
+      const u = url(h, k); rammer[u] ||= Object.assign(new Image(), { src: u, onload: vis });
+    }
   }
-  // Den rigtige ramme, ellers den nærmeste, der allerede er hentet (i samme højde, så i midterhøjden)
+  // Den rigtige ramme, ellers den nærmeste, der allerede er hentet; vinklen går forud for højden
   function vis() {
     if (!start()) return;
     const k = Math.round(vinkel / 10);
-    for (const h of [Math.round(hoejde), MIDT]) for (let d = 0; d <= RUNDT / 2; d++) for (const kk of [k + d, k - d]) {
+    for (let d = 0; d <= RUNDT / 2; d++) for (const h of [Math.round(hoejde), MIDT]) for (const kk of [k + d, k - d]) {
       const u = url(h, kk);
       if (klar(u)) { if (img.getAttribute('src') !== u) img.src = u; return; }
     }
@@ -81,7 +86,7 @@ function drejbar(boks, img, start, skyder) {
     if (!start() || (!dv && !dh)) return;
     vinkel = (((vinkel + dv) % 360) + 360) % 360;
     hoejde = Math.min(HOEJDER - 1, Math.max(0, hoejde + dh));
-    hent(MIDT); hent(Math.round(hoejde));
+    hent(true);
     vis();
     if (skyder) {
       const g = (Math.round(vinkel / 10) % RUNDT) * 10, t = HOEJDE_TEKST[Math.round(hoejde)];
@@ -90,18 +95,19 @@ function drejbar(boks, img, start, skyder) {
     }
     boks.dispatchEvent(new Event('drejet'));
   }
-  boks.addEventListener('pointerenter', () => hent(MIDT));
-  boks.addEventListener('pointerdown', (e) => { hent(MIDT); fra = [e.clientX, e.clientY]; flyttet = 0; });
+  boks.addEventListener('pointerenter', () => hent(true));
+  boks.addEventListener('pointerleave', () => { sidst = null; });
+  boks.addEventListener('pointerdown', (e) => { hent(true); fra = [e.clientX, e.clientY]; flyttet = 0; });
   for (const t of ['pointerup', 'pointercancel']) addEventListener(t, () => { fra = null; });
   boks.addEventListener('pointermove', (e) => {
     // Én omgang over billedets bredde og alle fem højder over dets højde. Musen drejer bare ved at bevæge sig hen over;
-    // en finger trækker (lodret træk, der starter lodret, scroller siden som normalt)
+    // en finger trækker (CSS touch-action afgør, om et lodret træk vipper eller scroller siden)
     const pv = 360 / boks.clientWidth, ph = (HOEJDER - 1) / boks.clientHeight;
-    let dx = e.movementX, dy = e.movementY;
-    if (e.pointerType !== 'mouse') {
-      if (!fra) return;
-      dx = e.clientX - fra[0]; dy = e.clientY - fra[1]; fra = [e.clientX, e.clientY];
-    }
+    const forrige = e.pointerType === 'mouse' ? sidst : fra;
+    if (e.pointerType === 'mouse') sidst = [e.clientX, e.clientY];
+    else if (fra) fra = [e.clientX, e.clientY];
+    if (!forrige) return;
+    const dx = e.clientX - forrige[0], dy = e.clientY - forrige[1];
     if (fra) flyttet += Math.abs(dx) + Math.abs(dy);
     drej(dx * pv, dy * ph);
   });
@@ -111,7 +117,7 @@ function drejbar(boks, img, start, skyder) {
     const d = { ArrowRight: [10, 0], ArrowLeft: [-10, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[e.key];
     if (d && start()) { e.preventDefault(); drej(...d); }
   });
-  return { hent: () => hent(MIDT), nulstil: () => { vinkel = 0; hoejde = MIDT; } };
+  return { hent: () => hent(false), nulstil: () => { vinkel = 0; hoejde = MIDT; } };
 }
 // Gør produktkortenes billeder drejbare (efter at kortene er sat ind)
 function drejKort(rod) {

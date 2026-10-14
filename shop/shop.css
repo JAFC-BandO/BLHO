@@ -220,9 +220,9 @@ p { margin: 0; }
 .produktside { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: clamp(1.5rem, 4vw, 4rem); align-items: start; padding-bottom: clamp(3rem, 8vw, 5rem); }
 .galleri .hoved { aspect-ratio: 1; border-radius: var(--r-stor); overflow: hidden; background: var(--flade); }
 .galleri .hoved img { width: 100%; height: 100%; object-fit: cover; -webkit-user-drag: none; user-select: none; }
-/* 360°: billede 1 drejes med musen eller ved at trække; lodret scroll på telefon virker stadig */
+/* 360°: billede 1 drejes og vippes med musen eller ved at trække */
 .galleri .hoved { position: relative; }
-.galleri .hoved[role="slider"] { cursor: ew-resize; touch-action: pan-y; }
+.galleri .hoved[role="slider"] { cursor: move; touch-action: none; }   /* et træk op og ned vipper produktet i stedet for at scrolle */
 .galleri .hoved:focus-visible { outline-offset: 3px; }
 .drej { position: absolute; left: 50%; bottom: 1rem; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 0.5rem; margin: 0; padding: 0.5rem 1rem; border-radius: 999px; background: var(--side); box-shadow: inset 0 0 0 1px var(--linje); font-size: 0.875rem; font-weight: 500; white-space: nowrap; pointer-events: none; transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
 .drej.vaek { opacity: 0; }
