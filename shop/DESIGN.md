@@ -130,7 +130,7 @@ Shoppen spiller den moderne Shopify-kanon lige ud: hvid side, produkterne på ly
 
 Tætheden er rolig: store sektioner med god luft, én kolonne indhold på tekstsider, to kolonner på forside, produktside og kurv, der falder til én kolonne på tablet og telefon. Der er ét lyst tema og ingen mørk tilstand, fordi produktbillederne er renderet direkte på billedfladens farve og skal smelte sammen med den.
 
-Billederne er 3D-gengivelser (three.js) af JFC Labs' egne STL-filer, renderet på billedfladen (#f2f4f1) med en blød kontaktskygge, så produkt og flade er ét. Hvert billede har en `.json`-fil ved siden af med oprindelsen, og handelsbetingelserne oplyser, at billederne er 3D-gengivelser.
+Billederne er 3D-gengivelser (three.js) af JFC Labs' egne STL-filer, renderet på billedfladen (#f2f4f1) uden skygge og med studielys, så produktet står rent på fladen. Hvert billede har en `.json`-fil ved siden af med oprindelsen, og handelsbetingelserne oplyser, at billederne er 3D-gengivelser.
 
 **Key Characteristics:**
 - Hvid side, grågrønne billedflader og paneler, sort-grøn tekst.
@@ -203,7 +203,7 @@ Skriften ligger selv på `/shop/fonts/` og preloades; Google Fonts bruges ikke, 
 
 ## Elevation & Depth
 
-Systemet er fladt. Dybde vises med flade-farven mod hvidt og med 1 px linjer. De eneste skygger er indvendige 1 px ringe (farveprøver, valgt miniature) og ringen om den valgte farveprøve; de er kanter, ikke løft. Produktrenderne har deres egen bløde kontaktskygge i billedet.
+Systemet er fladt. Dybde vises med flade-farven mod hvidt og med 1 px linjer. De eneste skygger er indvendige 1 px ringe (farveprøver, valgt miniature) og ringen om den valgte farveprøve; de er kanter, ikke løft. Produktrenderne har heller ingen skygge.
 
 ### Shadow Vocabulary
 - **Prøvekant** (`box-shadow: inset 0 0 0 1px var(--kant)`): omkreds på farveprøver, så hvid kan ses på hvidt.
@@ -267,7 +267,7 @@ Flade-baggrund, fire kolonner (ordmærke + én sætning / Shop / Information / K
 ## Do's and Don'ts
 
 ### Do:
-- **Do** læg hvert produktbillede på flade-farven (#f2f4f1) og rendér nye billeder på præcis den baggrund med blød kontaktskygge.
+- **Do** læg hvert produktbillede på flade-farven (#f2f4f1) og rendér nye billeder på præcis den baggrund uden skygge.
 - **Do** gem oprindelsen ved siden af hvert billede (`<navn>.webp.json`) og hold oplysningen om 3D-gengivelser i handelsbetingelserne, så længe billederne er renders.
 - **Do** brug pillen til alt, man trykker på, og kontrastkanten på alt, der skal kunne ses som en kontrol.
 - **Do** tegn ikoner som inline-SVG i én stregtykkelse (1.75 ved 20-24 px, 2 ved 14-16 px) med `currentColor`.

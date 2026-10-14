@@ -45,7 +45,7 @@
     ],
     "imagery": {
       "source": "three.js-gengivelser af JFC Labs' egne STL-filer, ikke AI-genereret.",
-      "background": "#f2f4f1 (samme som flade) med blød kontaktskygge.",
+      "background": "#f2f4f1 (samme som flade) uden skygge.",
       "provenance": "Hvert billede har <navn>.webp.json med oprindelse; handelsbetingelserne oplyser, at billederne er 3D-gengivelser.",
       "sets": "Tre billeder pr. produkt og farve: alene, med stolens ben, forfra. Forsidebilledet viser tre benholdere i sort, hvid og grå (1600x1100)."
     }
@@ -126,7 +126,7 @@
   ],
   "narrative": {
     "northStar": "Det lille, ordentlige værksted",
-    "overview": "Shoppen spiller den moderne Shopify-kanon lige ud: hvid side, produkterne på lyse grågrønne flader, én grøn handlingsfarve, pilleformede knapper og tynde linjer. Det er et bevidst valg af standarden, så en forælder genkender en rigtig butik med det samme og stoler på den. Personligheden ligger i ordene (Jacob, Danmark, 3D-print) og i de rene renders af produktet, ikke i pynt.\n\nTætheden er rolig: store sektioner med god luft, én kolonne indhold på tekstsider, to kolonner på forside, produktside og kurv, der falder til én kolonne på tablet og telefon. Der er ét lyst tema og ingen mørk tilstand, fordi produktbillederne er renderet direkte på billedfladens farve og skal smelte sammen med den.\n\nBillederne er 3D-gengivelser (three.js) af JFC Labs' egne STL-filer, renderet på billedfladen (#f2f4f1) med en blød kontaktskygge, så produkt og flade er ét. Hvert billede har en .json-fil ved siden af med oprindelsen, og handelsbetingelserne oplyser, at billederne er 3D-gengivelser.",
+    "overview": "Shoppen spiller den moderne Shopify-kanon lige ud: hvid side, produkterne på lyse grågrønne flader, én grøn handlingsfarve, pilleformede knapper og tynde linjer. Det er et bevidst valg af standarden, så en forælder genkender en rigtig butik med det samme og stoler på den. Personligheden ligger i ordene (Jacob, Danmark, 3D-print) og i de rene renders af produktet, ikke i pynt.\n\nTætheden er rolig: store sektioner med god luft, én kolonne indhold på tekstsider, to kolonner på forside, produktside og kurv, der falder til én kolonne på tablet og telefon. Der er ét lyst tema og ingen mørk tilstand, fordi produktbillederne er renderet direkte på billedfladens farve og skal smelte sammen med den.\n\nBillederne er 3D-gengivelser (three.js) af JFC Labs' egne STL-filer, renderet på billedfladen (#f2f4f1) uden skygge og med studielys, så produktet står rent på fladen. Hvert billede har en .json-fil ved siden af med oprindelsen, og handelsbetingelserne oplyser, at billederne er 3D-gengivelser.",
     "keyCharacteristics": [
       "Hvid side, grågrønne billedflader og paneler, sort-grøn tekst.",
       "Én handlingsfarve (grøn) til knapper, kurvantal, fokus og tillidsikoner.",
@@ -143,7 +143,7 @@
       { "name": "The Flat Floor Rule", "body": "Ingen kort, paneler eller knapper har slagskygge. Vil noget skille sig ud, får det flade-farve eller en hårlinje.", "section": "elevation" }
     ],
     "dos": [
-      "Do læg hvert produktbillede på flade-farven (#f2f4f1) og rendér nye billeder på præcis den baggrund med blød kontaktskygge.",
+      "Do læg hvert produktbillede på flade-farven (#f2f4f1) og rendér nye billeder på præcis den baggrund uden skygge.",
       "Do gem oprindelsen ved siden af hvert billede (<navn>.webp.json) og hold oplysningen om 3D-gengivelser i handelsbetingelserne, så længe billederne er renders.",
       "Do brug pillen til alt, man trykker på, og kontrastkanten på alt, der skal kunne ses som en kontrol.",
       "Do tegn ikoner som inline-SVG i én stregtykkelse (1.75 ved 20-24 px, 2 ved 14-16 px) med currentColor.",
