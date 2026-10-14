@@ -217,7 +217,13 @@ p { margin: 0; }
 /* Produktside */
 .produktside { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: clamp(1.5rem, 4vw, 4rem); align-items: start; padding-bottom: clamp(3rem, 8vw, 5rem); }
 .galleri .hoved { aspect-ratio: 1; border-radius: var(--r-stor); overflow: hidden; background: var(--flade); }
-.galleri .hoved img { width: 100%; height: 100%; object-fit: cover; }
+.galleri .hoved img { width: 100%; height: 100%; object-fit: cover; -webkit-user-drag: none; user-select: none; }
+/* 360°: billede 1 drejes med musen eller ved at trække; lodret scroll på telefon virker stadig */
+.galleri .hoved { position: relative; }
+.galleri .hoved[role="slider"] { cursor: ew-resize; touch-action: pan-y; }
+.galleri .hoved:focus-visible { outline-offset: 3px; }
+.drej { position: absolute; left: 50%; bottom: 1rem; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 0.5rem; margin: 0; padding: 0.5rem 1rem; border-radius: 999px; background: var(--side); box-shadow: inset 0 0 0 1px var(--linje); font-size: 0.875rem; font-weight: 500; white-space: nowrap; pointer-events: none; transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+.drej.vaek { opacity: 0; }
 .miniaturer { display: flex; gap: 0.625rem; margin-top: 0.75rem; }
 .miniaturer button { width: 4.5rem; height: 4.5rem; padding: 0; border: 1px solid transparent; border-radius: var(--r-lille); background: var(--flade); overflow: hidden; cursor: pointer; }
 .miniaturer button[aria-pressed="true"] { border-color: var(--blaek); box-shadow: inset 0 0 0 1px var(--blaek); }
@@ -281,5 +287,5 @@ p { margin: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .kort .ramme img, .svar summary svg { transition: none; }
+  .kort .ramme img, .svar summary svg, .drej { transition: none; }
 }
