@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JFC Labs – tilbehør til Antilop-højstolen</title>
+<meta name="description" content="3D-printet benholder og clips til IKEA Antilop-højstolen.">
+<!-- Fjernes, når shoppen åbner -->
+<meta name="robots" content="noindex">
+<style>
+  /* Skriften ligger her selv (ikke Google Fonts), så besøgendes IP ikke sendes til Google */
+  @font-face {
+    font-family: 'Schibsted Grotesk';
+    src: url('fonts/schibsted-grotesk.woff2') format('woff2');
+    font-weight: 400 900;
+    font-display: swap;
+  }
+  :root {
+    --papir: #f5f7f4;
+    --blaek: #1c2b2a;
+    --grafit: #5b6b69;
+    --filament: #2e7d6b;
+    --filament-moerk: #23624f;
+    --lag: #e2e9e4;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--papir);
+    color: var(--blaek);
+    font: 400 1.0625rem/1.55 'Schibsted Grotesk', system-ui, sans-serif;
+  }
+  main, footer { max-width: 46rem; margin: 0 auto; padding: 0 1rem; }
+  header { max-width: 46rem; margin: 0 auto; padding: 1.25rem 1rem 0; font-weight: 800; letter-spacing: -0.01em; }
+  h1 {
+    font-size: clamp(2.25rem, 8vw, 4rem);
+    line-height: 1.02;
+    letter-spacing: -0.035em;
+    font-weight: 800;
+    margin: 3.5rem 0 1rem;
+    max-width: 14ch;
+  }
+  .intro { color: var(--grafit); margin: 0 0 3rem; max-width: 34rem; }
+
+  .produkt {
+    display: grid;
+    grid-template-columns: 11rem 1fr;
+    gap: 1.5rem;
+    padding: 1.75rem 0;
+    border-top: 1px solid var(--lag);
+  }
+  .billede {
+    aspect-ratio: 1;
+    width: 100%;
+    border-radius: 6px;
+    object-fit: cover;
+    background: #fff;
+  }
+  /* Uden foto: vandrette printlag som pladsholder */
+  div.billede { background: repeating-linear-gradient(0deg, var(--lag) 0 3px, #fff 3px 6px); }
+  .produkt h2 { font-size: 1.375rem; line-height: 1.2; letter-spacing: -0.015em; margin: 0 0 0.375rem; }
+  .produkt p { margin: 0 0 1rem; color: var(--grafit); }
+  .linje { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .pris { font-weight: 600; font-size: 1.125rem; }
+
+  .antal { display: inline-flex; align-items: center; border: 1px solid #c9d3cd; border-radius: 999px; background: #fff; }
+  .antal button {
+    width: 2.75rem; height: 2.75rem;
+    border: 0; background: none; border-radius: 999px;
+    font: inherit; font-size: 1.25rem; color: var(--blaek); cursor: pointer;
+  }
+  .antal button:hover { background: var(--lag); }
+  .antal button:disabled { color: #b4bfba; cursor: default; background: none; }
+  .antal output { min-width: 1.75rem; text-align: center; font-weight: 600; }
+
+  .kurv {
+    position: sticky; bottom: 0;
+    margin: 2rem -1rem 0; padding: 1rem;
+    background: var(--papir);
+    border-top: 1px solid var(--lag);
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem 1rem; flex-wrap: wrap;
+  }
+  .kurv .sum { font-weight: 600; }
+  .kurv .fragt { color: var(--grafit); font-size: 0.9375rem; }
+  .betal {
+    font: inherit; font-weight: 600;
+    padding: 0.875rem 1.5rem; border: 0; border-radius: 999px;
+    background: var(--filament); color: #fff; cursor: pointer;
+  }
+  .betal:hover { background: var(--filament-moerk); }
+  .betal:disabled { background: #b4bfba; cursor: default; }
+  .fejl { color: #a3271f; margin: 0; flex-basis: 100%; }
+
+  .login { display: grid; gap: 0.75rem; max-width: 22rem; margin: 1rem 0 0; }
+  .login[hidden] { display: none; }
+  .login p { margin: 0; color: var(--grafit); }
+  .login label { display: grid; gap: 0.25rem; font-weight: 600; font-size: 0.9375rem; }
+  .login input {
+    font: inherit; font-weight: 400;
+    padding: 0.625rem 0.75rem; border: 1px solid #c9d3cd; border-radius: 6px; background: #fff; color: var(--blaek);
+  }
+  .login .betal { justify-self: start; }
+  .fejl:empty { display: none; }
+
+  .tak {
+    background: #fff; border: 1px solid var(--lag);
+    padding: 1rem 1.25rem; margin: 0 0 2rem; border-radius: 6px;
+  }
+  .tak p { margin: 0; }
+
+  footer { color: var(--grafit); font-size: 0.9375rem; padding-top: 3rem; padding-bottom: 3rem; }
+  footer p { margin: 0 0 0.5rem; }
+
+  :focus-visible { outline: 3px solid var(--filament); outline-offset: 2px; }
+
+  @media (max-width: 34rem) {
+    .produkt { grid-template-columns: 6.5rem 1fr; gap: 1rem; }
+  }
+</style>
+</head>
+<body>
+<header>JFC Labs</header>
+
+<main>
+  <h1>Tilbehør til IKEA Antilop-højstolen</h1>
+  <p class="intro">Designet og 3D-printet i Danmark. Sendes med PostNord.</p>
+
+  <div class="tak" id="tak" hidden><p>Tak for din bestilling. Kvitteringen kommer på mail.</p></div>
+
+  <section id="produkter" aria-label="Produkter"><p class="intro">Henter produkter …</p></section>
+
+  <div class="kurv">
+    <div>
+      <div class="sum" id="sum">Kurven er tom</div>
+      <div class="fragt">Fragt lægges til ved betaling</div>
+    </div>
+    <button class="betal" id="betal" disabled>Til betaling</button>
+    <p class="fejl" id="fejl" role="alert"></p>
+  </div>
+
+  <form class="login" id="login" hidden>
+    <p>Shoppen er ikke åben endnu. Log ind for at købe.</p>
+    <label>E-mail <input type="email" name="mail" autocomplete="username" required></label>
+    <label>Adgangskode <input type="password" name="kode" autocomplete="current-password" required></label>
+    <button class="betal">Log ind og betal</button>
+  </form>
+</main>
+
+<footer>
+  <!-- Før åbning: navn, adresse, CVR og kontaktmail her (lovkrav for webshops) -->
+  <p>JFC Labs</p>
+  <p>14 dages fortrydelsesret.</p>
+</footer>
+
+<template id="produkt-skabelon">
+  <article class="produkt">
+    <div class="billede" aria-hidden="true"></div>
+    <div>
+      <h2></h2>
+      <p></p>
+      <div class="linje">
+        <span class="pris"></span>
+        <span class="antal">
+          <button type="button" data-d="-1">−</button>
+          <output>0</output>
+          <button type="button" data-d="1">+</button>
+        </span>
+      </div>
+    </div>
+  </article>
+</template>
+
+<script>
+const SB = 'https://swmugtukacirgopjstdx.supabase.co';
+// Offentlig nøgle (beskyttet af RLS)
+const KEY = 'sb_publishable_izWXG-2mphLXS40f4eXwKg_pakWAUPi';
+const MAKS = 20;   // samme grænse som checkout-funktionen
+
+const kr = (oere) => (oere / 100).toLocaleString('da-DK') + ' kr.';
+const kurv = {};   // id -> antal
+let produkter = [];
+
+if (new URLSearchParams(location.search).has('tak')) document.getElementById('tak').hidden = false;
+
+function opdaterKurv() {
+  const stk = Object.values(kurv).reduce((a, n) => a + n, 0);
+  const sum = produkter.reduce((a, p) => a + (kurv[p.id] || 0) * p.pris_oere, 0);
+  document.getElementById('sum').textContent = stk ? `${stk} ${stk === 1 ? 'vare' : 'varer'}, ${kr(sum)}` : 'Kurven er tom';
+  document.getElementById('betal').disabled = !stk;
+}
+
+async function hentProdukter() {
+  const liste = document.getElementById('produkter');
+  try {
+    const r = await fetch(`${SB}/rest/v1/produkter?select=id,navn,beskrivelse,pris_oere,billede&order=sortering`, { headers: { apikey: KEY }, cache: 'no-cache' });
+    if (!r.ok) throw new Error(r.status);
+    produkter = await r.json();
+  } catch {
+    liste.innerHTML = '<p class="intro">Produkterne kunne ikke hentes. Prøv igen om lidt.</p>';
+    return;
+  }
+  liste.replaceChildren(...produkter.map((p) => {
+    const el = document.getElementById('produkt-skabelon').content.firstElementChild.cloneNode(true);
+    if (p.billede) {
+      const img = Object.assign(document.createElement('img'), { className: 'billede', src: p.billede, alt: p.navn, loading: 'lazy' });
+      el.querySelector('.billede').replaceWith(img);
+    }
+    el.querySelector('h2').textContent = p.navn;
+    el.querySelector('p').textContent = p.beskrivelse;
+    el.querySelector('.pris').textContent = kr(p.pris_oere);
+    const ud = el.querySelector('output');
+    const [minus, plus] = el.querySelectorAll('button');
+    minus.setAttribute('aria-label', `Færre: ${p.navn}`);
+    plus.setAttribute('aria-label', `Flere: ${p.navn}`);
+    ud.setAttribute('aria-label', `Antal: ${p.navn}`);
+    const vis = () => {
+      const n = kurv[p.id] || 0;
+      ud.textContent = n;
+      minus.disabled = !n;
+      plus.disabled = n >= MAKS;
+      opdaterKurv();
+    };
+    el.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+      const n = Math.min(MAKS, Math.max(0, (kurv[p.id] || 0) + +b.dataset.d));
+      if (n) kurv[p.id] = n; else delete kurv[p.id];
+      vis();
+    }));
+    vis();
+    return el;
+  }));
+}
+
+const knap = document.getElementById('betal');
+const fejl = document.getElementById('fejl');
+const form = document.getElementById('login');
+const fejltekst = (err) => err instanceof TypeError ? 'Ingen forbindelse. Prøv igen.' : err.message;
+function nulstil() { knap.textContent = 'Til betaling'; opdaterKurv(); }
+// Tilbage-knappen fra Stripe viser siden fra cachen med knappen stadig i "Åbner betaling …"
+addEventListener('pageshow', (e) => { if (e.persisted) nulstil(); });
+
+// Login, så længe shoppen er lukket (tabellen kun_koebere). Adgangsnøglen gemmes i fanen,
+// så den overlever turen til Stripe og tilbage.
+let login = null;
+try { login = JSON.parse(sessionStorage.getItem('shop-login')); } catch {}
+
+async function betal() {
+  knap.disabled = true;
+  knap.textContent = 'Åbner betaling …';
+  fejl.textContent = '';
+  try {
+    const headers = { apikey: KEY, 'Content-Type': 'application/json' };
+    if (login && login.udloeber > Date.now()) headers.Authorization = 'Bearer ' + login.token;
+    const r = await fetch(`${SB}/functions/v1/checkout`, { method: 'POST', headers, body: JSON.stringify({ varer: kurv }) });
+    const d = await r.json().catch(() => ({}));
+    if (d.login) {
+      form.hidden = false;
+      form.elements.mail.focus();
+      return nulstil();
+    }
+    if (!r.ok || !d.url) throw new Error(d.fejl || 'Betalingen kunne ikke startes.');
+    location.href = d.url;
+  } catch (err) {
+    fejl.textContent = fejltekst(err);
+    nulstil();
+  }
+}
+knap.addEventListener('click', betal);
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const send = form.querySelector('button');
+  send.disabled = true;
+  fejl.textContent = '';
+  try {
+    const r = await fetch(`${SB}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { apikey: KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: form.elements.mail.value, password: form.elements.kode.value }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error('Forkert e-mail eller adgangskode.');
+    login = { token: d.access_token, udloeber: Date.now() + (d.expires_in - 60) * 1000 };
+    try { sessionStorage.setItem('shop-login', JSON.stringify(login)); } catch {}
+    form.reset();
+    form.hidden = true;
+    betal();
+  } catch (err) {
+    fejl.textContent = fejltekst(err);
+  } finally {
+    send.disabled = false;
+  }
+});
+
+hentProdukter();
+</script>
+</body>
+</html>
