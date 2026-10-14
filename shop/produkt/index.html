@@ -8,7 +8,7 @@
 <!-- Fjernes, når shoppen åbner -->
 <meta name="robots" content="noindex">
 <link rel="preload" href="/shop/fonts/schibsted-grotesk.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/shop/shop.css?v=4">
+<link rel="stylesheet" href="/shop/shop.css?v=5">
 </head>
 <body>
 <a class="spring" href="#indhold">Gå til indhold</a>
@@ -114,7 +114,7 @@
   </div>
 </footer>
 
-<script src="/shop/shop.js?v=3"></script>
+<script src="/shop/shop.js?v=4"></script>
 <script>
 const q = new URLSearchParams(location.search);
 const $ = (id) => document.getElementById(id);
@@ -140,49 +140,24 @@ function vaelgFarve(f) {
 const hoved = Object.assign(document.createElement('img'), { width: 1000, height: 1000, draggable: false });
 const hovedboks = $('hoved'), hint = $('drej');
 const SLIDER = ['role', 'tabindex', 'aria-label', 'aria-valuemin', 'aria-valuemax', 'aria-valuenow', 'aria-valuetext'];
-let visning = 0, grader = 0, rammer = null, drejet = false, trukket = null;
+let visning = 0;
+// Billede 1 kan drejes 360° og vippes; rammerne hentes, så snart siden er vist
+const spin = drejbar(hovedboks, hoved, () => (visning === 0 ? farve.billeder[0] : ''), true);
+hovedboks.addEventListener('drejet', () => hint.classList.add('vaek'), { once: true });
+$('drej-tekst').textContent = matchMedia('(hover: hover) and (pointer: fine)').matches ? 'Bevæg musen for at dreje' : 'Træk for at dreje';
 function visBillede(i) {
   if (!hoved.isConnected) hovedboks.append(hoved);
-  visning = i; grader = 0;
+  visning = i;
+  spin.nulstil();
   Object.assign(hoved, { src: billede(farve.billeder[i]), alt: `${p.navn} i ${farve.navn.toLowerCase()}` });
   $('miniaturer').querySelectorAll('button').forEach((b, j) => b.setAttribute('aria-pressed', i === j));
   // Billede 1 er en 360°-drejning og opfører sig som en skyder (piletasterne drejer)
   hint.hidden = i !== 0;
   if (i !== 0) return SLIDER.forEach((a) => hovedboks.removeAttribute(a));
-  Object.entries({ role: 'slider', tabindex: 0, 'aria-label': `Drej ${p.navn.toLowerCase()} i ${farve.navn.toLowerCase()} hele vejen rundt`, 'aria-valuemin': 0, 'aria-valuemax': 350, 'aria-valuenow': 0, 'aria-valuetext': '0 grader' })
+  Object.entries({ role: 'slider', tabindex: 0, 'aria-label': `Drej ${p.navn.toLowerCase()} i ${farve.navn.toLowerCase()} rundt med pil højre og venstre, vip med pil op og ned`, 'aria-valuemin': 0, 'aria-valuemax': 350, 'aria-valuenow': 0, 'aria-valuetext': '0 grader rundt' })
     .forEach(([a, v]) => hovedboks.setAttribute(a, v));
+  (window.requestIdleCallback || setTimeout)(spin.hent);
 }
-
-// 360°: 36 rammer á 10°, hentet først når man kommer hen på billedet. Ramme 00 er billede 1
-const ramme = (k) => billede(farve.billeder[0].replace('billeder/', 'billeder/360/').replace(/-1\.webp$/, `-${String(k).padStart(2, '0')}.webp`));
-function hentRammer() {
-  if (visning === 0 && rammer?.farve !== farve) rammer = { farve, billeder: Array.from({ length: 36 }, (_, k) => Object.assign(new Image(), { src: ramme(k) })) };
-}
-function drej(d) {
-  if (visning !== 0 || !d) return;
-  hentRammer();
-  grader = (((grader + d) % 360) + 360) % 360;
-  const k = Math.round(grader / 10) % 36;
-  const img = rammer.billeder[k];
-  if (img.complete && img.naturalWidth) hoved.src = img.src;   // en ramme, der ikke er hentet endnu, springes over
-  hovedboks.setAttribute('aria-valuenow', k * 10);
-  hovedboks.setAttribute('aria-valuetext', `${k * 10} grader`);
-  if (!drejet) { drejet = true; hint.classList.add('vaek'); }
-}
-$('drej-tekst').textContent = matchMedia('(hover: hover) and (pointer: fine)').matches ? 'Bevæg musen for at dreje' : 'Træk for at dreje';
-hovedboks.addEventListener('pointerenter', hentRammer);
-hovedboks.addEventListener('focus', hentRammer);
-hovedboks.addEventListener('pointerdown', (e) => { hentRammer(); trukket = e.clientX; });
-for (const t of ['pointerup', 'pointercancel']) addEventListener(t, () => { trukket = null; });
-hovedboks.addEventListener('pointermove', (e) => {
-  const pr = 360 / hovedboks.clientWidth;   // én omgang over billedets bredde
-  if (e.pointerType === 'mouse') drej(e.movementX * pr);
-  else if (trukket !== null) { drej((e.clientX - trukket) * pr); trukket = e.clientX; }
-});
-hovedboks.addEventListener('keydown', (e) => {
-  const d = { ArrowRight: 10, ArrowUp: 10, ArrowLeft: -10, ArrowDown: -10 }[e.key];
-  if (d && visning === 0) { e.preventDefault(); drej(d); }
-});
 function visAntal() {
   $('antal').textContent = antal;
   const [minus, plus] = document.querySelectorAll('.kobraekke .antal button');
@@ -220,6 +195,7 @@ function visAntal() {
     const andre = ps.filter((x) => x.id !== p.id);
     if (andre.length) {
       $('andre').innerHTML = andre.map(produktkort).join('');
+      drejKort($('andre'));
       $('andre-sektion').hidden = false;
     }
   } catch (err) {

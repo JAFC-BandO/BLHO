@@ -8,7 +8,7 @@
 <!-- Fjernes, når shoppen åbner -->
 <meta name="robots" content="noindex">
 <link rel="preload" href="/shop/fonts/schibsted-grotesk.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/shop/shop.css?v=4">
+<link rel="stylesheet" href="/shop/shop.css?v=5">
 </head>
 <body>
 <a class="spring" href="#indhold">Gå til indhold</a>
@@ -147,13 +147,14 @@
   </div>
 </footer>
 
-<script src="/shop/shop.js?v=3"></script>
+<script src="/shop/shop.js?v=4"></script>
 <script>
 hentProdukter()
   .then((ps) => {
     document.getElementById('gitter').innerHTML = ps.length
       ? ps.map(produktkort).join('')
       : '<p class="under">Der er ingen produkter i shoppen lige nu.</p>';
+    drejKort(document.getElementById('gitter'));
   })
   .catch(() => {
     document.getElementById('gitter').innerHTML = '<p class="under">Produkterne kunne ikke hentes. Prøv igen om lidt.</p>';
