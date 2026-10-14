@@ -78,3 +78,8 @@ revoke execute on function public.giv_admin() from public, anon, authenticated;
 create trigger giv_admin after insert on auth.users
   for each row when (lower(new.email) = 'jfclabsshop@gmail.com' and new.email_confirmed_at is not null)
   execute function public.giv_admin();
+
+-- 14/10-2026: triggeren fangede ikke kontoen, fordi dashboardet bekræfter mailen lige efter oprettelsen
+-- (email_confirmed_at er tom ved insert). Admin blev derfor givet direkte:
+--   insert into public.admins (user_id) select id from auth.users where lower(email) = 'jfclabsshop@gmail.com';
+-- Triggeren er uskadelig (mailen findes nu) og kan fjernes: drop trigger giv_admin on auth.users; drop function public.giv_admin();

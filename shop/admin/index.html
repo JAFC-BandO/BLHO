@@ -37,6 +37,7 @@
 
     <form class="login adminlogin kodeform" id="kode">
       <h2>Skift adgangskode</h2>
+      <input type="email" name="brugernavn" autocomplete="username" hidden>
       <label>Ny adgangskode <input type="password" name="ny" autocomplete="new-password" minlength="10" required></label>
       <label>Gentag den nye adgangskode <input type="password" name="igen" autocomplete="new-password" minlength="10" required></label>
       <p class="fejl" id="kode-fejl" role="alert"></p>
@@ -77,6 +78,7 @@ async function start() {
     const ps = await api('/rest/v1/produkter?select=id,navn,kort,beskrivelse,pris_oere,maal,materiale,aktiv,tags,farver,lager(farve,antal)&order=sortering');
     $('varer').replaceChildren(...ps.map(vareform));
     $('hvem').textContent = `Logget ind som ${login.mail}`;
+    $('kode').elements.brugernavn.value = login.mail;   // til adgangskodeprogrammer
     $('status').textContent = 'Ret tekster, pris, lager og tags, og tryk Gem ændringer. Shoppen viser ændringerne med det samme.';
     $('login').hidden = true;
     $('katalog').hidden = false;
