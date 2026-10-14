@@ -56,6 +56,60 @@
         ],
         "createdAt": "2026-10-14T09:48:01.070Z",
         "reason": "Claude, målt i browseren 14/10-2026: footer .bundlinje har 24px padding-top (tekst 25px fra kant), .sektion.flade 48px top og .indhold 16px sider, .svar summary-tekst 19px under kanten, .tillid 21px. Detektoren læser padding på det forkerte element."
+      },
+      {
+        "rule": "design-system-font",
+        "value": "grotesk",
+        "files": [
+          "shop/index.html"
+        ],
+        "createdAt": "2026-10-14T09:57:24.826Z",
+        "reason": "Claude: shoppen er et separat produkt; Schibsted Grotesk er deklareret i shop/DESIGN.md. Hook'en læser kun Børneloppens DESIGN.md i roden."
+      },
+      {
+        "rule": "design-system-font",
+        "value": "grotesk",
+        "files": [
+          "shop/produkt/index.html"
+        ],
+        "createdAt": "2026-10-14T09:57:26.719Z",
+        "reason": "Claude: shoppen er et separat produkt; Schibsted Grotesk er deklareret i shop/DESIGN.md. Hook'en læser kun Børneloppens DESIGN.md i roden."
+      },
+      {
+        "rule": "design-system-font",
+        "value": "grotesk",
+        "files": [
+          "shop/kurv/index.html"
+        ],
+        "createdAt": "2026-10-14T09:57:27.718Z",
+        "reason": "Claude: shoppen er et separat produkt; Schibsted Grotesk er deklareret i shop/DESIGN.md. Hook'en læser kun Børneloppens DESIGN.md i roden."
+      },
+      {
+        "rule": "design-system-font",
+        "value": "grotesk",
+        "files": [
+          "shop/om/index.html"
+        ],
+        "createdAt": "2026-10-14T09:57:28.713Z",
+        "reason": "Claude: shoppen er et separat produkt; Schibsted Grotesk er deklareret i shop/DESIGN.md. Hook'en læser kun Børneloppens DESIGN.md i roden."
+      },
+      {
+        "rule": "design-system-font",
+        "value": "grotesk",
+        "files": [
+          "shop/handelsbetingelser/index.html"
+        ],
+        "createdAt": "2026-10-14T09:57:29.953Z",
+        "reason": "Claude: shoppen er et separat produkt; Schibsted Grotesk er deklareret i shop/DESIGN.md. Hook'en læser kun Børneloppens DESIGN.md i roden."
+      },
+      {
+        "rule": "design-system-font",
+        "value": "grotesk",
+        "files": [
+          "shop/privatlivspolitik/index.html"
+        ],
+        "createdAt": "2026-10-14T09:57:31.944Z",
+        "reason": "Claude: shoppen er et separat produkt; Schibsted Grotesk er deklareret i shop/DESIGN.md. Hook'en læser kun Børneloppens DESIGN.md i roden."
       }
     ]
   }
