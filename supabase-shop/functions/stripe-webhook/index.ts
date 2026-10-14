@@ -3,24 +3,36 @@
 // Samme betaling trækker kun én gang, også hvis Stripe sender beskeden igen (registrer_ordre).
 // Kurven kommer fra sessionens metadata varer ("id|farve|antal;..."), som checkout-funktionen sætter.
 //
-// Secret: STRIPE_WEBHOOK_SECRET (whsec_..., fra webhook-endpointet i Stripe-dashboardet).
+// Hemmelighed: STRIPE_WEBHOOK_SECRET som Edge Functions-secret eller stripe_webhook_secret i Vault
+// (whsec_..., fra webhook-endpointet i Stripe-dashboardet).
 // Udrulles med verify_jwt slået fra: Stripe sender ikke et Supabase-login, så Stripes signatur tjekkes her.
 
 const SB = Deno.env.get('SUPABASE_URL')!;
 const SR = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const HEMMELIG = Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? '';
 const TOLERANCE = 300;   // sekunder, som Stripes egne biblioteker
+
+// Stripe-nøgle: Edge Functions-secret, ellers krypteret i Vault (se supabase-shop/migration_stripe_vault.sql).
+// Hentes ved hvert kald, så en ny nøgle virker med det samme.
+async function noegle(env: string, vault: string): Promise<string> {
+  const v = Deno.env.get(env);
+  if (v) return v;
+  const r = await fetch(`${SB}/rest/v1/rpc/stripe_noegle`, {
+    method: 'POST', headers: { apikey: SR, Authorization: 'Bearer ' + SR, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_navn: vault }),
+  }).catch(() => null);
+  return r?.ok ? ((await r.json()) ?? '') : '';
+}
 
 const tekst = (body: string, status = 200) => new Response(body, { status });
 
 // Stripe-Signature: "t=<tid>,v1=<hex>[,v1=...]"; v1 er HMAC-SHA256 af "<tid>.<rå body>" med webhook-hemmeligheden
-async function gyldig(body: string, header: string): Promise<boolean> {
+async function gyldig(body: string, header: string, hemmelig: string): Promise<boolean> {
   const dele = header.split(',').map((d) => d.split('='));
   const t = dele.find(([k]) => k === 't')?.[1];
   const v1 = dele.filter(([k]) => k === 'v1').map(([, v]) => v);
   if (!t || !v1.length || Math.abs(Date.now() / 1000 - Number(t)) > TOLERANCE) return false;
-  const noegle = await crypto.subtle.importKey('raw', new TextEncoder().encode(HEMMELIG), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', noegle, new TextEncoder().encode(`${t}.${body}`)));
+  const hmac = await crypto.subtle.importKey('raw', new TextEncoder().encode(hemmelig), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', hmac, new TextEncoder().encode(`${t}.${body}`)));
   const hex = [...sig].map((b) => b.toString(16).padStart(2, '0')).join('');
   // Sammenlign uden at afsløre, hvor tidligt to strenge afviger
   return v1.some((v) => v.length === hex.length && [...v].reduce((d, c, i) => d | (c.charCodeAt(0) ^ hex.charCodeAt(i)), 0) === 0);
@@ -28,9 +40,10 @@ async function gyldig(body: string, header: string): Promise<boolean> {
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return tekst('Kun POST', 405);
-  if (!HEMMELIG) return tekst('Webhooken er ikke sat op', 503);
+  const hemmelig = await noegle('STRIPE_WEBHOOK_SECRET', 'stripe_webhook_secret');
+  if (!hemmelig) return tekst('Webhooken er ikke sat op', 503);
   const body = await req.text();
-  if (!(await gyldig(body, req.headers.get('Stripe-Signature') ?? ''))) return tekst('Ugyldig signatur', 400);
+  if (!(await gyldig(body, req.headers.get('Stripe-Signature') ?? '', hemmelig))) return tekst('Ugyldig signatur', 400);
 
   const ev = JSON.parse(body);
   if (ev.type !== 'checkout.session.completed') return tekst('ok');

@@ -14,7 +14,8 @@
 // Mængderabat: 5 % ved 10 stk. og 10 % ved 50 stk. i alt (samme regel som rabatPct i shop/shop.js);
 // den trækkes fra stykprisen, ikke fra fragten.
 //
-// Secret: STRIPE_SECRET_KEY (sk_test_... til test, sk_live_... når shoppen åbner).
+// Nøgle: STRIPE_SECRET_KEY som Edge Functions-secret eller stripe_secret_key i Vault (sk_test_... til test,
+// sk_live_... når shoppen åbner).
 // Lukket test: står der mails i tabellen kun_koebere, må kun de købe (logget ind i shoppens
 // Supabase-Auth). Tøm tabellen, når shoppen åbner; så må alle købe uden login. Login tjekkes her mod
 // /auth/v1/user, derfor udrulles funktionen med verify_jwt slået fra.
@@ -29,11 +30,22 @@ const svar = (body: unknown, status = 200) =>
 
 const SB = Deno.env.get('SUPABASE_URL')!;
 const SR = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const STRIPE = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
 const SHOP = 'https://jfclabs.dk/shop/';
 const FRAGT_OERE = 4900;   // pladsholder: fast fragt med PostNord; samme som FRAGT_OERE i shop/shop.js
 const MAKS_ANTAL = 100;    // pr. linje; samme som MAKS i shop/shop.js (lageret sætter den reelle grænse)
 const MAKS_LINJER = 10;
+
+// Stripe-nøgle: Edge Functions-secret, ellers krypteret i Vault (se supabase-shop/migration_stripe_vault.sql).
+// Hentes ved hvert kald, så en ny nøgle virker med det samme.
+async function noegle(env: string, vault: string): Promise<string> {
+  const v = Deno.env.get(env);
+  if (v) return v;
+  const r = await fetch(`${SB}/rest/v1/rpc/stripe_noegle`, {
+    method: 'POST', headers: { apikey: SR, Authorization: 'Bearer ' + SR, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_navn: vault }),
+  }).catch(() => null);
+  return r?.ok ? ((await r.json()) ?? '') : '';
+}
 
 type Farve = { navn: string; billeder: string[] };
 type Produkt = { id: string; navn: string; pris_oere: number; farver: Farve[]; lager: { farve: string; antal: number }[] };
@@ -55,6 +67,7 @@ Deno.serve(async (req) => {
   const kun = (await k.json() as { mail: string }[]).map((x) => x.mail);
   if (kun.length && !mail) return svar({ fejl: 'Log ind for at købe.', login: true }, 401);
   if (kun.length && !kun.includes(mail)) return svar({ fejl: 'Shoppen er ikke åben endnu.' }, 403);
+  const STRIPE = await noegle('STRIPE_SECRET_KEY', 'stripe_secret_key');
   if (!STRIPE) return svar({ fejl: 'Betaling er ikke sat op endnu.' }, 503);
 
   // Kurven: { varer: [{ id: "benholder", farve: "Sort", antal: 1 }, ...] }
@@ -94,8 +107,8 @@ Deno.serve(async (req) => {
   // Lageret: summen pr. produkt og farve må ikke overstige det, der er på lager
   const iKurv = new Map<string, number>();
   for (const l of linjer) iKurv.set(l.id + '|' + l.farve, (iKurv.get(l.id + '|' + l.farve) ?? 0) + l.antal);
-  for (const [noegle, antal] of iKurv) {
-    const [id, fn] = noegle.split('|');
+  for (const [vare, antal] of iKurv) {
+    const [id, fn] = vare.split('|');
     const p = produkter.get(id);
     const paaLager = p?.lager.find((x) => x.farve === fn)?.antal ?? 0;
     if (p && antal > paaLager) {
