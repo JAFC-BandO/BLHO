@@ -12,4 +12,6 @@ grant execute on function public.stripe_noegle(text) to service_role;
 -- Ejeren kører selv (med sine egne nøgler, i SQL-editoren):
 --   select vault.create_secret('sk_test_...', 'stripe_secret_key');
 --   select vault.create_secret('whsec_...', 'stripe_webhook_secret');
--- Ny nøgle senere (fx sk_live_): opret igen med samme navn; den nyeste bruges.
+-- Navnet er unikt i Vault. Ny nøgle senere (fx sk_live_): find id'et med
+--   select id, name from vault.secrets;
+-- og opdatér: select vault.update_secret('<id>', 'sk_live_...');
