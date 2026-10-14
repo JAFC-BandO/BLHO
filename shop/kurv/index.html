@@ -7,7 +7,7 @@
 <!-- Fjernes, når shoppen åbner -->
 <meta name="robots" content="noindex">
 <link rel="preload" href="/shop/fonts/schibsted-grotesk.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/shop/shop.css?v=6">
+<link rel="stylesheet" href="/shop/shop.css?v=7">
 </head>
 <body>
 <a class="spring" href="#indhold">Gå til indhold</a>
@@ -42,6 +42,8 @@
     <a class="knap" href="/shop/#produkter">Se produkterne</a>
   </div>
 
+  <p class="besked" id="rettet" role="status"></p>
+
   <div class="kurvgitter" id="fyldt" hidden>
     <ul class="linjer" id="linjer" aria-label="Varer i kurven"></ul>
 
@@ -49,10 +51,12 @@
       <h2 id="oversigt-titel">Oversigt</h2>
       <dl>
         <div><dt>Varer</dt><dd id="subtotal"></dd></div>
+        <div id="rabatlinje" hidden><dt id="rabat-tekst">Mængderabat</dt><dd id="rabat"></dd></div>
         <div><dt>Fragt med PostNord</dt><dd data-fragt></dd></div>
         <div class="ialt"><dt>I alt</dt><dd id="ialt"></dd></div>
       </dl>
       <p class="smaat" id="moms"></p>
+      <p class="smaat" id="rabat-tip"></p>
       <button class="knap fuld" id="betal" type="button">Gå til betaling</button>
       <p class="fejl" id="fejl" role="alert"></p>
       <div class="betaling"><ul aria-label="Betalingsmåder"><li>Visa</li><li>Mastercard</li><li>MobilePay</li><li>Apple Pay</li></ul></div>
@@ -100,7 +104,7 @@
   </div>
 </footer>
 
-<script src="/shop/shop.js?v=5"></script>
+<script src="/shop/shop.js?v=6"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 let produkter = [];
@@ -115,9 +119,16 @@ const minusIkon = '<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 7h10"
 const plusIkon = '<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 7h10M7 2v10"/></svg>';
 
 function tegn() {
-  // Linjer med produkter eller farver, der ikke findes længere, fjernes
+  // Linjer med produkter eller farver, der ikke findes længere, fjernes; antal rettes ned til lageret
+  const rettet = [];
   const kurv = hentKurv().filter((l) => produkter.some((p) => p.id === l.id && p.farver.some((f) => f.navn === l.farve)));
-  gemKurv(kurv);
+  for (const l of kurv) {
+    const p = produkter.find((x) => x.id === l.id), n = paaLager(p, l.farve);
+    if (l.antal > n) { rettet.push(n ? `Der er kun ${n} stk. af ${p.navn.toLowerCase()} i ${l.farve.toLowerCase()} på lager, så antallet er rettet.` : `${p.navn} i ${l.farve.toLowerCase()} er udsolgt og er fjernet fra kurven.`); l.antal = n; }
+  }
+  if (rettet.length) $('rettet').textContent = rettet.join(' ');
+  gemKurv(kurv.filter((l) => l.antal > 0));
+  kurv.splice(0, kurv.length, ...kurv.filter((l) => l.antal > 0));
   $('status').hidden = true;
   $('tom').hidden = kurv.length > 0 || !$('tak').hidden;
   $('fyldt').hidden = !kurv.length;
@@ -140,14 +151,21 @@ function tegn() {
         <div class="antal">
           <button type="button" data-i="${i}" data-d="-1" aria-label="Færre: ${esc(p.navn)}, ${esc(f.navn.toLowerCase())}" ${l.antal <= 1 ? 'disabled' : ''}>${minusIkon}</button>
           <output aria-label="Antal">${l.antal}</output>
-          <button type="button" data-i="${i}" data-d="1" aria-label="Flere: ${esc(p.navn)}, ${esc(f.navn.toLowerCase())}" ${l.antal >= MAKS ? 'disabled' : ''}>${plusIkon}</button>
+          <button type="button" data-i="${i}" data-d="1" aria-label="Flere: ${esc(p.navn)}, ${esc(f.navn.toLowerCase())}" ${l.antal >= Math.min(MAKS, paaLager(p, l.farve)) ? 'disabled' : ''}>${plusIkon}</button>
         </div>
         <button class="fjern" type="button" data-i="${i}">Fjern</button>
       </div>
       <p class="linjepris">${kr(p.pris_oere * l.antal)}</p>
     </li>`;
   }).join('');
-  const ialt = sum + FRAGT_OERE;
+  // Mængderabat efter antal stk. i alt, trukket fra stykprisen som i checkout-funktionen
+  const stk = kurv.reduce((a, l) => a + l.antal, 0), pct = rabatPct(stk);
+  const rabat = sum - kurv.reduce((a, l) => a + stykpris(produkter.find((x) => x.id === l.id).pris_oere, pct) * l.antal, 0);
+  $('rabatlinje').hidden = !rabat;
+  $('rabat-tekst').textContent = `Mængderabat ${pct} %`;
+  $('rabat').textContent = '−' + kr(rabat);
+  $('rabat-tip').textContent = stk < 10 ? `Køb ${10 - stk} stk. mere, og få 5 % mængderabat.` : stk < 50 ? `Køb ${50 - stk} stk. mere, og få 10 % mængderabat.` : '';
+  const ialt = sum - rabat + FRAGT_OERE;
   $('subtotal').textContent = kr(sum);
   $('ialt').textContent = kr(ialt);
   $('moms').textContent = `Heraf moms ${kr(Math.round(ialt / 5))}`;   // 25 % moms = 1/5 af beløbet inkl. moms
@@ -160,7 +178,7 @@ $('linjer').addEventListener('click', (e) => {
   const l = kurv[+b.dataset.i];
   if (!l) return;
   if (b.classList.contains('fjern')) kurv.splice(+b.dataset.i, 1);
-  else l.antal = Math.min(MAKS, Math.max(1, l.antal + +b.dataset.d));
+  else l.antal = Math.min(MAKS, paaLager(produkter.find((x) => x.id === l.id), l.farve), Math.max(1, l.antal + +b.dataset.d));
   gemKurv(kurv);
   tegn();
 });

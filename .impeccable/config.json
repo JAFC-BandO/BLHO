@@ -110,6 +110,14 @@
         ],
         "createdAt": "2026-10-14T09:57:31.944Z",
         "reason": "Claude: shoppen er et separat produkt; Schibsted Grotesk er deklareret i shop/DESIGN.md. Hook'en læser kun Børneloppens DESIGN.md i roden."
+      },
+      {
+        "rule": "design-system-font",
+        "value": "grotesk",
+        "files": [
+          "shop/admin/index.html"
+        ],
+        "createdAt": "2026-10-14T18:24:12.341Z"
       }
     ]
   }

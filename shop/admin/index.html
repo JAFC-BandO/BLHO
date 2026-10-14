@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin – JFC Labs</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preload" href="/shop/fonts/schibsted-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/shop/shop.css?v=7">
+</head>
+<body>
+<a class="spring" href="#indhold">Gå til indhold</a>
+<header class="top">
+  <div class="indhold">
+    <a class="logo" href="/shop/">JFC Labs</a>
+    <nav class="menu" aria-label="Hovedmenu">
+      <a href="/shop/">Til shoppen</a>
+    </nav>
+  </div>
+</header>
+
+<!-- Superadmin: kun konti i tabellen admins kan rette (RLS i databasen); siden er bare brugerfladen -->
+<main id="indhold" class="indhold admin">
+  <h1>Produktkatalog</h1>
+  <p class="under" id="status">Log ind som administrator.</p>
+
+  <form class="login adminlogin" id="login" hidden>
+    <label>E-mail <input type="email" name="mail" autocomplete="username" required></label>
+    <label>Adgangskode <input type="password" name="kode" autocomplete="current-password" required></label>
+    <p class="fejl" id="login-fejl" role="alert"></p>
+    <button class="knap fuld">Log ind</button>
+  </form>
+
+  <div id="katalog" hidden>
+    <div class="adminbar"><p id="hvem"></p><button class="knap sekundaer" id="ud" type="button">Log ud</button></div>
+    <div id="varer"></div>
+
+    <form class="login adminlogin kodeform" id="kode">
+      <h2>Skift adgangskode</h2>
+      <label>Ny adgangskode <input type="password" name="ny" autocomplete="new-password" minlength="10" required></label>
+      <label>Gentag den nye adgangskode <input type="password" name="igen" autocomplete="new-password" minlength="10" required></label>
+      <p class="fejl" id="kode-fejl" role="alert"></p>
+      <p class="besked" id="kode-besked" role="status"></p>
+      <button class="knap">Skift adgangskode</button>
+    </form>
+  </div>
+</main>
+
+<script src="/shop/shop.js?v=6"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const LOGIN = 'admin-login';
+let login = null;
+try { login = JSON.parse(sessionStorage.getItem(LOGIN)); } catch {}
+
+// Kald til Supabase som den indloggede admin
+async function api(sti, valg = {}) {
+  const r = await fetch(SB + sti, { ...valg, headers: { apikey: KEY, Authorization: 'Bearer ' + login.token, 'Content-Type': 'application/json', ...valg.headers } });
+  const d = await r.json().catch(() => null);
+  if (r.status === 401) { logUd('Du er blevet logget ud. Log ind igen.'); throw new Error('Du er blevet logget ud. Log ind igen.'); }
+  if (!r.ok) throw new Error(d?.message || d?.msg || 'Noget gik galt. Prøv igen.');
+  return d;
+}
+
+function logUd(besked) {
+  login = null;
+  try { sessionStorage.removeItem(LOGIN); } catch {}
+  $('katalog').hidden = true;
+  $('login').hidden = false;
+  $('status').textContent = besked || 'Log ind som administrator.';
+}
+
+async function start() {
+  if (!login || login.udloeber < Date.now()) return logUd();
+  try {
+    if (!(await api('/rest/v1/rpc/er_admin', { method: 'POST', body: '{}' }))) return logUd(`${login.mail} har ikke adgang til admin. Log ind med administratorkontoen.`);
+    const ps = await api('/rest/v1/produkter?select=id,navn,kort,beskrivelse,pris_oere,maal,materiale,aktiv,tags,farver,lager(farve,antal)&order=sortering');
+    $('varer').replaceChildren(...ps.map(vareform));
+    $('hvem').textContent = `Logget ind som ${login.mail}`;
+    $('status').textContent = 'Ret tekster, pris, lager og tags, og tryk Gem ændringer. Shoppen viser ændringerne med det samme.';
+    $('login').hidden = true;
+    $('katalog').hidden = false;
+  } catch (err) {
+    $('status').textContent = err.message;
+  }
+}
+
+// Ét produkt som formular. Id og billeder kan ikke rettes her (databasen tillader det heller ikke)
+function vareform(p) {
+  const f = document.createElement('form');
+  f.className = 'vare';
+  f.innerHTML = `
+    <img src="${p.farver[0]?.billeder[0] ? billede(p.farver[0].billeder[0]) : ''}" alt="" width="1000" height="1000">
+    <div>
+      <div class="varetop"><h2>${esc(p.navn)}</h2><label class="vis"><input type="checkbox" name="aktiv" ${p.aktiv ? 'checked' : ''}> Vises i shoppen</label></div>
+      <div class="felter">
+        <label class="felt">Navn <input name="navn" required maxlength="80" value="${esc(p.navn)}"></label>
+        <label class="felt">Pris i kr. inkl. moms <input name="pris" required inputmode="decimal" pattern="\\d+([,.]\\d{1,2})?" value="${String(p.pris_oere / 100).replace('.', ',')}"></label>
+        <label class="felt bred">Kort tekst <small>Står under navnet på produktkortet og produktsiden</small><input name="kort" maxlength="120" value="${esc(p.kort)}"></label>
+        <label class="felt bred">Beskrivelse <textarea name="beskrivelse" rows="4">${esc(p.beskrivelse)}</textarea></label>
+        <label class="felt">Mål <input name="maal" maxlength="80" value="${esc(p.maal)}"></label>
+        <label class="felt">Materiale <input name="materiale" maxlength="120" value="${esc(p.materiale)}"></label>
+        <label class="felt bred">Tags til Google <small>Søgeord, som folk skriver, når de leder efter produktet, adskilt med komma</small><textarea name="tags" rows="2">${esc((p.tags || []).join(', '))}</textarea></label>
+        <fieldset class="bred lagerfelter"><legend>Lager</legend>${p.farver.map((fa, i) => `<label class="felt"><span><i style="background:${esc(fa.hex)}"></i>${esc(fa.navn)}</span><input name="lager${i}" type="number" inputmode="numeric" min="0" max="100000" step="1" required value="${paaLager(p, fa.navn)}"></label>`).join('')}</fieldset>
+      </div>
+      <div class="gemraekke"><button class="knap">Gem ændringer</button><p class="besked" role="status"></p></div>
+    </div>`;
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const el = f.elements, knap = f.querySelector('.gemraekke button'), besked = f.querySelector('.gemraekke .besked');
+    const pris = Math.round(parseFloat(el.pris.value.replace(',', '.')) * 100);
+    if (!(pris > 0)) { besked.textContent = 'Skriv en pris over 0 kr., fx 69 eller 69,50.'; return; }
+    knap.disabled = true;
+    besked.textContent = 'Gemmer …';
+    try {
+      const rettet = await api(`/rest/v1/produkter?id=eq.${encodeURIComponent(p.id)}&select=navn`, {
+        method: 'PATCH', headers: { Prefer: 'return=representation' },
+        body: JSON.stringify({
+          navn: el.navn.value.trim(), kort: el.kort.value.trim(), beskrivelse: el.beskrivelse.value.trim(), pris_oere: pris,
+          maal: el.maal.value.trim(), materiale: el.materiale.value.trim(), aktiv: el.aktiv.checked,
+          tags: [...new Set(el.tags.value.split(',').map((t) => t.trim()).filter(Boolean))],
+        }),
+      });
+      if (!rettet?.length) throw new Error('Ændringen blev ikke gemt. Har kontoen admin-adgang?');
+      for (const [i, fa] of p.farver.entries()) {
+        const n = +el['lager' + i].value;
+        if (n === paaLager(p, fa.navn)) continue;
+        const r = await api(`/rest/v1/lager?produkt_id=eq.${encodeURIComponent(p.id)}&farve=eq.${encodeURIComponent(fa.navn)}&select=antal`, {
+          method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ antal: n }),
+        });
+        if (!r?.length) throw new Error(`Lageret for ${fa.navn.toLowerCase()} blev ikke gemt.`);
+        p.lager.find((l) => l.farve === fa.navn).antal = n;
+      }
+      f.querySelector('h2').textContent = rettet[0].navn;
+      besked.textContent = `Gemt kl. ${new Date().toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' })}.`;
+    } catch (err) {
+      besked.textContent = err.message;
+    } finally {
+      knap.disabled = false;
+    }
+  });
+  return f;
+}
+
+$('login').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target, knap = form.querySelector('button');
+  knap.disabled = true;
+  $('login-fejl').textContent = '';
+  try {
+    const r = await fetch(`${SB}/auth/v1/token?grant_type=password`, {
+      method: 'POST', headers: { apikey: KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: form.elements.mail.value, password: form.elements.kode.value }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error('Forkert e-mail eller adgangskode.');
+    login = { token: d.access_token, udloeber: Date.now() + (d.expires_in - 60) * 1000, mail: d.user?.email || form.elements.mail.value };
+    try { sessionStorage.setItem(LOGIN, JSON.stringify(login)); } catch {}
+    form.reset();
+    await start();
+  } catch (err) {
+    $('login-fejl').textContent = err instanceof TypeError ? 'Ingen forbindelse. Prøv igen.' : err.message;
+  } finally {
+    knap.disabled = false;
+  }
+});
+
+$('ud').addEventListener('click', () => logUd('Du er logget ud.'));
+
+$('kode').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target, ny = form.elements.ny.value;
+  $('kode-fejl').textContent = '';
+  $('kode-besked').textContent = '';
+  if (ny !== form.elements.igen.value) { $('kode-fejl').textContent = 'De to adgangskoder er ikke ens.'; return; }
+  try {
+    await api('/auth/v1/user', { method: 'PUT', body: JSON.stringify({ password: ny }) });
+    form.reset();
+    $('kode-besked').textContent = 'Adgangskoden er skiftet. Brug den nye, næste gang du logger ind.';
+  } catch (err) {
+    $('kode-fejl').textContent = err.message;
+  }
+});
+
+start();
+</script>
+</body>
+</html>

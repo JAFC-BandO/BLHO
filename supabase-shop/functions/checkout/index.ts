@@ -9,6 +9,11 @@
 // Beløbet reserveres kun (capture_method manual): det må først trækkes, når pakken sendes. Tryk
 // "Capture" på betalingen i Stripe-dashboardet, når pakken er sendt (inden 7 dage, ellers frigives den).
 //
+// Lager: købet afvises, hvis der ikke er nok af en farve (tabellen lager). Kurven sendes med i
+// sessionens metadata (varer), så stripe-webhook kan trække den fra lageret, når betalingen er gennemført.
+// Mængderabat: 5 % ved 10 stk. og 10 % ved 50 stk. i alt (samme regel som rabatPct i shop/shop.js);
+// den trækkes fra stykprisen, ikke fra fragten.
+//
 // Secret: STRIPE_SECRET_KEY (sk_test_... til test, sk_live_... når shoppen åbner).
 // Lukket test: står der mails i tabellen kun_koebere, må kun de købe (logget ind i shoppens
 // Supabase-Auth). Tøm tabellen, når shoppen åbner; så må alle købe uden login. Login tjekkes her mod
@@ -27,11 +32,12 @@ const SR = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const STRIPE = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
 const SHOP = 'https://jfclabs.dk/shop/';
 const FRAGT_OERE = 4900;   // pladsholder: fast fragt med PostNord; samme som FRAGT_OERE i shop/shop.js
-const MAKS_ANTAL = 20;     // pr. linje; samme som MAKS i shop/shop.js
+const MAKS_ANTAL = 100;    // pr. linje; samme som MAKS i shop/shop.js (lageret sætter den reelle grænse)
 const MAKS_LINJER = 10;
 
 type Farve = { navn: string; billeder: string[] };
-type Produkt = { id: string; navn: string; pris_oere: number; farver: Farve[] };
+type Produkt = { id: string; navn: string; pris_oere: number; farver: Farve[]; lager: { farve: string; antal: number }[] };
+const rabatPct = (stk: number) => (stk >= 50 ? 10 : stk >= 10 ? 5 : 0);
 type Linje = { id: string; farve: string; antal: number };
 
 Deno.serve(async (req) => {
@@ -65,7 +71,7 @@ Deno.serve(async (req) => {
   }
 
   const ids = [...new Set(linjer.map((l) => l.id))].join(',');
-  const r = await fetch(`${SB}/rest/v1/produkter?select=id,navn,pris_oere,farver&aktiv=is.true&id=in.(${ids})`, {
+  const r = await fetch(`${SB}/rest/v1/produkter?select=id,navn,pris_oere,farver,lager(farve,antal)&aktiv=is.true&id=in.(${ids})`, {
     headers: { apikey: SR, Authorization: 'Bearer ' + SR },
   });
   if (!r.ok) return svar({ fejl: 'Kunne ikke hente produkterne.' }, 502);
@@ -85,14 +91,28 @@ Deno.serve(async (req) => {
     'phone_number_collection[enabled]': 'true',
   });
   if (mail) f.set('customer_email', mail);
+  // Lageret: summen pr. produkt og farve må ikke overstige det, der er på lager
+  const iKurv = new Map<string, number>();
+  for (const l of linjer) iKurv.set(l.id + '|' + l.farve, (iKurv.get(l.id + '|' + l.farve) ?? 0) + l.antal);
+  for (const [noegle, antal] of iKurv) {
+    const [id, fn] = noegle.split('|');
+    const p = produkter.get(id);
+    const paaLager = p?.lager.find((x) => x.farve === fn)?.antal ?? 0;
+    if (p && antal > paaLager) {
+      return svar({ fejl: paaLager ? `Der er kun ${paaLager} stk. af ${p.navn.toLowerCase()} i ${fn.toLowerCase()} på lager.` : `${p.navn} i ${fn.toLowerCase()} er udsolgt.` }, 409);
+    }
+  }
+  const rabat = rabatPct(linjer.reduce((s, l) => s + l.antal, 0));
+  f.set('metadata[varer]', linjer.map((l) => `${l.id}|${l.farve}|${l.antal}`).join(';'));
+  f.set('metadata[rabat]', String(rabat));
   for (const [i, l] of linjer.entries()) {
     const p = produkter.get(l.id);
     const farve = p?.farver.find((x) => x.navn === l.farve);
     if (!p || !farve) return svar({ fejl: 'En vare i kurven findes ikke længere.' }, 400);
     f.set(`line_items[${i}][quantity]`, String(l.antal));
     f.set(`line_items[${i}][price_data][currency]`, 'dkk');
-    f.set(`line_items[${i}][price_data][unit_amount]`, String(p.pris_oere));
-    f.set(`line_items[${i}][price_data][product_data][name]`, `${p.navn}, ${farve.navn.toLowerCase()}`);
+    f.set(`line_items[${i}][price_data][unit_amount]`, String(Math.round(p.pris_oere * (100 - rabat) / 100)));
+    f.set(`line_items[${i}][price_data][product_data][name]`, `${p.navn}, ${farve.navn.toLowerCase()}${rabat ? ` (${rabat} % mængderabat)` : ''}`);
     f.set(`line_items[${i}][price_data][product_data][metadata][id]`, p.id);
     f.set(`line_items[${i}][price_data][product_data][metadata][farve]`, farve.navn);
     if (farve.billeder[0]) f.set(`line_items[${i}][price_data][product_data][images][0]`, SHOP + farve.billeder[0]);

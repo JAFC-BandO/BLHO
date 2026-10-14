@@ -3,7 +3,13 @@
 const SB = 'https://swmugtukacirgopjstdx.supabase.co';
 const KEY = 'sb_publishable_izWXG-2mphLXS40f4eXwKg_pakWAUPi';   // offentlig, beskyttet af RLS
 const FRAGT_OERE = 4900;   // samme som checkout-funktionen
-const MAKS = 20;           // pr. linje, samme som checkout-funktionen
+const MAKS = 100;          // pr. linje, samme som checkout-funktionen (lageret sætter den reelle grænse)
+
+// Mængderabat på varerne (ikke fragten) efter antal stk. i alt; samme regel og afrunding som checkout-funktionen
+const rabatPct = (stk) => (stk >= 50 ? 10 : stk >= 10 ? 5 : 0);
+const stykpris = (pris, pct) => Math.round(pris * (100 - pct) / 100);
+// Antal på lager af en farve (lager kommer med fra hentProdukter)
+const paaLager = (p, farve) => p.lager?.find((l) => l.farve === farve)?.antal ?? 0;
 
 // Firmaoplysninger står kun her og sættes ind alle steder med data-firma="..."
 const FIRMA = {
@@ -31,11 +37,14 @@ function gemKurv(k) {
   try { localStorage.setItem(KURV, JSON.stringify(k)); } catch {}
   visKurvAntal();
 }
-function laegIKurv(id, farve, antal) {
+// Lægger op til antal i kurven (højst maks i alt for linjen) og giver linjens nye antal tilbage
+function laegIKurv(id, farve, antal, maks = MAKS) {
   const k = hentKurv();
-  const l = k.find((x) => x.id === id && x.farve === farve);
-  if (l) l.antal = Math.min(MAKS, l.antal + antal); else k.push({ id, farve, antal: Math.min(MAKS, antal) });
-  gemKurv(k);
+  let l = k.find((x) => x.id === id && x.farve === farve);
+  if (!l) k.push(l = { id, farve, antal: 0 });
+  l.antal = Math.min(maks, MAKS, l.antal + antal);
+  gemKurv(k.filter((x) => x.antal > 0));
+  return l.antal;
 }
 function visKurvAntal() {
   const n = hentKurv().reduce((a, l) => a + l.antal, 0);
@@ -47,14 +56,13 @@ addEventListener('storage', (e) => { if (e.key === KURV) visKurvAntal(); });
 // Produkter fra Supabase (kun aktive kan læses)
 async function hentProdukter(id) {
   const filter = id ? '&id=eq.' + encodeURIComponent(id) : '';
-  const r = await fetch(`${SB}/rest/v1/produkter?select=id,navn,kort,beskrivelse,pris_oere,farver,maal,materiale&order=sortering${filter}`, {
+  const r = await fetch(`${SB}/rest/v1/produkter?select=id,navn,kort,beskrivelse,pris_oere,farver,maal,materiale,tags,lager(farve,antal)&order=sortering${filter}`, {
     headers: { apikey: KEY }, cache: 'no-cache',
   });
   if (!r.ok) throw new Error('Produkterne kunne ikke hentes.');
   return r.json();
 }
 
-// Produktkort til forsiden og "Du kan også bruge": første farves billede 1, og billede 2 ved hover
 // 360°: billede 1 kan drejes rundt og vippes lidt op og ned. Rammerne ligger i billeder/360/ som
 // <produkt>-<farve>-<højde>-<nr>.webp: 5 højder á 10° (højde 2 er billede 1's) og 36 rammer á 10° rundt.
 // start() giver stien til billede 1 i den valgte farve, eller '' når et andet billede vises.
@@ -124,6 +132,7 @@ function drejKort(rod) {
   rod.querySelectorAll('[data-drej]').forEach((r) => drejbar(r, r.querySelector('img'), () => r.dataset.drej));
 }
 
+// Produktkort til forsiden og "Du kan også bruge": første farves billede 1, der kan drejes
 function produktkort(p) {
   const f = p.farver[0] || { billeder: [] };
   const b1 = f.billeder[0];
@@ -131,7 +140,7 @@ function produktkort(p) {
     <div class="ramme"${b1 ? ` data-drej="${esc(b1)}"` : ''}>${b1 ? `<img src="${billede(b1)}" alt="" width="1000" height="1000" loading="lazy" draggable="false"><span class="tre60" aria-hidden="true"><svg class="ikon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>360°</span>` : ''}</div>
     <h3>${esc(p.navn)}</h3>
     <p>${esc(p.kort)}</p>
-    <div class="bund"><span class="pris">${kr(p.pris_oere)}</span>
+    <div class="bund"><span class="pris">${kr(p.pris_oere)}${p.farver.some((f) => paaLager(p, f.navn) > 0) ? '' : ' <span class="udsolgt">Udsolgt</span>'}</span>
       <span class="prikker" aria-label="${p.farver.length} farver: ${esc(p.farver.map((x) => x.navn).join(', '))}">${p.farver.map((x) => `<span style="background:${esc(x.hex)}"></span>`).join('')}</span></div>
   </a>`;
 }

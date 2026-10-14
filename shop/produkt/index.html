@@ -5,10 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Produkt – JFC Labs</title>
 <meta name="description" content="Tilbehør til stolebenene, når højstolen er skilt ad. Passer til IKEA Antilop.">
+<link rel="canonical" href="https://jfclabs.dk/shop/">
 <!-- Fjernes, når shoppen åbner -->
 <meta name="robots" content="noindex">
 <link rel="preload" href="/shop/fonts/schibsted-grotesk.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/shop/shop.css?v=6">
+<link rel="stylesheet" href="/shop/shop.css?v=7">
 </head>
 <body>
 <a class="spring" href="#indhold">Gå til indhold</a>
@@ -40,12 +41,15 @@
     <div class="kob">
       <h1 id="navn"></h1>
       <p class="prislinje"><span id="pris"></span> <span class="moms">inkl. moms</span></p>
+      <p class="rabatinfo">Mængderabat: 5 % ved 10 stk. og 10 % ved 50 stk.</p>
       <p class="korttekst" id="kort"></p>
 
       <fieldset class="farvevalg">
         <legend>Farve: <strong id="farvenavn"></strong></legend>
         <div class="farver" id="farver"></div>
       </fieldset>
+
+      <p class="lagerstatus" id="lager"></p>
 
       <div class="kobraekke">
         <div class="antal">
@@ -114,7 +118,7 @@
   </div>
 </footer>
 
-<script src="/shop/shop.js?v=5"></script>
+<script src="/shop/shop.js?v=6"></script>
 <script>
 const q = new URLSearchParams(location.search);
 const $ = (id) => document.getElementById(id);
@@ -124,6 +128,7 @@ let p, farve, antal = 1;
 function vaelgFarve(f) {
   farve = f;
   $('farvenavn').textContent = f.navn;
+  visLager();
   visBillede(0);
   $('miniaturer').replaceChildren(...f.billeder.map((src, i) => {
     const b = document.createElement('button');
@@ -158,11 +163,40 @@ function visBillede(i) {
     .forEach(([a, v]) => hovedboks.setAttribute(a, v));
   (window.requestIdleCallback || setTimeout)(spin.hent);
 }
+// Lager for den valgte farve: antal kan ikke overstige det, der er på lager
+const maksAntal = () => Math.min(MAKS, paaLager(p, farve.navn));
+function visLager() {
+  const n = paaLager(p, farve.navn);
+  $('lager').textContent = n ? `På lager: ${n} stk.` : `Udsolgt i ${farve.navn.toLowerCase()}`;
+  $('lager').classList.toggle('tom', !n);
+  $('laeg').disabled = !n;
+  antal = Math.max(1, Math.min(antal, n));
+  visAntal();
+}
 function visAntal() {
   $('antal').textContent = antal;
   const [minus, plus] = document.querySelectorAll('.kobraekke .antal button');
   minus.disabled = antal <= 1;
-  plus.disabled = antal >= MAKS;
+  plus.disabled = antal >= maksAntal();
+}
+// Strukturerede data til Google: produkt, pris, lager og søgeord (tags)
+function visProduktdata() {
+  const ialt = p.farver.reduce((s, f) => s + paaLager(p, f.navn), 0);
+  const data = {
+    '@context': 'https://schema.org', '@type': 'Product',
+    name: p.navn, description: p.beskrivelse, sku: p.id, brand: { '@type': 'Brand', name: FIRMA.navn },
+    image: p.farver.flatMap((f) => f.billeder.map((b) => location.origin + billede(b))),
+    keywords: (p.tags || []).join(', '), color: p.farver.map((f) => f.navn).join(', '), material: p.materiale,
+    offers: { '@type': 'Offer', url: `${location.origin}/shop/produkt/?id=${p.id}`, priceCurrency: 'DKK', price: (p.pris_oere / 100).toFixed(2),
+      availability: ialt ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock', itemCondition: 'https://schema.org/NewCondition',
+      seller: { '@type': 'Organization', name: FIRMA.navn } },
+  };
+  const el = document.createElement('script');
+  el.type = 'application/ld+json';
+  el.textContent = JSON.stringify(data);
+  document.head.append(el);
+  document.querySelector('meta[name="description"]').content = `${p.navn}: ${p.kort}. ${p.beskrivelse}`.slice(0, 300);
+  document.querySelector('link[rel="canonical"]').href = `${location.origin}/shop/produkt/?id=${p.id}`;
 }
 
 (async () => {
@@ -170,7 +204,8 @@ function visAntal() {
     const ps = await hentProdukter();
     p = ps.find((x) => x.id === q.get('id'));
     if (!p) throw new Error('Produktet findes ikke. Se alle produkter i shoppen.');
-    document.title = `${p.navn} – JFC Labs`;
+    document.title = `${p.navn} til højstolen – JFC Labs`;
+    visProduktdata();
     $('kr-navn').textContent = p.navn;
     $('navn').textContent = p.navn;
     $('pris').textContent = kr(p.pris_oere);
@@ -204,13 +239,17 @@ function visAntal() {
 })();
 
 document.querySelectorAll('.kobraekke .antal button').forEach((b) => b.addEventListener('click', () => {
-  antal = Math.min(MAKS, Math.max(1, antal + +b.dataset.d));
+  antal = Math.min(maksAntal(), Math.max(1, antal + +b.dataset.d));
   visAntal();
 }));
 
 $('laeg').addEventListener('click', () => {
-  laegIKurv(p.id, farve.navn, antal);
-  $('besked').innerHTML = `${antal} × ${esc(p.navn)} (${esc(farve.navn.toLowerCase())}) er lagt i kurven. <a href="/shop/kurv/">Gå til kurven</a>`;
+  const foer = hentKurv().find((l) => l.id === p.id && l.farve === farve.navn)?.antal ?? 0;
+  const nu = laegIKurv(p.id, farve.navn, antal, maksAntal());
+  const navn = `${esc(p.navn)} (${esc(farve.navn.toLowerCase())})`;
+  $('besked').innerHTML = nu - foer === antal
+    ? `${antal} × ${navn} er lagt i kurven. <a href="/shop/kurv/">Gå til kurven</a>`
+    : `Der er kun ${maksAntal()} stk. på lager, så du har nu ${nu} × ${navn} i kurven. <a href="/shop/kurv/">Gå til kurven</a>`;
 });
 </script>
 </body>
