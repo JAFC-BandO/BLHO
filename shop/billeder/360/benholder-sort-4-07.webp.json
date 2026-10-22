@@ -1,4 +1,4 @@
 {
-  "prompt": "Oprindelse: 3D-gengivelse (three.js 0.160, ikke AI-genereret) af JFC Labs' egen STL-model 'Antilop benholder (slank, fjederhorn, kraftig hals, fastere greb).stl' i farven sort #2b2e30, højde 4 af 5 og ramme 07 af 36 i en 360°-drejning (drejet 70° om den lodrette akse fra billede 1, kameraet 20° højere end billede 1), på billedfladen #f2f4f1 uden skygge, med studielys (RoomEnvironment). Renderet 14/10-2026 med en lokal render-side (STLLoader, ACES tone mapping, 2x supersampling, 1000x1000 webp).",
-  "createdAt": "2026-10-14T17:43:43.288Z"
+  "prompt": "Oprindelse: 3D-gengivelse (three.js 0.160, ikke AI-genereret) af JFC Labs' egen STL-model 'jfclabs-benholder-v28.stl' (benholder version 28) i farven sort #2b2e30, højde 4 af 5 og ramme 07 af 36 i en 360°-drejning (drejet 70° om den lodrette akse fra billede 1, kameraet 20° højere end billede 1), på billedfladen #f2f4f1 uden skygge, med studielys (RoomEnvironment). Renderet 22/10-2026 med en lokal render-side (STLLoader, ACES tone mapping, 2x supersampling, 1000x1000 webp).",
+  "createdAt": "2026-10-22T06:28:34.394Z"
 }

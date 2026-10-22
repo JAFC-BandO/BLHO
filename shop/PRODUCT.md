@@ -6,7 +6,7 @@ Gælder kun jfclabs.dk/shop. PRODUCT.md i repo-roden hører til Børneloppen og 
 JFC Labs er én person, Jacob, der selv tegner, 3D-printer, pakker og sender hver ordre fra Danmark. Momsregistreret virksomhed (CVR 36367571, Follerupgårdvej 34, 7160 Tørring, jfclabsshop@gmail.com). Siderne henter firmaoplysningerne fra ét sted i shop.js.
 
 ## Hvad
-- **Benholder med håndtag:** samler de fire stoleben, når højstolen er skilt ad; benene trykkes ned i holderens to stjerner.
+- **Benholder med håndtag:** samler de fire stoleben, når højstolen er skilt ad; hvert ben klikkes ind i sin egen ring i begge ender.
 - **Benclips:** holder benene samlet uden håndtag.
 - Farver: sort, hvid, grå. Materiale: PLA og PETG, printet lag for lag (fine linjer og lidt farveforskel kan forekomme).
 - Det er tilbehør til opbevaring og transport, ikke legetøj.

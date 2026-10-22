@@ -21,7 +21,7 @@ const FIRMA = {
 
 const kr = (oere) => (oere / 100).toLocaleString('da-DK', { minimumFractionDigits: oere % 100 ? 2 : 0, maximumFractionDigits: 2 }) + ' kr.';
 // Bump BILLED_V, når billederne renderes om; så henter browserne de nye i stedet for dem i deres cache
-const BILLED_V = 2;
+const BILLED_V = 3;
 const billede = (sti) => `/shop/${sti}?v=${BILLED_V}`;
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
