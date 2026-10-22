@@ -1,4 +1,4 @@
 {
-  "prompt": "Oprindelse: 3D-gengivelse (three.js 0.160, ikke AI-genereret) af JFC Labs' egen STL-model 'Antilop clips (forbedret).stl' i farven sort #2b2e30, midt på fire stoleben (stålrør, 25 mm, 42 cm), hele bundtet i billedet, på billedfladen #f2f4f1 uden skygge, med studielys (RoomEnvironment). Renderet 14/10-2026 med en lokal render-side (STLLoader, ACES tone mapping, 2x supersampling, 1000x1000 webp).",
-  "createdAt": "2026-10-14T17:57:52.941Z"
+  "prompt": "Oprindelse: 3D-gengivelse (three.js 0.160, ikke AI-genereret) af JFC Labs' egen STL-model 'jfclabs-benclips-shop-ribber.stl' (shop-benclipsen med greb-ribber) i farven sort #2b2e30, midt på fire stoleben (stålrør, 25 mm, 42 cm), hele bundtet i billedet, på billedfladen #f2f4f1 uden skygge, med studielys (RoomEnvironment). Renderet 22/10-2026 med en lokal render-side (STLLoader, ACES tone mapping, 2x supersampling, 1000x1000 webp).",
+  "createdAt": "2026-10-22T07:03:28.142Z"
 }
