@@ -124,8 +124,8 @@ Deno.serve(async (req) => {
 <tr><td bgcolor="#ffffff" class="kort" style="background:#ffffff;border:1px solid #d9e4ec;border-top:0;border-radius:0 0 12px 12px;padding:32px 34px 34px;font-family:${skrift};font-size:16px;line-height:1.6;color:#143546">
 <p style="margin:0 0 16px">Kære ${esc(butik)}</p>
 <p style="margin:0 0 16px">Nedenfor finder I SoMe-rapporten for ${esc(butik)} for perioden <b>${esc(periode).replace(/(\d\.) /g, '$1&nbsp;')}</b>.</p>
-<p style="margin:0 0 ${ny ? 16 : 26}px">Følg linket og log ind for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.</p>
-${ny ? `<p style="margin:0 0 26px">Log ind med din Børneloppen-mail <b>${esc(mail)}</b> og adgangskoden <b>${STARTKODE}</b>. Du bliver bedt om at vælge en ny adgangskode, første gang du logger ind.</p>` : ''}
+<p style="margin:0 0 16px">Følg linket og log ind for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.</p>
+<p style="margin:0 0 26px">${ny ? `Log ind med din Børneloppen-mail <b>${esc(mail)}</b> og adgangskoden <b>${STARTKODE}</b>. Du bliver bedt om at vælge en ny adgangskode, første gang du logger ind.` : `Log ind med din Børneloppen-mail <b>${esc(mail)}</b> og din egen adgangskode.`}</p>
 <table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#33a3dc" class="knap" style="background:#33a3dc;border-radius:999px;mso-padding-alt:13px 26px"><a href="${esc(url)}" style="display:inline-block;padding:13px 26px;font-family:${skrift};font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none">Log ind og læs rapporten</a></td></tr></table>
 ${kontakt ? `<p style="margin:26px 0 0">Har I spørgsmål til rapporten, er I velkomne til at skrive til <a href="mailto:${esc(kontakt)}" class="lnk" style="color:#143546">${esc(kontakt)}</a>.</p>` : ''}
 <p style="margin:${kontakt ? 16 : 26}px 0 0">Med venlig hilsen<br>Børneloppen-teamet</p>
@@ -133,7 +133,7 @@ ${kontakt ? `<p style="margin:26px 0 0">Har I spørgsmål til rapporten, er I ve
 </table>
 </td></tr></table></body></html>`;
   const text = (url: string, ny: boolean, mail: string) => `Kære ${butik}\n\nNedenfor finder I SoMe-rapporten for ${butik} for perioden ${periode}. Følg linket og log ind for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.\n\n${url}\n\n`
-    + (ny ? `Log ind med din Børneloppen-mail ${mail} og adgangskoden ${STARTKODE}. Du bliver bedt om at vælge en ny adgangskode, første gang du logger ind.\n\n` : '')
+    + (ny ? `Log ind med din Børneloppen-mail ${mail} og adgangskoden ${STARTKODE}. Du bliver bedt om at vælge en ny adgangskode, første gang du logger ind.\n\n` : `Log ind med din Børneloppen-mail ${mail} og din egen adgangskode.\n\n`)
     + (kontakt ? `Har I spørgsmål til rapporten, er I velkomne til at skrive til ${kontakt}.\n\n` : '') + 'Med venlig hilsen\nBørneloppen-teamet';
   const send = (from: string, modtager: string, url: string, ny: boolean) => fetch('https://api.resend.com/emails', {
     method: 'POST',
