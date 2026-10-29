@@ -36,6 +36,9 @@ const SIDE = 'https://jfclabs.dk/BL/some/';
 const LOGO = 'https://jfclabs.dk/BL/logo-boerneloppen-mail.png';
 const FRA = 'Børneloppen SoMe <boerneloppen-some@jfclabs.dk>';
 const TESTFRA = 'Børneloppen SoMe <onboarding@resend.dev>';
+// Startkoden til nyoprettede logins (supabase/opret-some-modtagere.mjs). Den staar kun i mailen, saa laenge
+// modtageren ikke har valgt sin egen adgangskode (skal_saette_password) -- se some_mail_ny_login
+const STARTKODE = '12345678';
 const PAUSE_MS = 600;   // mellem mails: Resend tager hoejst 2 kald i sekundet
 type Link = { kode: string; modtager: string };   // en raekke i some_mail_log: modtagerens personlige link
 
@@ -104,7 +107,7 @@ Deno.serve(async (req) => {
   // farver i stedet for at vende de lyse om selv. Lyst: logoet paa Night som sitets header.
   // Moerkt: logoet og knappen paa brand-blaa (#33a3dc), kort #1e2029 paa side #15161b. Klasserne
   // styrer kun den moerke variant; de faste farver inline er den lyse. [data-ogsc] er Outlook.com.
-  const html = (url: string) => `<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>
+  const html = (url: string, ny: boolean, mail: string) => `<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>
 :root{color-scheme:light dark;supported-color-schemes:light dark}
 @media (prefers-color-scheme:dark){
  .side,body{background:#15161b!important}
@@ -121,21 +124,23 @@ Deno.serve(async (req) => {
 <tr><td bgcolor="#ffffff" class="kort" style="background:#ffffff;border:1px solid #d9e4ec;border-top:0;border-radius:0 0 12px 12px;padding:32px 34px 34px;font-family:${skrift};font-size:16px;line-height:1.6;color:#143546">
 <p style="margin:0 0 16px">Kære ${esc(butik)}</p>
 <p style="margin:0 0 16px">Nedenfor finder I SoMe-rapporten for ${esc(butik)} for perioden <b>${esc(periode).replace(/(\d\.) /g, '$1&nbsp;')}</b>.</p>
-<p style="margin:0 0 26px">Følg linket og log ind med butikkens login for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.</p>
+<p style="margin:0 0 ${ny ? 16 : 26}px">Følg linket og log ind for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.</p>
+${ny ? `<p style="margin:0 0 26px">Log ind med din Børneloppen-mail <b>${esc(mail)}</b> og adgangskoden <b>${STARTKODE}</b>. Du bliver bedt om at vælge en ny adgangskode, første gang du logger ind.</p>` : ''}
 <table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#33a3dc" class="knap" style="background:#33a3dc;border-radius:999px;mso-padding-alt:13px 26px"><a href="${esc(url)}" style="display:inline-block;padding:13px 26px;font-family:${skrift};font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none">Log ind og læs rapporten</a></td></tr></table>
 ${kontakt ? `<p style="margin:26px 0 0">Har I spørgsmål til rapporten, er I velkomne til at skrive til <a href="mailto:${esc(kontakt)}" class="lnk" style="color:#143546">${esc(kontakt)}</a>.</p>` : ''}
 <p style="margin:${kontakt ? 16 : 26}px 0 0">Med venlig hilsen<br>Børneloppen-teamet</p>
 </td></tr>
 </table>
 </td></tr></table></body></html>`;
-  const text = (url: string) => `Kære ${butik}\n\nNedenfor finder I SoMe-rapporten for ${butik} for perioden ${periode}. Følg linket og log ind med butikkens login for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.\n\n${url}\n\n`
+  const text = (url: string, ny: boolean, mail: string) => `Kære ${butik}\n\nNedenfor finder I SoMe-rapporten for ${butik} for perioden ${periode}. Følg linket og log ind for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.\n\n${url}\n\n`
+    + (ny ? `Log ind med din Børneloppen-mail ${mail} og adgangskoden ${STARTKODE}. Du bliver bedt om at vælge en ny adgangskode, første gang du logger ind.\n\n` : '')
     + (kontakt ? `Har I spørgsmål til rapporten, er I velkomne til at skrive til ${kontakt}.\n\n` : '') + 'Med venlig hilsen\nBørneloppen-teamet';
-  const send = (from: string, modtager: string, url: string) => fetch('https://api.resend.com/emails', {
+  const send = (from: string, modtager: string, url: string, ny: boolean) => fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + d.noegle, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       from, to: [modtager], ...(kontakt ? { reply_to: kontakt } : {}), subject: `SoMe-rapport for ${butik}, ${periode}`,
-      html: html(url), text: text(url),
+      html: html(url, ny, modtager), text: text(url, ny, modtager),
       attachments: [{ path: LOGO, filename: 'boerneloppen.png', content_type: 'image/png', content_id: 'logo' }],
     }),
     signal: AbortSignal.timeout(20000),
@@ -149,14 +154,22 @@ ${kontakt ? `<p style="margin:26px 0 0">Har I spørgsmål til rapporten, er I ve
   const links: Link[] | null = ind && ind.ok ? await ind.json().catch(() => null) : null;
   if (!links || links.length !== til.length) return svar({ fejl: 'Mailen kunne ikke gøres klar. Prøv igen om lidt.' }, 500);
 
+  // Hvem har endnu ikke valgt egen adgangskode (de faar startkoden i mailen)
+  const nyRes = await fetch(SB + '/rest/v1/rpc/some_mail_ny_login', {
+    method: 'POST', headers: { apikey: SR, Authorization: 'Bearer ' + SR, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_modtagere: til }),
+  }).catch(() => null);
+  const nye = new Set<string>(nyRes && nyRes.ok ? ((await nyRes.json().catch(() => [])) as string[]) : []);
+
   let fra = FRA, besked = '';
   const sendt: string[] = [], fejlet: Link[] = [];
   for (const l of links) {
     if (l !== links[0]) await pause(PAUSE_MS);
     const url = SIDE + '?k=' + l.kode;
-    let res = await send(fra, l.modtager, url);
+    const ny = nye.has(l.modtager.toLowerCase());
+    let res = await send(fra, l.modtager, url, ny);
     // Domaenet er ikke godkendt hos Resend endnu: saa kan der kun sendes fra deres testadresse
-    if (res && res.status === 403 && fra === FRA) { fra = TESTFRA; await pause(PAUSE_MS); res = await send(fra, l.modtager, url); }
+    if (res && res.status === 403 && fra === FRA) { fra = TESTFRA; await pause(PAUSE_MS); res = await send(fra, l.modtager, url, ny); }
     if (res && res.ok) { sendt.push(l.modtager); continue; }
     fejlet.push(l);
     besked = (res ? (await res.json().catch(() => null))?.message : '') || besked;

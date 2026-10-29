@@ -238,6 +238,22 @@ dialog.tid::backdrop{background:rgba(0,0,0,.5)}
   </form>
 </div>
 
+<!-- Nye logins har en startkode og skal vaelge deres egen foer rapporten vises (samme flag som i butik-redigering) -->
+<div class="laeser" id="nyKodeVis" hidden style="padding-top:10vh">
+  <div class="login-logo"><img src="../logo-boerneloppen.svg" alt="Børneloppen"></div>
+  <form class="kort login-kort" id="nyKodeForm">
+    <h2 style="margin:0 0 4px">Vælg ny adgangskode</h2>
+    <div class="lille" style="margin-bottom:14px">Første gang skal du vælge din egen adgangskode (mindst 8 tegn).</div>
+    <input type="email" autocomplete="username" id="nyKodeMail" hidden>
+    <label for="nyKode1">Ny adgangskode</label>
+    <input type="password" id="nyKode1" autocomplete="new-password" minlength="8" required>
+    <label for="nyKode2">Gentag adgangskode</label>
+    <input type="password" id="nyKode2" autocomplete="new-password" minlength="8" required>
+    <button type="submit" class="knap" id="nyKodeKnap">Gem og læs rapporten</button>
+    <div class="lille" id="nyKodeFejl" style="color:var(--bad);margin-top:8px" hidden></div>
+  </form>
+</div>
+
 <div class="indhold" id="app" hidden>
   <div class="hoved">
     <h1 id="titel">SoMe-performance</h1>
@@ -387,7 +403,7 @@ function skjulLaeser() {
   $('#laeserVis').hidden = true;
   try { if (window.parent !== window && window.parent.someKlar) window.parent.someKlar(); } catch (e) {}
 }
-function vis(id) { ['ingenAdgangVis', 'ugyldigtLinkVis', 'loginVis', 'app'].forEach(x => { $('#' + x).hidden = x != id; }); if (id != 'app') skjulLaeser(); }
+function vis(id) { ['ingenAdgangVis', 'ugyldigtLinkVis', 'loginVis', 'nyKodeVis', 'app'].forEach(x => { $('#' + x).hidden = x != id; }); if (id != 'app') skjulLaeser(); }
 
 // Perioden slutter i gaar: dagens tal er ikke faerdige foer i morgen. Der sammenlignes med samme
 // datoer aaret foer -- eller, hvis man vaelger det, med perioden lige foer: lige saa mange dage,
@@ -1501,7 +1517,11 @@ tegnTemaKnap();
 
 async function start() {
   if (LINK) {
-    if (!(await client.auth.getUser()).data.user) { vis('loginVis'); return; }
+    const u = (await client.auth.getUser()).data.user;
+    if (!u) { vis('loginVis'); return; }
+    // Startkoden fra mailen skal skiftes foer noget vises
+    const { data: b } = await client.from('brugere').select('skal_saette_password').eq('id', u.id).maybeSingle();
+    if (b && b.skal_saette_password) { $('#nyKodeMail').value = u.email || ''; vis('nyKodeVis'); return; }
     vis('app'); await hentRapporter(); vaelgStandardRapport(); await hent(); return;
   }
   const { data: { user } } = await client.auth.getUser();
@@ -1540,6 +1560,22 @@ $('#loginForm').addEventListener('submit', async e => {
   if (error) { $('#loginFejl').hidden = false; return; }
   // Samme logning som butik-redigering, saa det staar i Aktivitetsloggen (fire-and-forget)
   client.rpc('log_admin_handling', { p_handling: 'login', p_detaljer: 'SoMe-rapport via maillink' }).then(() => {});
+  $('#laeserVis').hidden = false;
+  start().catch(() => vis('ugyldigtLinkVis'));
+});
+$('#nyKodeForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const fejl = t => { const f = $('#nyKodeFejl'); f.textContent = t; f.hidden = !t; };
+  const p1 = $('#nyKode1').value;
+  fejl('');
+  if (p1.length < 8) { fejl('Adgangskoden skal være mindst 8 tegn.'); return; }
+  if (p1 !== $('#nyKode2').value) { fejl('De to adgangskoder er ikke ens.'); return; }
+  if (p1 === '12345678') { fejl('Vælg en anden adgangskode end startkoden.'); return; }
+  const knap = $('#nyKodeKnap'); knap.disabled = true;
+  const { error } = await client.auth.updateUser({ password: p1 });
+  const { error: e2 } = error ? { error } : await client.rpc('mark_password_set');
+  knap.disabled = false;
+  if (error || e2) { fejl('Kunne ikke gemme adgangskoden: ' + (error || e2).message); return; }
   $('#laeserVis').hidden = false;
   start().catch(() => vis('ugyldigtLinkVis'));
 });
