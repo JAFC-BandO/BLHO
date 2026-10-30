@@ -372,6 +372,7 @@ Deno.serve(async (req) => {
     for (const s of sider) {
       konti.push({ platform: 'facebook', ekstern_id: s.id, navn: s.name, brugernavn: s.username ?? null, billede_url: s.picture?.data?.url ?? null });
       const ig = s.instagram_business_account;
+      // Har Instagram samme brugernavn som siden, faar den ogsaa sidens navn (Meta kan have adressen med i Instagram-navnet)
       if (ig) konti.push({ platform: 'instagram', ekstern_id: ig.id, navn: (ig.username && ig.username === s.username) ? s.name : (ig.name || ig.username || s.name), brugernavn: ig.username ?? null, billede_url: ig.profile_picture_url ?? null });
     }
     const gemt = await upsert('some_konti', 'platform,ekstern_id', konti, true);
