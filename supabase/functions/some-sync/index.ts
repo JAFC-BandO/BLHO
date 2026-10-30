@@ -264,6 +264,9 @@ async function hentInstagram(ig: Json, navn: string, tok: string, kontoId: strin
   }
 }
 
+// Sider, der skal hedde noget andet end hos Meta (side-id -> navn)
+const EGET_NAVN: Record<string, string> = { '100265667487395': 'Barnaloppan Island' };
+
 const SIDE_FELTER = 'id,name,username,followers_count,picture{url},instagram_business_account{id,username,name,followers_count,profile_picture_url}';
 
 // Finder siderne: foerst med hoved-tokenet (finder ogsaa nye sider og gemmer deres noegler),
@@ -370,10 +373,11 @@ Deno.serve(async (req) => {
     }
     const konti: Raekke[] = [];
     for (const s of sider) {
-      konti.push({ platform: 'facebook', ekstern_id: s.id, navn: s.name, brugernavn: s.username ?? null, billede_url: s.picture?.data?.url ?? null });
+      const sNavn = EGET_NAVN[s.id] ?? s.name;
+      konti.push({ platform: 'facebook', ekstern_id: s.id, navn: sNavn, brugernavn: s.username ?? null, billede_url: s.picture?.data?.url ?? null });
       const ig = s.instagram_business_account;
       // Har Instagram samme brugernavn som siden, faar den ogsaa sidens navn (Meta kan have adressen med i Instagram-navnet)
-      if (ig) konti.push({ platform: 'instagram', ekstern_id: ig.id, navn: (ig.username && ig.username === s.username) ? s.name : (ig.name || ig.username || s.name), brugernavn: ig.username ?? null, billede_url: ig.profile_picture_url ?? null });
+      if (ig) konti.push({ platform: 'instagram', ekstern_id: ig.id, navn: (ig.username && ig.username === s.username) ? sNavn : (ig.name || ig.username || s.name), brugernavn: ig.username ?? null, billede_url: ig.profile_picture_url ?? null });
     }
     const gemt = await upsert('some_konti', 'platform,ekstern_id', konti, true);
     const id = new Map<string, Json>(gemt.map((k) => [k.platform + ':' + k.ekstern_id, k]));
