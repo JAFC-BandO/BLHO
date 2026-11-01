@@ -604,6 +604,101 @@ function tegn() {
   tegnKonti();
   tegnTider();
   hentOpslag();
+  if (!LINK) signifikansIKonsol(p.fra, p.til, butik);
+}
+
+// ---------- Signifikanstest i browserens konsol (F12) ----------
+// Er forskellen mellem tidspunkterne reel? Koerer af sig selv, naar SoMe-fanen har tegnet sine tal,
+// for den valgte periode og butik. Serveren sender kun opsummeringer; blandingen sker i en worker,
+// saa siden ikke hakker, og resultatet gemmes en time i fanen, saa databasen ikke spoerges igen.
+// Metode: permutationstest paa visninger ift. kontoens normale opslag. Opslag fra samme kalendertime
+// flyttes samlet (faelles kampagner og Metas gode dage maa ikke ligne mange uafhaengige opslag).
+// p = to-sidet, q = korrigeret for mange tests (Benjamini-Hochberg). Det er q, der afgoer svaret.
+const SIG_MIN = 20, SIG_PERM = 10000, SIG_ALFA = 0.05;
+let sigNr = 0;
+const sigWorker = () => {
+  onmessage = ({ data: { klynger, perm } }) => {
+    let seed = 20261101;
+    const slump = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const koer = (kl, nogle) => {
+      const navne = [...new Set(kl.map(nogle))], nr = new Map(navne.map((e, i) => [e, i]));
+      const L = Int32Array.from(kl, k => nr.get(nogle(k))), S = Float64Array.from(kl, k => k[3]), N = Int32Array.from(kl, k => k[4]);
+      const sum = new Float64Array(navne.length), cnt = new Int32Array(navne.length);
+      const tael = () => { sum.fill(0); cnt.fill(0); for (let i = 0; i < S.length; i++) { sum[L[i]] += S[i]; cnt[L[i]] += N[i]; } };
+      tael();
+      const obs = Float64Array.from(sum, (s, i) => Math.abs(s / cnt[i])), n = Array.from(cnt), hits = new Int32Array(navne.length);
+      for (let p = 0; p < perm; p++) {
+        for (let i = L.length - 1; i > 0; i--) { const j = Math.floor(slump() * (i + 1)), t = L[i]; L[i] = L[j]; L[j] = t; }
+        tael();
+        for (let e = 0; e < hits.length; e++) if (Math.abs(sum[e] / cnt[e]) >= obs[e] - 1e-12) hits[e]++;
+      }
+      return navne.map((e, i) => ({ e, n: n[i], p: (hits[i] + 1) / (perm + 1) }));
+    };
+    const ud = {};
+    for (const pf of ['facebook', 'instagram']) {
+      const kl = klynger.filter(k => k[0] === pf);
+      if (kl.length) ud[pf] = { time: koer(kl, k => k[2]), uge: koer(kl, k => k[1] * 100 + k[2]) };
+    }
+    postMessage(ud);
+  };
+};
+
+async function signifikansIKonsol(fra, til, b) {
+  const nr = ++sigNr, noegle = `some-sig:${fra}:${til}:${b || 'alle'}`;
+  let gemt = null;
+  try { gemt = JSON.parse(sessionStorage.getItem(noegle)); } catch (e) { /* blokeret -- saa regnes der igen */ }
+  if (gemt && Date.now() - gemt.t < FRISK_MS) { sigUdskriv(fra, til, b, gemt.raekker); return; }
+  await new Promise(ok => (window.requestIdleCallback || (f => setTimeout(f, 500)))(ok));
+  if (nr !== sigNr) return;
+  const { data: d, error } = await client.rpc('some_signifikans', { p_fra: fra, p_til: til, p_butik: b });
+  if (nr !== sigNr) return;
+  if (error || !d) { console.warn('SoMe-signifikans: tallene kunne ikke hentes.', error || ''); return; }
+  const adresse = URL.createObjectURL(new Blob([`(${sigWorker})()`], { type: 'text/javascript' }));
+  const w = new Worker(adresse);
+  URL.revokeObjectURL(adresse);
+  w.onerror = e => { console.warn('SoMe-signifikans: testen fejlede.', e.message); w.terminate(); };
+  w.onmessage = ({ data: ud }) => {
+    w.terminate();
+    if (nr !== sigNr) return;
+    const median = new Map(d.median.map(m => [`${m[0]}:${m[1] == null ? '' : m[1]}:${m[2]}`, Number(m[3])]));
+    const raekker = {};
+    for (const pf in ud) raekker[pf] = {
+      time: sigTabel(ud[pf].time, e => `${pf}::${e}`, median),
+      uge: sigTabel(ud[pf].uge, e => `${pf}:${Math.floor(e / 100)}:${e % 100}`, median),
+    };
+    try { sessionStorage.setItem(noegle, JSON.stringify({ t: Date.now(), raekker })); } catch (e) { /* fuld eller blokeret */ }
+    sigUdskriv(fra, til, b, raekker);
+  };
+  w.postMessage({ klynger: d.klynger, perm: SIG_PERM });
+}
+
+function sigTabel(res, medianNoegle, median) {
+  const med = res.filter(r => r.n >= SIG_MIN).sort((a, z) => a.p - z.p);
+  let q = 1;
+  for (let i = med.length - 1; i >= 0; i--) { q = Math.min(q, med[i].p * med.length / (i + 1)); med[i].q = q; }
+  const kl = t => String(t).padStart(2, '0') + '-' + String(t + 1).padStart(2, '0');
+  const pTxt = p => p <= 1 / (SIG_PERM + 1) ? '<' + (1 / SIG_PERM).toFixed(4) : p.toFixed(4);
+  return { sprunget: res.length - med.length, liste: med.sort((a, z) => a.e - z.e).map(r => {
+    const g = median.get(medianNoegle(r.e)), sig = r.q < SIG_ALFA;
+    return {
+      Tidspunkt: r.e >= 100 ? `${UGEDAGE[Math.floor(r.e / 100) - 1].slice(0, 3)} ${kl(r.e % 100)}` : kl(r.e),
+      Opslag: r.n, 'Ift. normalt': g == null ? '–' : g.toFixed(2).replace('.', ',') + '×',
+      p: pTxt(r.p), q: pTxt(r.q), Signifikant: sig ? (g >= 1 ? 'JA, flere visninger' : 'JA, færre visninger') : 'nej',
+    };
+  }) };
+}
+
+function sigUdskriv(fra, til, b, raekker) {
+  const hvem = b ? (($('#butik').selectedOptions[0] || {}).textContent || 'valgt butik') : 'alle butikker';
+  console.group(`SoMe-signifikans: ${hvem}, ${fra} til ${til}`);
+  console.log(`Permutationstest (${SIG_PERM} blandinger). q < 0,05 = sandsynligvis reel forskel. "nej" betyder, at data ikke kan skelne tidspunktet fra et normalt opslag. Tidspunkter under ${SIG_MIN} opslag er sprunget over.`);
+  for (const pf in raekker) for (const [del, navn] of [['time', 'time på døgnet'], ['uge', 'ugedag og time']]) {
+    const { liste, sprunget } = raekker[pf][del];
+    const antal = liste.filter(r => r.Signifikant !== 'nej').length;
+    console.log(`${PLATFORM[pf]}, ${navn}: ${antal} signifikante af ${liste.length} testede (${sprunget} sprunget over)`);
+    if (liste.length) console.table(liste);
+  }
+  console.groupEnd();
 }
 
 // ---------- Rapporten: tekst fra den SoMe-ansvarlige, laast til en periode ----------

@@ -595,6 +595,42 @@ end $$;
 revoke execute on function public.some_rapport_tid_timer(text, date, date, text, text, int, int, int) from public;
 grant execute on function public.some_rapport_tid_timer(text, date, date, text, text, int, int, int) to anon, authenticated;
 
+-- ---------- Grundlag for signifikanstesten i browserens konsol ----------
+-- Kun opsummeringer, ingen enkeltopslag. 'klynger' = én raekke pr. kalendertime (sum af centreret
+-- log-forhold og antal), 'median' = forholdet pr. tidspunkt.
+create or replace function public.some_signifikans_kerne(p_fra date, p_til date, p_butik uuid)
+returns jsonb language sql stable security definer set search_path = public as $$
+  with p as (
+    select k.platform, o.konto_id, o.visninger::float8 v, o.oprettet_at at time zone 'Europe/Copenhagen' lok
+    from some_opslag o join some_konti k on k.id = o.konto_id and k.aktiv and (p_butik is null or k.butik_id = p_butik)
+    where o.visninger is not null
+      and o.oprettet_at >= (p_fra::timestamp at time zone 'Europe/Copenhagen')
+      and o.oprettet_at < ((p_til + 1)::timestamp at time zone 'Europe/Copenhagen')
+      and (o.type is null or o.type not in ('STORY', 'created_event'))),
+  m as (select konto_id, percentile_cont(0.5) within group (order by v) med from p group by 1 having count(*) >= 5),
+  c as (
+    select p.platform, date_trunc('hour', p.lok) kl, extract(isodow from p.lok)::int dag, extract(hour from p.lok)::int tm,
+      p.v / nullif(m.med, 0) r,
+      ln((p.v + 1) / (m.med + 1)) - avg(ln((p.v + 1) / (m.med + 1))) over (partition by p.konto_id) x
+    from p join m using (konto_id))
+  select jsonb_build_object(
+    'klynger', coalesce((select jsonb_agg(jsonb_build_array(platform, dag, tm, round(s::numeric, 4), n)) from (
+      select platform, kl, dag, tm, sum(x) s, count(*) n from c group by 1, 2, 3, 4) a), '[]'::jsonb),
+    'median', coalesce((select jsonb_agg(jsonb_build_array(platform, dag, tm, round(g::numeric, 3))) from (
+      select platform, dag, tm, percentile_cont(0.5) within group (order by r) g from c group by grouping sets ((platform, tm), (platform, dag, tm))) b), '[]'::jsonb));
+$$;
+revoke execute on function public.some_signifikans_kerne(date, date, uuid) from public, anon, authenticated;
+
+create or replace function public.some_signifikans(p_fra date, p_til date, p_butik uuid default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.har_some_adgang() then return null; end if;
+  if p_til < p_fra or p_til - p_fra > 400 then raise exception 'Ugyldig periode'; end if;
+  return public.some_signifikans_kerne(p_fra, p_til, p_butik);
+end $$;
+revoke execute on function public.some_signifikans(date, date, uuid) from public, anon;
+grant execute on function public.some_signifikans(date, date, uuid) to authenticated;
+
 -- ---------- Styring af adgangen (Admin-menuen i butik-redigering) ----------
 -- Kun brugere med kan_styre maa se og aendre, hvem der har SoMe-fanen. Flaget saettes med SQL:
 --   update public.some_adgang set kan_styre = true where bruger_id = (select id from auth.users where email = '...');
