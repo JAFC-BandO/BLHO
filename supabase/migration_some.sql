@@ -511,19 +511,25 @@ grant execute on function public.some_rapport2(text, date, date, text, text, dat
 -- Hoejst 60 opslag, flest interaktioner foerst. Kernen tjekker ikke adgang.
 create or replace function public.some_tid_kerne(p_fra date, p_til date, p_butik uuid, p_platform text, p_ugedag int, p_time_fra int, p_time_til int)
 returns jsonb language sql stable security definer set search_path = public as $$
-  select coalesce(jsonb_agg(to_jsonb(t) order by t.interaktioner desc, t.oprettet_at desc), '[]'::jsonb) from (
-    select o.ekstern_id, o.oprettet_at, o.type, o.tekst, o.permalink, o.billede_url, o.likes, o.kommentarer, o.delinger, o.visninger,
-      coalesce(o.likes, 0) + coalesce(o.kommentarer, 0) + coalesce(o.delinger, 0) as interaktioner,
-      jsonb_build_object('navn', k.navn, 'platform', k.platform) some_konti
+  with p as (
+    select o.*, k.navn konto_navn, k.platform konto_platform,
+      coalesce(o.likes, 0) + coalesce(o.kommentarer, 0) + coalesce(o.delinger, 0) as inter
     from some_opslag o
     join some_konti k on k.id = o.konto_id and k.aktiv and k.platform = p_platform and (p_butik is null or k.butik_id = p_butik)
     where o.oprettet_at >= (p_fra::timestamp at time zone 'Europe/Copenhagen')
       and o.oprettet_at < ((p_til + 1)::timestamp at time zone 'Europe/Copenhagen')
-      and (o.type is null or o.type not in ('STORY', 'created_event'))
-      and extract(isodow from o.oprettet_at at time zone 'Europe/Copenhagen')::int = p_ugedag
-      and extract(hour from o.oprettet_at at time zone 'Europe/Copenhagen')::int >= p_time_fra
-      and extract(hour from o.oprettet_at at time zone 'Europe/Copenhagen')::int < p_time_til
-    order by coalesce(o.likes, 0) + coalesce(o.kommentarer, 0) + coalesce(o.delinger, 0) desc, o.oprettet_at desc
+      and (o.type is null or o.type not in ('STORY', 'created_event'))),
+  m as (select konto_id, percentile_cont(0.5) within group (order by visninger) med from p where visninger is not null group by 1)
+  select coalesce(jsonb_agg(to_jsonb(t) order by t.interaktioner desc, t.oprettet_at desc), '[]'::jsonb) from (
+    select p.ekstern_id, p.oprettet_at, p.type, p.tekst, p.permalink, p.billede_url, p.likes, p.kommentarer, p.delinger, p.visninger,
+      p.inter as interaktioner,
+      round((p.visninger::numeric / nullif(m.med, 0)::numeric), 2) as forhold, -- visninger ift. kontoens normale opslag
+      jsonb_build_object('navn', p.konto_navn, 'platform', p.konto_platform) some_konti
+    from p left join m on m.konto_id = p.konto_id
+    where extract(isodow from p.oprettet_at at time zone 'Europe/Copenhagen')::int = p_ugedag
+      and extract(hour from p.oprettet_at at time zone 'Europe/Copenhagen')::int >= p_time_fra
+      and extract(hour from p.oprettet_at at time zone 'Europe/Copenhagen')::int < p_time_til
+    order by p.inter desc, p.oprettet_at desc
     limit 60) t;
 $$;
 revoke execute on function public.some_tid_kerne(date, date, uuid, text, int, int, int) from public, anon, authenticated;
@@ -547,6 +553,47 @@ begin
 end $$;
 revoke execute on function public.some_rapport_tid(text, date, date, text, text, int, int, int) from public;
 grant execute on function public.some_rapport_tid(text, date, date, text, text, int, int, int) to anon, authenticated;
+
+-- ---------- Et felt time for time (dialogen bag "Bedste tidspunkter at poste") ----------
+-- Samme score som felterne i 'tider': median af visninger ift. kontoens median i perioden.
+create or replace function public.some_tid_timer_kerne(p_fra date, p_til date, p_butik uuid, p_platform text, p_ugedag int, p_time_fra int, p_time_til int)
+returns jsonb language sql stable security definer set search_path = public as $$
+  with p as (
+    select o.konto_id, o.visninger, coalesce(o.likes, 0) + coalesce(o.kommentarer, 0) + coalesce(o.delinger, 0) inter,
+      extract(isodow from o.oprettet_at at time zone 'Europe/Copenhagen')::int ugedag,
+      extract(hour from o.oprettet_at at time zone 'Europe/Copenhagen')::int tm
+    from some_opslag o
+    join some_konti k on k.id = o.konto_id and k.aktiv and k.platform = p_platform and (p_butik is null or k.butik_id = p_butik)
+    where o.oprettet_at >= (p_fra::timestamp at time zone 'Europe/Copenhagen')
+      and o.oprettet_at < ((p_til + 1)::timestamp at time zone 'Europe/Copenhagen')
+      and (o.type is null or o.type not in ('STORY', 'created_event'))),
+  m as (select konto_id, percentile_cont(0.5) within group (order by visninger) med from p where visninger is not null group by 1)
+  select coalesce(jsonb_agg(to_jsonb(t) order by t."time"), '[]'::jsonb) from (
+    select p.tm as "time", count(*) antal, sum(p.inter) interaktioner,
+      round((percentile_cont(0.5) within group (order by p.visninger::numeric / nullif(m.med, 0)))::numeric, 2) score
+    from p left join m on m.konto_id = p.konto_id
+    where p.ugedag = p_ugedag and p.tm >= p_time_fra and p.tm < p_time_til
+    group by p.tm) t;
+$$;
+revoke execute on function public.some_tid_timer_kerne(date, date, uuid, text, int, int, int) from public, anon, authenticated;
+
+create or replace function public.some_tid_timer(p_fra date, p_til date, p_butik uuid, p_platform text, p_ugedag int, p_time_fra int, p_time_til int)
+returns jsonb language sql stable security definer set search_path = public as $$
+  select case when public.har_some_adgang() then public.some_tid_timer_kerne(p_fra, p_til, p_butik, p_platform, p_ugedag, p_time_fra, p_time_til) end;
+$$;
+revoke execute on function public.some_tid_timer(date, date, uuid, text, int, int, int) from public, anon;
+grant execute on function public.some_tid_timer(date, date, uuid, text, int, int, int) to authenticated;
+
+create or replace function public.some_rapport_tid_timer(p_noegle text, p_fra date, p_til date, p_omfang text, p_platform text, p_ugedag int, p_time_fra int, p_time_til int)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v_butik uuid := public.some_link_butik(p_noegle);
+begin
+  if v_butik is null then return null; end if;
+  if p_til < p_fra or p_til - p_fra > 400 then raise exception 'Ugyldig periode'; end if;
+  return public.some_tid_timer_kerne(p_fra, p_til, case when p_omfang = 'faelles' then null else v_butik end, p_platform, p_ugedag, p_time_fra, p_time_til);
+end $$;
+revoke execute on function public.some_rapport_tid_timer(text, date, date, text, text, int, int, int) from public;
+grant execute on function public.some_rapport_tid_timer(text, date, date, text, text, int, int, int) to anon, authenticated;
 
 -- ---------- Styring af adgangen (Admin-menuen i butik-redigering) ----------
 -- Kun brugere med kan_styre maa se og aendre, hvem der har SoMe-fanen. Flaget saettes med SQL:
