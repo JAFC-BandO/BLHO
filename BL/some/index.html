@@ -316,6 +316,7 @@ button.time-raekke[aria-pressed="true"],button.time-raekke[aria-pressed="true"]:
     <span class="status" id="status" data-tip="Automatisk indsamling&#10;Tallene hentes fra Facebook og Instagram én gang i timen.&#10;Opdater nu henter dem med det samme."></span>
     <button class="knap stille" id="rapportKnap" type="button" hidden>Skriv rapport</button>
     <button class="knap" id="opdater" title="Tallene hentes automatisk én gang i timen. Tryk for at hente de nyeste fra Facebook og Instagram nu.">Opdater nu</button>
+    <select id="sprogValg" aria-label="Sprog / Language"><option value="da">Dansk</option><option value="en">English</option></select>
     <button id="temaKnap" type="button" hidden></button>
     </span>
     <div class="lille" id="periodeTekst"></div>
@@ -1822,14 +1823,24 @@ function anvendEngelsk() {
 // Sproget: ?sprog=, ellers butikken bag linket eller brugerens butik. Svarer serveren ikke (eller er
 // linket ugyldigt), afgoer browserens sprog det, saa en udenlandsk gaest ikke moedes af dansk.
 async function saetSprog() {
-  const onsket = new URLSearchParams(location.search).get('sprog');
+  // Rækkefølge: ?sprog= i adressen, så personens eget valg i toppen, så butikken
+  let onsket = new URLSearchParams(location.search).get('sprog');
+  if (!onsket) try { onsket = localStorage.getItem('some-sprog'); } catch (e) { /* blokeret -- saa afgoer butikken */ }
   let s = onsket === 'en' || onsket === 'da' ? onsket : null;
   if (!s) {
     const { data: d, error } = await client.rpc('some_sprog', { p_noegle: LINK });
     s = d || (LINK || error ? (/^(da|nb|nn|no|sv)/i.test(navigator.language || '') ? 'da' : 'en') : 'da');
   }
   if (s === 'en' && !EN) { anvendEngelsk(); tegnTemaKnap(); }
+  $('#sprogValg').value = s;
 }
+// Teksterne saettes ved opstart, saa et skift indlaeser siden igen (samme konto, periode nulstilles)
+$('#sprogValg').addEventListener('change', e => {
+  try { localStorage.setItem('some-sprog', e.target.value); } catch (x) { /* blokeret -- adressen klarer det saa */ }
+  const u = new URL(location.href);
+  if (u.searchParams.has('sprog') || !window.localStorage) u.searchParams.set('sprog', e.target.value);
+  location.replace(u.href);
+});
 
 async function start() {
   await saetSprog();
@@ -1900,6 +1911,6 @@ $('#nyKodeForm').addEventListener('submit', async e => {
   $('#laeserVis').hidden = false;
   start().catch(() => vis('ugyldigtLinkVis'));
 });
-if (window.top !== window || LINK || new URLSearchParams(location.search).has('sprog')) start().catch(() => vis(LINK ? 'ugyldigtLinkVis' : 'ingenAdgangVis'));
+if (window.top !== window || LINK) start().catch(() => vis(LINK ? 'ugyldigtLinkVis' : 'ingenAdgangVis'));
 </script>
 </body></html>
