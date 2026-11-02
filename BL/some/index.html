@@ -378,28 +378,34 @@ const SUPABASE_KEY = 'sb_publishable_taPyJFcINrPL5JiB-ay4CQ_iscnTyy3';
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { storageKey: 'sb-butik-redigering-auth' } });
 
 const $ = s => document.querySelector(s);
+// Sprog: butikker.sprog afgoer det (Island og Liège laeser engelsk). T(dansk, engelsk) i koden;
+// faste tekster og tabeller ligger samlet i anvendEngelsk. ?sprog=en|da overstyrer, til at tjekke siden.
+let EN = false, LOC = 'da-DK';
+const T = (da, en) => EN ? en : da;
+const ordOpslag = n => T('opslag', Number(n) === 1 ? 'post' : 'posts');
+const ordKomm = n => T('komm.', Number(n) === 1 ? 'comment' : 'comments');
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const tal = n => n == null ? '–' : Number(n).toLocaleString('da-DK', { maximumFractionDigits: 1 });
-const kortTal = n => n == null ? '–' : Number(n).toLocaleString('da-DK', { notation: 'compact', maximumFractionDigits: 1 });
+const tal = n => n == null ? '–' : Number(n).toLocaleString(LOC, { maximumFractionDigits: 1 });
+const kortTal = n => n == null ? '–' : Number(n).toLocaleString(LOC, { notation: 'compact', maximumFractionDigits: 1 });
 const tilStreng = dt => dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
 const tilDato = s => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, m - 1, d); };
 const plusDage = (s, n) => { const d = tilDato(s); d.setDate(d.getDate() + n); return tilStreng(d); };
 // Datoer vises altid med aarstal (der sammenlignes paa tvaers af aar). Kun grafens akse, hvor
 // pladsen er trang, noejes med dag og maaned paa de midterste maerker.
-const datoKort = dt => dt.toLocaleDateString('da-DK', { day: 'numeric', month: 'short', year: 'numeric' });
-const datoUdenAar = dt => dt.toLocaleDateString('da-DK', { day: 'numeric', month: 'short' });
-const datoLang = dt => dt.toLocaleDateString('da-DK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+const datoKort = dt => dt.toLocaleDateString(LOC, { day: 'numeric', month: 'short', year: 'numeric' });
+const datoUdenAar = dt => dt.toLocaleDateString(LOC, { day: 'numeric', month: 'short' });
+const datoLang = dt => dt.toLocaleDateString(LOC, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 // Samme dato aaret foer (29. februar bliver til 28.) -- samme regel som Postgres' "- interval '1 year'"
 const aarFoer = d => { const t = tilDato(d), r = new Date(t.getFullYear() - 1, t.getMonth(), t.getDate()); if (r.getMonth() !== t.getMonth()) r.setDate(0); return tilStreng(r); };
 const PLATFORM = { facebook: 'Facebook', instagram: 'Instagram', tiktok: 'TikTok' };
 const RAEKKEFOELGE = ['facebook', 'instagram', 'tiktok']; // fast -- farven foelger platformen
-const METRIK = { visninger: 'Visninger på kontoen', raekkevidde: 'Rækkevidde', interaktioner: 'Interaktioner', nye_foelgere: 'Nye følgere' };
-const UGEDAGE = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
+let METRIK = { visninger: 'Visninger på kontoen', raekkevidde: 'Rækkevidde', interaktioner: 'Interaktioner', nye_foelgere: 'Nye følgere' };
+let UGEDAGE = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
 const BLOKKE = [[0, 6], [6, 9], [9, 12], [12, 15], [15, 18], [18, 21], [21, 24]];
 
 // To maader at se siden paa:
 //  - SoMe-fanen (logget ind, some_adgang): alle butikker, og man kan grave ned i én butik.
-//  - Butikslink (?k=noegle, uden login): kun den butiks tal ('egen') eller kaedens samlede tal
+//  - Butikslink (?k=noegle, kraever login): kun den butiks tal ('egen') eller kaedens samlede tal
 //    ('faelles'). Serveren afgoer hvad linket maa se -- siden kan ikke bede om andre butikker.
 const LINK = new URLSearchParams(location.search).get('k');
 let omfang = 'egen';        // butikslink: 'egen' | 'faelles'
@@ -423,9 +429,10 @@ let mailLog = null;         // sendte rapportmails og hvem der har aabnet dem (h
 const kladder = new Map();  // ikke-gemte tekster pr. butik ('alle' = den faelles), saa man kan skifte butik og periode uden at miste noget
 let foerUdkast = null;      // det, der stod i skrivefeltet, foer AI-udkastet blev sat ind (til "Fortryd")
 const bedsteTider = {};     // de bedste tidspunkter pr. platform, som tekst (til AI-udkastet)
+let sprogListe = {};        // butikker, der ikke laeser dansk: { butik_id: 'en' } (kun i fanen)
 let periodeFraUrl = false;  // adressen bad selv om en bestemt periode
 let sammenligning = 'aar';  // 'aar' = samme periode sidste aar, 'foer' = perioden lige foer
-const foerNavn = () => sammenligning === 'aar' ? 'Samme periode sidste år' : 'Perioden lige før';
+const foerNavn = () => sammenligning === 'aar' ? T('Samme periode sidste år', 'Same period last year') : T('Perioden lige før', 'The previous period');
 
 // laeserVis (spinneren) ligger over siden og er ikke en af visningerne: den fjernes, naar de foerste
 // tal er hentet (hent), eller naar der i stedet vises en besked. Butik-redigering har sin egen spinner
@@ -495,7 +502,7 @@ async function hent() {
   if (nr !== hentNr) return;
   $('#app').classList.remove('henter');
   skjulLaeser();
-  if (error) { besked('Tallene kunne ikke hentes. Prøv igen om lidt.', true); return; }
+  if (error) { besked(T('Tallene kunne ikke hentes. Prøv igen om lidt.', 'The numbers could not be loaded. Try again shortly.'), true); return; }
   if (!d) { vis(LINK ? 'ugyldigtLinkVis' : 'ingenAdgangVis'); return; }
   data = d;
   sidstLaest = Date.now();
@@ -551,22 +558,22 @@ function sammenlign(konti, felt) {
   // "uden Instagram" kun naar hele platformen mangler -- ellers antallet af konti
   const helt = RAEKKEFOELGE.filter(p => ude.some(k => k.platform === p) && !konti.some(k => k.platform === p && !ude.includes(k)));
   const rest = ude.filter(k => !helt.includes(k.platform)).length;
-  const uden = [...helt.map(p => PLATFORM[p]), ...(rest ? [rest + (rest === 1 ? ' konto' : ' konti')] : [])].join(' og ');
+  const uden = [...helt.map(p => PLATFORM[p]), ...(rest ? [rest + (rest === 1 ? T(' konto', ' account') : T(' konti', ' accounts'))] : [])].join(T(' og ', ' and '));
   return { pct: (nu - foer) / foer * 100, foer, uden };
 }
 function pctHtml(p) {
   if (p == null) return '';
   const kl = p > 0.05 ? 'op' : p < -0.05 ? 'ned' : '';
-  return `<span class="${kl}">${p > 0.05 ? '▲' : p < -0.05 ? '▼' : ''} ${Math.abs(p).toLocaleString('da-DK', { maximumFractionDigits: 1 })}%</span>`;
+  return `<span class="${kl}">${p > 0.05 ? '▲' : p < -0.05 ? '▼' : ''} ${Math.abs(p).toLocaleString(LOC, { maximumFractionDigits: 1 })}%</span>`;
 }
 
 function tegn() {
   $('#metrikker').innerHTML = Object.entries(METRIK).map(([k, n]) => `<button type="button" class="chip${k === metrik ? ' aktiv' : ''}" data-m="${k}">${n}</button>`).join('');
 
   // Overskrift og valg af butik
-  const butikNavn = n => String(n || '').replace(/^Butik\s+/, 'Børneloppen ');
+  const butikNavn = n => EN && n === 'Butik Island' ? 'Barnaloppan Island' : String(n || '').replace(/^Butik\s+/, 'Børneloppen ');
   if (LINK) {
-    $('#titel').textContent = omfang === 'faelles' ? 'Alle butikker' : butikNavn(data.butik);
+    $('#titel').textContent = omfang === 'faelles' ? T('Alle butikker', 'All stores') : butikNavn(data.butik);
     $('#omfang').hidden = false;
     $('#omfang').querySelector('[data-o="egen"]').textContent = butikNavn(data.butik);
     $('#opdater').hidden = true;
@@ -574,19 +581,19 @@ function tegn() {
     const valg = $('#butik'), liste = data.butikker || [];
     valg.hidden = liste.length < 2;
     valg.textContent = '';
-    [{ id: '', navn: 'Alle butikker' }, ...liste].forEach(b => { const o = el('option', '', butikNavn(b.navn)); o.value = b.id; valg.appendChild(o); });
+    [{ id: '', navn: T('Alle butikker', 'All stores') }, ...liste].forEach(b => { const o = el('option', '', butikNavn(b.navn)); o.value = b.id; valg.appendChild(o); });
     valg.value = butik || '';
   }
 
   const s = data.sidste_sync;
   // Hvad der gik galt, er kun noget for den SoMe-ansvarlige (som ogsaa faar alarmen oeverst paa admin-siden)
-  if (s && s.ok === false) besked(LINK || !kanStyre ? 'De nyeste tal kunne ikke hentes. Tallene nedenfor er fra sidste vellykkede indsamling.'
+  if (s && s.ok === false) besked(LINK || !kanStyre ? T('De nyeste tal kunne ikke hentes. Tallene nedenfor er fra sidste vellykkede indsamling.', 'The latest numbers could not be collected. The numbers below are from the last successful collection.')
     : 'Den seneste indsamling fejlede: ' + ((data.sync_fejl && data.sync_fejl[0]) || 'ukendt fejl') + ' Tallene nedenfor er fra sidste vellykkede indsamling.', true);
-  else if (!data.konti.length) besked(LINK ? 'Der er ikke koblet nogen Facebook- eller Instagram-konti til butikken endnu.'
+  else if (!data.konti.length) besked(LINK ? T('Der er ikke koblet nogen Facebook- eller Instagram-konti til butikken endnu.', 'No Facebook or Instagram accounts are connected to this store yet.')
     : 'Der er ikke hentet nogen tal endnu. Tryk "Opdater nu" for at hente dem – ellers hentes de automatisk hver morgen.');
-  else if (!harForrige()) besked('Der er ingen tal fra ' + foerNavn().toLowerCase() + ' at sammenligne med' + (sammenligning === 'aar' ? ' – tallene går ikke så langt tilbage. Vælg "Sammenlign med perioden før" øverst for at se udviklingen.' : '. Prøv en kortere periode.'));
+  else if (!harForrige()) besked(EN ? 'There are no numbers from ' + foerNavn().toLowerCase() + ' to compare with' + (sammenligning === 'aar' ? '. The numbers do not go back that far. Choose "Compare with the previous period" at the top to see the trend.' : '. Try a shorter period.') : 'Der er ingen tal fra ' + foerNavn().toLowerCase() + ' at sammenligne med' + (sammenligning === 'aar' ? ' – tallene går ikke så langt tilbage. Vælg "Sammenlign med perioden før" øverst for at se udviklingen.' : '. Prøv en kortere periode.'));
   else besked('');
-  $('#status').textContent = s && s.afsluttet_at ? 'Opdateret ' + new Date(s.afsluttet_at).toLocaleString('da-DK', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  $('#status').textContent = s && s.afsluttet_at ? T('Opdateret ', 'Updated ') + new Date(s.afsluttet_at).toLocaleString(LOC, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
   $('#status').classList.toggle('bad', !!s && s.ok === false);
 
   // Sig lige ud, hvilke datoer der vises, og hvad pilene sammenligner med ("▼ 10 % fra 817.110"
@@ -594,8 +601,8 @@ function tegn() {
   const p = periode(), dato = d => datoKort(tilDato(d));
   nuTekst = dato(p.fra) + ' – ' + dato(p.til);
   forrigeTekst = harForrige() ? dato(p.foerFra) + ' – ' + dato(p.foerTil) : '';
-  $('#periodeTekst').textContent = 'Viser ' + nuTekst +
-    (forrigeTekst ? '  ·  Pilene og "fra"-tallene sammenligner med ' + foerNavn().toLowerCase() + ': ' + forrigeTekst : '');
+  $('#periodeTekst').textContent = T('Viser ', 'Showing ') + nuTekst +
+    (forrigeTekst ? T('  ·  Pilene og "fra"-tallene sammenligner med ', '  ·  The arrows and "from" numbers compare with ') + foerNavn().toLowerCase() + ': ' + forrigeTekst : '');
 
   tegnRapport();
   tegnSektioner();
@@ -712,9 +719,9 @@ const datoTekst = d => datoKort(tilDato(d));
 function periodeNavn(fra, til) {
   const a = tilDato(fra), b = tilDato(til);
   if (a.getDate() === 1 && a.getMonth() % 3 === 0 && b.getFullYear() === a.getFullYear() && b.getMonth() === a.getMonth() + 2
-    && new Date(b.getFullYear(), b.getMonth(), b.getDate() + 1).getDate() === 1) return (a.getMonth() / 3 + 1) + '. kvartal ' + a.getFullYear();
+    && new Date(b.getFullYear(), b.getMonth(), b.getDate() + 1).getDate() === 1) return EN ? 'Q' + (a.getMonth() / 3 + 1) + ' ' + a.getFullYear() : (a.getMonth() / 3 + 1) + '. kvartal ' + a.getFullYear();
   const helMaaned = a.getDate() === 1 && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear() && new Date(b.getFullYear(), b.getMonth(), b.getDate() + 1).getDate() === 1;
-  return helMaaned ? a.toLocaleDateString('da-DK', { month: 'long', year: 'numeric' }) : datoTekst(fra) + ' – ' + datoTekst(til);
+  return helMaaned ? a.toLocaleDateString(LOC, { month: 'long', year: 'numeric' }) : datoTekst(fra) + ' – ' + datoTekst(til);
 }
 const butikNavnAf = id => String(((data && data.butikker || []).find(b => b.id === id) || {}).navn || 'butikken').replace(/^Butik\s+/, 'Børneloppen ');
 async function hentRapporter() {
@@ -790,13 +797,13 @@ function tegnRapport(status) {
   const navn = r => periodeNavn(r.fra, r.til);
   // De andre rapporter for samme butik: de tidligere -- og den nyeste, naar man kigger paa en tidligere
   const andre = visListe().filter(r => r.id !== vist.id);
-  const valg = andre.length ? `<select class="rapportValg" aria-label="Se en anden rapport"><option value="">${vist.arkiveret_at ? 'Andre rapporter …' : 'Tidligere rapporter …'}</option>${andre.map(r => `<option value="${r.id}">${esc((r.arkiveret_at ? '' : 'Nyeste: ') + navn(r) + (r.titel ? ' – ' + r.titel : ''))}</option>`).join('')}</select>` : '';
+  const valg = andre.length ? `<select class="rapportValg" aria-label="${T('Se en anden rapport', 'See another report')}"><option value="">${vist.arkiveret_at ? T('Andre rapporter …', 'Other reports …') : T('Tidligere rapporter …', 'Earlier reports …')}</option>${andre.map(r => `<option value="${r.id}">${esc((r.arkiveret_at ? '' : T('Nyeste: ', 'Latest: ')) + navn(r) + (r.titel ? ' – ' + r.titel : ''))}</option>`).join('')}</select>` : '';
   $('#rapportBoks').innerHTML = `<div class="rapport">
-    <div class="rapport-hoved"><span class="rapport-maerke">${vist.arkiveret_at ? 'Tidligere rapport' : vist.butik_id ? 'Rapport' : 'Til alle butikker'} · ${esc(navn(vist))}</span><span class="luft"></span>${valg}</div>
+    <div class="rapport-hoved"><span class="rapport-maerke">${vist.arkiveret_at ? T('Tidligere rapport', 'Earlier report') : vist.butik_id ? T('Rapport', 'Report') : T('Til alle butikker', 'To all stores')} · ${esc(navn(vist))}</span><span class="luft"></span>${valg}</div>
     ${vist.titel ? `<h2>${esc(vist.titel)}</h2>` : ''}
     <div class="rapport-tekst">${esc(vist.tekst)}</div>
-    ${vist === egen && faelles ? `<div class="rapport-faelles"><span class="rapport-maerke">Til alle butikker${navn(faelles) === navn(egen) ? '' : ' · ' + esc(navn(faelles))}</span>${faelles.titel ? `<h2>${esc(faelles.titel)}</h2>` : ''}<div class="rapport-tekst">${esc(faelles.tekst)}</div></div>` : ''}
-    ${vist.fra === p.fra && vist.til === p.til ? '' : `<div class="rapport-note">Rapporten handler om ${esc(navn(vist))}, men du kigger lige nu på en anden periode. <button type="button" class="linkknap" data-r="periode">Vis rapportens periode</button></div>`}
+    ${vist === egen && faelles ? `<div class="rapport-faelles"><span class="rapport-maerke">${T('Til alle butikker', 'To all stores')}${navn(faelles) === navn(egen) ? '' : ' · ' + esc(navn(faelles))}</span>${faelles.titel ? `<h2>${esc(faelles.titel)}</h2>` : ''}<div class="rapport-tekst">${esc(faelles.tekst)}</div></div>` : ''}
+    ${vist.fra === p.fra && vist.til === p.til ? '' : `<div class="rapport-note">${EN ? `This report covers ${esc(navn(vist))}, but you are looking at a different period.` : `Rapporten handler om ${esc(navn(vist))}, men du kigger lige nu på en anden periode.`} <button type="button" class="linkknap" data-r="periode">${T('Vis rapportens periode', "Show the report's period")}</button></div>`}
   </div>`;
 }
 function tegnEditor(status) {
@@ -823,7 +830,7 @@ function tegnEditor(status) {
 // Hvem har faaet rapportmailen, og hvem har aabnet sit link: for en butik dens seneste afsendelser
 // med modtagerne, for "alle butikker" den seneste afsendelse pr. butik. Hentes foerste gang
 // skrivefeltet aabnes, og igen efter en afsendelse.
-const tidspunkt = s => { const d = new Date(s); return datoKort(d) + ' kl. ' + d.toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' }); };
+const tidspunkt = s => { const d = new Date(s); return datoKort(d) + ' kl. ' + d.toLocaleTimeString(LOC, { hour: '2-digit', minute: '2-digit' }); };
 async function tegnMailLog(hentIgen) {
   if (hentIgen || !mailLog) mailLog = (await client.rpc('some_mail_log_hent')).data || [];
   const boks = $('#rapMailLog'); if (!boks) return;
@@ -857,6 +864,7 @@ function tegnEditorPeriode(status) {
   const p = periode(), n = rapNoegle(), gemt = gemtRapport(n), navn = periodeNavn(p.fra, p.til);
   const gemtNavn = gemt && (gemt.fra !== p.fra || gemt.til !== p.til) ? periodeNavn(gemt.fra, gemt.til) : '';
   $('#rapPeriode').innerHTML = `Rapporten gemmes for <b>${esc(navn)}</b>${navn === nuTekst ? '' : ' (' + esc(nuTekst) + ')'} – perioden valgt øverst. Det er den periode, butikken lander på, når den åbner sit link; den kan selv vælge en anden bagefter.`
+    + (butik && sprogListe[butik] === 'en' ? '<br><b>Butikken læser siden på engelsk:</b> skriv rapporten på engelsk. AI-udkastet og mailen kommer på engelsk af sig selv.' : '')
     + (gemtNavn ? `<br>Den gemte rapport dækker <b>${esc(gemtNavn)}</b>. Gemmer du nu, kommer den til at dække perioden ovenfor i stedet. <button type="button" class="linkknap" data-r="periode">Skift til ${esc(gemtNavn)}</button>` : '');
   $('#rapStatus').textContent = status || (kladder.has(n) ? 'Ændringerne er ikke gemt endnu.' : '');
 }
@@ -871,8 +879,8 @@ function tegnUdkastNote(besked) {
 // hvilke formater, tidspunkter og ugedage der virker, og alle periodens opslag med tal og tekst,
 // saa den kan se, hvilke emner der rammer. Til "alle butikker": kaedens tal og mest sete opslag.
 async function udkastKontekst(p) {
-  const pct = v => v.toLocaleString('da-DK', { maximumFractionDigits: 1, signDisplay: 'exceptZero' }) + ' %';
-  const hel = v => v == null ? '–' : Math.round(v).toLocaleString('da-DK');
+  const pct = v => v.toLocaleString(LOC, { maximumFractionDigits: 1, signDisplay: 'exceptZero' }) + ' %';
+  const hel = v => v == null ? '–' : Math.round(v).toLocaleString(LOC);
   const snit = (liste, f) => liste.length ? liste.reduce((a, x) => a + f(x), 0) / liste.length : null;
   const median = v => { const t = v.slice().sort((a, b) => a - b), m = t.length >> 1; return !t.length ? null : t.length % 2 ? t[m] : (t[m - 1] + t[m]) / 2; };
   const inter = x => (x.likes || 0) + (x.kommentarer || 0) + (x.delinger || 0);
@@ -966,7 +974,7 @@ async function udkastKontekst(p) {
       + ` (nr. · ${butik ? '' : 'butik · '}format · tidspunkt · visninger · likes · kommentarer · delinger · tekst):`);
     numre.forEach(i => {
       const x = o[i];
-      linjer.push(`${i + 1}. ${butik ? '' : x.some_konti.navn + ' · '}${formatAf(x)} · ${new Date(x.oprettet_at).toLocaleString('da-DK', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${hel(x.visninger)} · ${x.likes || 0} · ${x.kommentarer || 0} · ${x.delinger || 0} · "${String(x.tekst || '(uden tekst)').replace(/\s+/g, ' ').slice(0, tegn)}"`);
+      linjer.push(`${i + 1}. ${butik ? '' : x.some_konti.navn + ' · '}${formatAf(x)} · ${new Date(x.oprettet_at).toLocaleString(LOC, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${hel(x.visninger)} · ${x.likes || 0} · ${x.kommentarer || 0} · ${x.delinger || 0} · "${String(x.tekst || '(uden tekst)').replace(/\s+/g, ' ').slice(0, tegn)}"`);
     });
   }
   // Lige under periode og sammenligning, saa det ikke drukner i opslagene
@@ -1019,7 +1027,7 @@ $('#rapportBoks').addEventListener('click', async e => {
     if (foerUdkast && foerUdkast.noegle === n) foerUdkast = null;
     await hentRapporter();
     if (boks.isConnected) boks.removeAttribute('data-noegle');   // det gemte skal ikke blive til en kladde igen
-    tegnRapport(rapNoegle() === n ? 'Gemt ✓ kl. ' + new Date().toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' }) + ' – rapporten gælder ' + periodeNavn(p.fra, p.til) + '.' : '');
+    tegnRapport(rapNoegle() === n ? 'Gemt ✓ kl. ' + new Date().toLocaleTimeString(LOC, { hour: '2-digit', minute: '2-digit' }) + ' – rapporten gælder ' + periodeNavn(p.fra, p.til) + '.' : '');
   }
   else if (h === 'slet') {
     // To tryk, saa en rapport ikke forsvinder ved et uheld
@@ -1092,7 +1100,7 @@ $('#rapportBoks').addEventListener('click', async e => {
     tegnUdkastNote('Læser periodens tal og opslag – det tager typisk 5–20 sekunder …');
     let ud = null, fejl = '';
     try {
-      const { data: r, error } = await client.functions.invoke('some-udkast', { body: { kontekst: await udkastKontekst(p) } });
+      const { data: r, error } = await client.functions.invoke('some-udkast', { body: { kontekst: await udkastKontekst(p) + (butik && sprogListe[butik] === 'en' ? '\n\nSPROG: Butikken er uden for Danmark. Skriv HELE rapporten, inklusive overskriften, på engelsk – ikke dansk – med samme tone, opbygning og emojis.' : '') } });
       if (error || !r || r.fejl || !r.tekst) fejl = (r && r.fejl) || mislykket; else ud = r;
     } catch (x) { fejl = mislykket; }
     if (!k.isConnected) return;   // der er skiftet butik imens
@@ -1126,7 +1134,7 @@ $('#rapportBoks').addEventListener('change', e => {
 // op) og resultat (hvad det gav). Opslag, reels og stories taelles hver for sig, og visningerne
 // er dem, indholdet fra perioden har faaet. "Samlede visninger" er paa Instagram summen af dem
 // (som "Samlet views" i rapporterne) og paa Facebook sidens samlede visninger (se hent()).
-const SEKTION = {
+let SEKTION = {
   facebook: {
     indsats: [['Antal opslag', 'opslag', 'Opslag slået op i perioden. Begivenheder tæller ikke med.']],
     resultat: [
@@ -1151,24 +1159,24 @@ const SEKTION = {
 function kortHtml(konti, [navn, felt, hjaelp, hint]) {
   const nu = sum(konti, 'nu', felt) ?? (FRA_OPSLAG.includes(felt) && konti.length ? 0 : null), s = sammenlign(konti, felt);
   return `<div class="tal" data-tip="${esc(tipTekst(navn, hjaelp, nu, s))}"><div class="navn">${esc(navn)}</div><div class="vaerdi">${nu != null && nu >= 1e6 ? kortTal(nu) : tal(nu)}</div>` +
-    `<div class="aendring">${s ? pctHtml(s.pct) + ' fra ' + tal(s.foer) + (s.uden ? `<br><span>Ændring uden ${esc(s.uden)}</span>` : '') : '&nbsp;'}</div>` +
+    `<div class="aendring">${s ? pctHtml(s.pct) + T(' fra ', ' from ') + tal(s.foer) + (s.uden ? `<br><span>${T('Ændring uden', 'Change without')} ${esc(s.uden)}</span>` : '') : '&nbsp;'}</div>` +
     (hint ? `<div class="hint">${esc(hint)}</div>` : '') + '</div>';
 }
 function tegnSektioner() {
   // Top-opslag vises ogsaa i butikslinkets "Alle butikker" (paa tvaers af butikkerne, til inspiration)
   const visOpslag = true;
-  const sortValg = '<select class="opslagSort" aria-label="Sortér top-opslag">' + [['visninger', 'Flest visninger'], ['likes', 'Flest likes'], ['kommentarer', 'Flest kommentarer']]
+  const sortValg = '<select class="opslagSort" aria-label="' + T('Sortér top-opslag', 'Sort top posts') + '">' + [['visninger', T('Flest visninger', 'Most views')], ['likes', T('Flest likes', 'Most likes')], ['kommentarer', T('Flest kommentarer', 'Most comments')]]
     .map(([v, n]) => `<option value="${v}"${v === opslagSort ? ' selected' : ''}>${n}</option>`).join('') + '</select>';
   $('#sektioner').innerHTML = RAEKKEFOELGE.filter(p => SEKTION[p] && data.konti.some(k => k.platform === p)).map(p => {
     const k = data.konti.filter(x => x.platform === p), s = SEKTION[p];
     const gruppe = (titel, liste) => `<div class="gruppe" style="--n:${liste.length}"><h3>${titel}</h3><div class="noegletal">${liste.map(x => kortHtml(k, x)).join('')}</div></div>`;
     return `<section class="pf" data-p="${p}">
       <h2 class="pf-titel"><span class="prik ${p}"></span>${PLATFORM[p]}</h2>
-      <div class="pf-tal">${gruppe('Indsats', s.indsats)}${gruppe('Resultat', s.resultat)}</div>
+      <div class="pf-tal">${gruppe(T('Indsats', 'Activity'), s.indsats)}${gruppe(T('Resultat', 'Results'), s.resultat)}</div>
       <div class="to${visOpslag ? '' : ' en'}">
-        ${visOpslag ? `<div class="kort"><div class="kort-hoved"><h2>Top-opslag</h2><span class="luft"></span>${sortValg}</div><div class="opslagListe" data-p="${p}"></div></div>` : ''}
+        ${visOpslag ? `<div class="kort"><div class="kort-hoved"><h2>${T('Top-opslag', 'Top posts')}</h2><span class="luft"></span>${sortValg}</div><div class="opslagListe" data-p="${p}"></div></div>` : ''}
         <div class="kort">
-          <div class="kort-hoved"><h2>Bedste tidspunkter at poste <small>${p === 'instagram' ? 'visninger pr. opslag i forhold til et normalt opslag, vægtet med hvornår følgerne er online' : 'visninger pr. opslag i forhold til et normalt opslag for butikken'}</small></h2></div>
+          <div class="kort-hoved"><h2>${T('Bedste tidspunkter at poste', 'Best times to post')} <small>${p === 'instagram' ? T('visninger pr. opslag i forhold til et normalt opslag, vægtet med hvornår følgerne er online', 'views per post compared with a normal post, weighted by when followers are online') : T('visninger pr. opslag i forhold til et normalt opslag for butikken', "views per post compared with the store's normal post")}</small></h2></div>
           <div class="varmekort" data-p="${p}"></div>
           <ol class="bedst" data-p="${p}"></ol>
           <div class="lille tidNote" data-p="${p}" style="margin-top:8px"></div>
@@ -1182,9 +1190,9 @@ function tegnSektioner() {
 function tegnFoelgere() {
   $('#foelgerTal').innerHTML = RAEKKEFOELGE.filter(p => data.konti.some(k => k.platform === p)).flatMap(p => {
     const k = data.konti.filter(x => x.platform === p);
-    return [kortHtml(k, [PLATFORM[p] + ': følgere', 'foelgere', 'Antal følgere ved periodens slutning']),
+    return [kortHtml(k, [PLATFORM[p] + T(': følgere', ': followers'), 'foelgere', T('Antal følgere ved periodens slutning', 'Followers at the end of the period')]),
       // Instagram udleverer tallet med forsinkelse: de seneste to dage staar som 0, indtil Meta har regnet dem ud
-      kortHtml(k, [PLATFORM[p] + ': nye følgere', 'nye_foelgere', 'Nye følgere i perioden.' + (p === 'instagram' ? ' Instagram er op til to døgn om at levere tallet, så de seneste to dage tæller først med senere.' : '')])];
+      kortHtml(k, [PLATFORM[p] + T(': nye følgere', ': new followers'), 'nye_foelgere', T('Nye følgere i perioden.', 'New followers in the period.') + (p === 'instagram' ? T(' Instagram er op til to døgn om at levere tallet, så de seneste to dage tæller først med senere.', ' Instagram can take up to two days to deliver this number, so the last two days count later.') : '')])];
   }).join('');
 }
 
@@ -1249,19 +1257,19 @@ function paenTop(maks) {
 }
 function tegnGraf() {
   const g = grafData(), boks = $('#graf');
-  $('#grafTitel').textContent = METRIK[metrik] + ' pr. dag';
+  $('#grafTitel').textContent = METRIK[metrik] + T(' pr. dag', ' per day');
   const flere = g.serier.length > 1;
   $('#forklaring').innerHTML = (flere ? g.serier.map(s => `<span><i class="streg" style="border-color:${s.farve}"></i>${esc(s.navn)}</span>`).join('') : '') +
     (g.forrige ? `<span><i class="streg stiplet"></i>${foerNavn()}</span>` : '');
   const alle = g.serier.flatMap(s => s.v.concat(s.f || [])).filter(n => n != null);
-  if (!alle.length) { boks.innerHTML = '<div class="lille" style="padding:40px 0;text-align:center">Der er ingen tal for ' + esc(METRIK[metrik].toLowerCase()) + ' i perioden endnu.</div>'; $('#grafTabel').innerHTML = ''; grafTilstand = null; return; }
+  if (!alle.length) { boks.innerHTML = '<div class="lille" style="padding:40px 0;text-align:center">' + T('Der er ingen tal for ', 'There are no numbers for ') + esc(METRIK[metrik].toLowerCase()) + T(' i perioden endnu.', ' in this period yet.') + '</div>'; $('#grafTabel').innerHTML = ''; grafTilstand = null; return; }
 
-  const B = Math.max(320, boks.clientWidth), H = 280, V = 46, HO = 14, T = 12, BU = 26;
+  const B = Math.max(320, boks.clientWidth), H = 280, V = 46, HO = 14, TOP = 12, BU = 26;
   const top = paenTop(Math.max(...alle)), n = g.dage.length;
   const x = i => V + (n < 2 ? (B - V - HO) / 2 : i * (B - V - HO) / (n - 1));
-  const y = v => T + (H - T - BU) * (1 - v / top);
+  const y = v => TOP + (H - TOP - BU) * (1 - v / top);
   const sti = v => { let d = '', pen = false; v.forEach((p, i) => { if (p == null) { pen = false; return; } d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p).toFixed(1); pen = true; }); return d; };
-  let svg = `<svg viewBox="0 0 ${B} ${H}" role="img" tabindex="0" aria-label="${esc(METRIK[metrik])} pr. dag. Brug piletasterne for at se de enkelte dage.">`;
+  let svg = `<svg viewBox="0 0 ${B} ${H}" role="img" tabindex="0" aria-label="${esc(METRIK[metrik])}${T(' pr. dag. Brug piletasterne for at se de enkelte dage.', ' per day. Use the arrow keys to see each day.')}">`;
   for (let i = 0; i <= 4; i++) {
     const v = top * i / 4;
     svg += `<line x1="${V}" x2="${B - HO}" y1="${y(v)}" y2="${y(v)}" stroke="var(--gitter)"/><text x="${V - 8}" y="${y(v) + 4}" text-anchor="end">${kortTal(v)}</text>`;
@@ -1280,7 +1288,7 @@ function tegnGraf() {
     svg += `<path d="${a}" fill="${g.serier[0].farve}" opacity=".1"/>`;
   }
   g.serier.forEach(s => { svg += `<path d="${sti(s.v)}" fill="none" stroke="${s.farve}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`; });
-  svg += `<line id="sigte" y1="${T}" y2="${H - BU}" stroke="var(--mut)" stroke-width="1" visibility="hidden"/>`;
+  svg += `<line id="sigte" y1="${TOP}" y2="${H - BU}" stroke="var(--mut)" stroke-width="1" visibility="hidden"/>`;
   g.serier.forEach((s, j) => { svg += `<circle id="punkt${j}" r="4.5" fill="${s.farve}" stroke="var(--card)" stroke-width="2" visibility="hidden"/>`; });
   boks.innerHTML = svg + '</svg>';
 
@@ -1299,7 +1307,7 @@ function tegnGraf() {
     visPunkt(i);
   });
 
-  $('#grafTabel').innerHTML = `<thead><tr><th>Dato</th>${g.serier.map(s => `<th>${esc(s.navn)}</th>${s.f ? `<th>${esc(s.navn)}, ${foerNavn().toLowerCase()}</th>` : ''}`).join('')}${flere ? '<th>I alt</th>' + (g.forrige ? `<th>I alt, ${foerNavn().toLowerCase()}</th>` : '') : ''}</tr></thead><tbody>` +
+  $('#grafTabel').innerHTML = `<thead><tr><th>${T('Dato', 'Date')}</th>${g.serier.map(s => `<th>${esc(s.navn)}</th>${s.f ? `<th>${esc(s.navn)}, ${foerNavn().toLowerCase()}</th>` : ''}`).join('')}${flere ? `<th>${T('I alt', 'Total')}</th>` + (g.forrige ? `<th>${T('I alt', 'Total')}, ${foerNavn().toLowerCase()}</th>` : '') : ''}</tr></thead><tbody>` +
     g.dage.map((d, i) => `<tr><td>${datoKort(tilDato(d))}</td>${g.serier.map(s => `<td>${tal(s.v[i])}</td>${s.f ? `<td>${tal(s.f[i])}</td>` : ''}`).join('')}${flere ? `<td>${tal(g.total[i])}</td>` + (g.forrige ? `<td>${tal(g.forrige[i])}</td>` : '') : ''}</tr>`).join('') + '</tbody>';
 }
 function visPunkt(i, musY) {
@@ -1322,8 +1330,8 @@ function visPunkt(i, musY) {
       if (s.f) n.appendChild(tipLinje(s.farve, s.navn + ' ' + foerDato, tal(s.f[i]), true));
     });
     if (t.g.serier.length > 1) {
-      const l = tipLinje(null, 'I alt', tal(t.g.total[i])); l.classList.add('t-sum'); n.appendChild(l);
-      if (t.g.forrige) n.appendChild(tipLinje(null, 'I alt ' + foerDato, tal(t.g.forrige[i])));
+      const l = tipLinje(null, T('I alt', 'Total'), tal(t.g.total[i])); l.classList.add('t-sum'); n.appendChild(l);
+      if (t.g.forrige) n.appendChild(tipLinje(null, T('I alt ', 'Total ') + foerDato, tal(t.g.forrige[i])));
     }
   });
 }
@@ -1335,7 +1343,7 @@ function skjulPunkt() {
 }
 
 // ---------- Butikker og konti ----------
-const KOL = [
+let KOL = [
   ['Opslag', 'opslag', 'Opslag slået op i perioden – uden reels, stories og begivenheder'],
   ['Reels', 'reels', 'Reels slået op på Instagram i perioden'],
   ['Stories', 'stories', 'Stories slået op på Instagram i perioden'],
@@ -1348,12 +1356,12 @@ const KOL = [
 // Format: foerste linje er overskriften; en linje med tabulator er "navn <tab> tal <tab> datoer"
 // (tallet stilles til hoejre, datoerne staar med smaat nedenunder); alt andet er forklarende tekst.
 function tipTekst(navn, hjaelp, nu, c) {
-  const linjer = [navn, hjaelp, 'Denne periode\t' + tal(nu) + '\t' + nuTekst];
+  const linjer = [navn, hjaelp, T('Denne periode', 'This period') + '\t' + tal(nu) + '\t' + nuTekst];
   if (c) {
     linjer.push(foerNavn() + '\t' + tal(c.foer) + '\t' + forrigeTekst);
-    linjer.push('Ændring\t' + c.pct.toLocaleString('da-DK', { maximumFractionDigits: 1, signDisplay: 'exceptZero' }) + ' %');
-    if (c.uden) linjer.push('Ændringen er regnet uden ' + c.uden + ', som ikke har tal for den periode.');
-  } else if (forrigeTekst) linjer.push('Der er ingen tal for ' + foerNavn().toLowerCase() + ' (' + forrigeTekst + ') at sammenligne med.');
+    linjer.push(T('Ændring', 'Change') + '\t' + c.pct.toLocaleString(LOC, { maximumFractionDigits: 1, signDisplay: 'exceptZero' }) + ' %');
+    if (c.uden) linjer.push(EN ? 'The change is calculated without ' + c.uden + ', which has no numbers for that period.' : 'Ændringen er regnet uden ' + c.uden + ', som ikke har tal for den periode.');
+  } else if (forrigeTekst) linjer.push(EN ? 'There are no numbers for ' + foerNavn().toLowerCase() + ' (' + forrigeTekst + ') to compare with.' : 'Der er ingen tal for ' + foerNavn().toLowerCase() + ' (' + forrigeTekst + ') at sammenligne med.');
   return linjer.filter(Boolean).join('\n');
 }
 function tegnKonti() {
@@ -1377,19 +1385,19 @@ function tegnKonti() {
   const s = sortering;
   r.sort((a, b) => s.felt === 'navn' ? a.navn.localeCompare(b.navn, 'da') * (s.ned ? -1 : 1) : ((b.nu[s.felt] ?? -1) - (a.nu[s.felt] ?? -1)) * (s.ned ? 1 : -1));
   tabelRaekker = r;
-  $('#kontiAntal').textContent = r.length ? r.length + (visning === 'butik' ? (r.length === 1 ? ' butik' : ' butikker') : ' konti') : '';
+  $('#kontiAntal').textContent = r.length ? r.length + (visning === 'butik' ? (r.length === 1 ? T(' butik', ' store') : T(' butikker', ' stores')) : (r.length === 1 ? T(' konto', ' account') : T(' konti', ' accounts'))) : '';
   const celle = (x, [navn, f, hjaelp]) => { const c = sammenlign(x.konti, f); return `<td data-tip="${esc(tipTekst(x.navn + ' – ' + navn.toLowerCase(), hjaelp, x.nu[f], c))}">${tal(x.nu[f])}${!c ? '' : `<div class="lille">${pctHtml(c.pct)}${c.uden ? '*' : ''}</div>`}</td>`; };
-  $('#konti').innerHTML = `<thead><tr><th data-felt="navn" class="${s.felt === 'navn' ? 'sorteret' : ''}">${visning === 'butik' ? 'Butik' : 'Konto'}${s.felt === 'navn' ? (s.ned ? ' ↓' : ' ↑') : ''}</th>${KOL.map(([n, f, hjaelp]) => `<th data-felt="${f}" data-tip="${esc(n + '\n' + hjaelp + '\nKlik for at sortere')}" class="${s.felt === f ? 'sorteret' : ''}">${n}${s.felt === f ? (s.ned ? ' ↓' : ' ↑') : ''}</th>`).join('')}</tr></thead><tbody>${
+  $('#konti').innerHTML = `<thead><tr><th data-felt="navn" class="${s.felt === 'navn' ? 'sorteret' : ''}">${visning === 'butik' ? T('Butik', 'Store') : T('Konto', 'Account')}${s.felt === 'navn' ? (s.ned ? ' ↓' : ' ↑') : ''}</th>${KOL.map(([n, f, hjaelp]) => `<th data-felt="${f}" data-tip="${esc(n + '\n' + hjaelp + '\n' + T('Klik for at sortere', 'Click to sort'))}" class="${s.felt === f ? 'sorteret' : ''}">${n}${s.felt === f ? (s.ned ? ' ↓' : ' ↑') : ''}</th>`).join('')}</tr></thead><tbody>${
     r.map(x => `<tr><td><div class="konto">${x.platforme.map(p => `<span class="prik ${p}" title="${PLATFORM[p]}"></span>`).join('')}<span>${esc(x.navn)}${x.brugernavn ? ` <span class="lille">@${esc(x.brugernavn)}</span>` : ''}</span></div></td>${KOL.map(kol => celle(x, kol)).join('')}</tr>`).join('')
-    || `<tr><td colspan="${KOL.length + 1}" class="lille">Ingen konti endnu.</td></tr>`}</tbody>`;
+    || `<tr><td colspan="${KOL.length + 1}" class="lille">${T('Ingen konti endnu.', 'No accounts yet.')}</td></tr>`}</tbody>`;
 }
 function hentCsv() {
   const p = periode(), felt = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
-  const linjer = [[visning === 'butik' ? 'Butik' : 'Konto', 'Platform', ...KOL.map(k => k[0])].map(felt).join(';')]
+  const linjer = [[visning === 'butik' ? T('Butik', 'Store') : T('Konto', 'Account'), 'Platform', ...KOL.map(k => k[0])].map(felt).join(';')]
     .concat(tabelRaekker.map(x => [x.navn, x.platforme.map(q => PLATFORM[q]).join(' + '), ...KOL.map(([, f]) => x.nu[f] ?? '')].map(felt).join(';')));
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['﻿' + linjer.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
-  a.download = `some-${p.fra}-til-${p.til}.csv`;
+  a.download = `some-${p.fra}-${T('til', 'to')}-${p.til}.csv`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
@@ -1417,12 +1425,12 @@ async function hentOpslag() {
     }
     boks.innerHTML = (o || []).map(x => {
       const inter = (x.likes || 0) + (x.kommentarer || 0) + (x.delinger || 0);
-      const rate = x.visninger ? ` · ${(inter / x.visninger * 100).toLocaleString('da-DK', { maximumFractionDigits: 1 })}% engagement` : '';
+      const rate = x.visninger ? ` · ${(inter / x.visninger * 100).toLocaleString(LOC, { maximumFractionDigits: 1 })}% engagement` : '';
       return `<div class="opslag">
       ${x.billede_url ? `<img src="${esc(x.billede_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML='<div class=tom></div>'">` : '<div class="tom"></div>'}
-      <a href="${esc(/^https:\/\//.test(x.permalink || '') ? x.permalink : '#')}" target="_blank" rel="noopener"><div class="lille">${esc(x.some_konti.navn)}, ${datoKort(new Date(x.oprettet_at))}</div><div class="tekst">${esc(x.tekst || '(uden tekst)')}</div></a>
-      <div class="tal2"><b>${x.visninger != null ? kortTal(x.visninger) : '–'}</b> visninger<br>${tal(x.likes)} likes · ${tal(x.kommentarer)} komm.${rate}</div>
-    </div>`; }).join('') || '<div class="lille">Ingen opslag i perioden endnu.</div>';
+      <a href="${esc(/^https:\/\//.test(x.permalink || '') ? x.permalink : '#')}" target="_blank" rel="noopener"><div class="lille">${esc(x.some_konti.navn)}, ${datoKort(new Date(x.oprettet_at))}</div><div class="tekst">${esc(x.tekst || T('(uden tekst)', '(no text)'))}</div></a>
+      <div class="tal2"><b>${x.visninger != null ? kortTal(x.visninger) : '–'}</b> ${T('visninger', 'views')}<br>${tal(x.likes)} likes · ${tal(x.kommentarer)} ${ordKomm(x.kommentarer)}${rate}</div>
+    </div>`; }).join('') || `<div class="lille">${T('Ingen opslag i perioden endnu.', 'No posts in this period yet.')}</div>`;
   }));
 }
 
@@ -1432,7 +1440,7 @@ async function hentOpslag() {
 // og smaa butikker kan laegges sammen. Instagram faar desuden Metas "foelgere online" pr. time.
 function tegnTider() {
   const blokNavn = ([a, z]) => String(a).padStart(2, '0') + '–' + String(z).padStart(2, '0');
-  const gange = s => s.toLocaleString('da-DK', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '×';
+  const gange = s => s.toLocaleString(LOC, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '×';
   document.querySelectorAll('.varmekort[data-p]').forEach(kort => {
     const pf = kort.dataset.p;
     const celler = UGEDAGE.map(() => BLOKKE.map(() => ({ antal: 0, inter: 0, score: null })));
@@ -1475,10 +1483,10 @@ function tegnTider() {
       h += `<div class="akse">${UGEDAGE[d].slice(0, 3)}</div>`;
       raekke.forEach((c, b) => {
         // Et tomt felt er ikke manglende data: der er bare ikke slaaet noget op i det tidsrum
-        if (!c.antal) { h += `<div class="celle tom" title="${UGEDAGE[d]} kl. ${blokNavn(BLOKKE[b])}: ingen opslag i perioden">–</div>`; return; }
-        const r = rang(d, b), tekst = `${UGEDAGE[d]} ${blokNavn(BLOKKE[b])}: ${gange(score(c))} så mange visninger som et normalt opslag, ${c.antal} opslag`;
-        if (r) { h += `<button type="button" class="celle har r${r}" data-d="${d}" data-b="${b}" aria-label="Nr. ${r}. ${tekst}">${gange(score(c))}</button>`; return; }
-        if (!taeller(c)) { h += `<button type="button" class="celle har faa" data-d="${d}" data-b="${b}" aria-label="${tekst} (for få til at tælle med)">${c.score == null ? '?' : gange(score(c))}</button>`; return; }
+        if (!c.antal) { h += `<div class="celle tom" title="${UGEDAGE[d]} ${KL()}${blokNavn(BLOKKE[b])}: ${T('ingen opslag i perioden', 'no posts in this period')}">–</div>`; return; }
+        const r = rang(d, b), tekst = `${UGEDAGE[d]} ${blokNavn(BLOKKE[b])}: ${gange(score(c))} ${T('så mange visninger som et normalt opslag', 'the views of a normal post')}, ${c.antal} ${ordOpslag(c.antal)}`;
+        if (r) { h += `<button type="button" class="celle har r${r}" data-d="${d}" data-b="${b}" aria-label="${T('Nr.', 'No.')} ${r}. ${tekst}">${gange(score(c))}</button>`; return; }
+        if (!taeller(c)) { h += `<button type="button" class="celle har faa" data-d="${d}" data-b="${b}" aria-label="${tekst} ${T('(for få til at tælle med)', '(too few to count)')}">${c.score == null ? '?' : gange(score(c))}</button>`; return; }
         // Resten: én farve fra lys til moerk -- jo bedre placeret, jo kraftigere
         const styrke = Math.round(10 + 60 * placering({ c, d, b }));
         h += `<button type="button" class="celle har" data-d="${d}" data-b="${b}" style="background:color-mix(in srgb, var(--varme) ${styrke}%, var(--card));color:${styrke > 55 ? 'var(--card)' : 'var(--fg)'}" aria-label="${tekst}">${gange(score(c))}</button>`;
@@ -1489,34 +1497,34 @@ function tegnTider() {
       const k = e.target.closest('.celle.har'); if (!k) return;
       const c = celler[k.dataset.d][k.dataset.b], r = k.getBoundingClientRect();
       visTip(r.right - 6, r.top + r.height / 2, n => {
-        n.appendChild(el('div', 't-titel', UGEDAGE[k.dataset.d] + ' kl. ' + blokNavn(BLOKKE[k.dataset.b])));
-        n.appendChild(tipLinje(null, 'Visninger ift. et normalt opslag', c.score == null ? '?' : gange(score(c))));
-        n.appendChild(tipLinje(null, 'Interaktioner pr. opslag', tal(c.inter / c.antal)));
-        n.appendChild(tipLinje(null, 'Opslag', tal(c.antal)));
-        if (onlMaks > 0) n.appendChild(tipLinje(null, 'Følgere online (snit pr. time)', kortTal(Math.round(onl(online[k.dataset.d][k.dataset.b]))) + ' (' + Math.round(100 * onl(online[k.dataset.d][k.dataset.b]) / onlMaks) + ' % af flest)'));
-        if (kombi && taeller(c)) n.appendChild(tipLinje(null, 'Samlet (visninger + følgere online)', Math.round(100 * vaegt({ c, d: +k.dataset.d, b: +k.dataset.b })) + ' %'));
-        if (!taeller(c)) n.appendChild(el('div', 'lille', c.score == null ? 'Ingen visningstal for opslagene' : 'For få opslag til at tælle med i top 3'));
-        n.appendChild(el('div', 'lille', 'Klik for at se time for time'));
+        n.appendChild(el('div', 't-titel', UGEDAGE[k.dataset.d] + ' ' + KL() + blokNavn(BLOKKE[k.dataset.b])));
+        n.appendChild(tipLinje(null, T('Visninger ift. et normalt opslag', 'Views compared with a normal post'), c.score == null ? '?' : gange(score(c))));
+        n.appendChild(tipLinje(null, T('Interaktioner pr. opslag', 'Interactions per post'), tal(c.inter / c.antal)));
+        n.appendChild(tipLinje(null, T('Opslag', 'Posts'), tal(c.antal)));
+        if (onlMaks > 0) n.appendChild(tipLinje(null, T('Følgere online (snit pr. time)', 'Followers online (average per hour)'), kortTal(Math.round(onl(online[k.dataset.d][k.dataset.b]))) + ' (' + Math.round(100 * onl(online[k.dataset.d][k.dataset.b]) / onlMaks) + T(' % af flest)', ' % of the busiest)')));
+        if (kombi && taeller(c)) n.appendChild(tipLinje(null, T('Samlet (visninger + følgere online)', 'Combined (views + followers online)'), Math.round(100 * vaegt({ c, d: +k.dataset.d, b: +k.dataset.b })) + ' %'));
+        if (!taeller(c)) n.appendChild(el('div', 'lille', c.score == null ? T('Ingen visningstal for opslagene', 'No view numbers for these posts') : T('For få opslag til at tælle med i top 3', 'Too few posts to count in the top 3')));
+        n.appendChild(el('div', 'lille', T('Klik for at se time for time', 'Click to see hour by hour')));
       });
     };
     kort.onpointerover = visCelle; kort.onfocusin = visCelle;
     kort.onpointerleave = skjulTip; kort.onfocusout = skjulTip;
     kort.onclick = e => { const k = e.target.closest('.celle.har'); if (k) { skjulTip(); visTidOpslag(pf, Number(k.dataset.d), Number(k.dataset.b), celler[k.dataset.d][k.dataset.b]); } };
-    const onlineTekst = x => kombi ? ` · ${Math.round(100 * onl(online[x.d][x.b]) / onlMaks)} % af flest følgere online` : '';
-    document.querySelector(`.bedst[data-p="${pf}"]`).innerHTML = top.map((x, i) => `<li><span class="rang r${i + 1}">${i + 1}</span>${UGEDAGE[x.d]} kl. ${blokNavn(BLOKKE[x.b])}: <b>${gange(score(x.c))}</b> så mange visninger som normalt <span class="lille">(${x.c.antal} opslag${onlineTekst(x)})</span></li>`).join('')
-      || '<li class="lille">Ingen opslag i perioden.</li>';
-    document.querySelector(`.tidNote[data-p="${pf}"]`).textContent = !medOpslag.length ? '' : (kombi ? 'Grøn = de tre bedste tidspunkter, når visninger pr. opslag og følgere online vægtes lige (se gitteret nederst). ' : 'Grøn = de tre bedste tidspunkter. ') + '1,0× = et normalt opslag for butikken (medianen af opslagenes visninger).'
-      + (NOK > 1 ? ` Grå tal = færre end ${NOK} opslag, så de tæller ikke med.` : '') + ' – = ingen opslag i perioden.'
-      + (NOK < 5 ? ' Der er få opslag i perioden, så hvert felt bygger på ganske få opslag – vælg en længere periode (fx 90 dage) for et mere sikkert billede.' : '');
+    const onlineTekst = x => kombi ? ` · ${Math.round(100 * onl(online[x.d][x.b]) / onlMaks)} % ${T('af flest følgere online', 'of the most followers online')}` : '';
+    document.querySelector(`.bedst[data-p="${pf}"]`).innerHTML = top.map((x, i) => `<li><span class="rang r${i + 1}">${i + 1}</span>${UGEDAGE[x.d]} ${KL()}${blokNavn(BLOKKE[x.b])}: <b>${gange(score(x.c))}</b> ${T('så mange visninger som normalt', 'the normal views')} <span class="lille">(${x.c.antal} ${ordOpslag(x.c.antal)}${onlineTekst(x)})</span></li>`).join('')
+      || `<li class="lille">${T('Ingen opslag i perioden.', 'No posts in this period.')}</li>`;
+    document.querySelector(`.tidNote[data-p="${pf}"]`).textContent = !medOpslag.length ? '' : (kombi ? T('Grøn = de tre bedste tidspunkter, når visninger pr. opslag og følgere online vægtes lige (se gitteret nederst). ', 'Green = the three best times when views per post and followers online are weighted equally (see the grid below). ') : T('Grøn = de tre bedste tidspunkter. ', 'Green = the three best times. ')) + T('1,0× = et normalt opslag for butikken (medianen af opslagenes visninger).', "1.0× = the store's normal post (the median of its post views).")
+      + (NOK > 1 ? (EN ? ` Grey numbers = fewer than ${NOK} posts, so they do not count.` : ` Grå tal = færre end ${NOK} opslag, så de tæller ikke med.`) : '') + T(' – = ingen opslag i perioden.', ' – = no posts in this period.')
+      + (NOK < 5 ? T(' Der er få opslag i perioden, så hvert felt bygger på ganske få opslag – vælg en længere periode (fx 90 dage) for et mere sikkert billede.', ' There are few posts in this period, so each cell rests on very few posts. Choose a longer period (e.g. 90 days) for a more reliable picture.') : '');
     bedsteTider[pf] = top.map(x => `${UGEDAGE[x.d]} kl. ${blokNavn(BLOKKE[x.b])} (${gange(score(x.c))} så mange visninger som et normalt opslag, ${x.c.antal} opslag${onlineTekst(x)})`);
     // Foelgere online: samme gitter, farvet efter andel af det travleste felt
     document.querySelector(`.online[data-p="${pf}"]`).innerHTML = onlMaks <= 0 ? '' :
-      '<div class="lille" style="margin:14px 0 6px"><b>Følgere online</b> – hvor mange af følgerne der er på Instagram, i snit pr. time de seneste 4 uger. Mørkegrøn = flest. Meta oplyser det ikke for Facebook.</div>'
+      `<div class="lille" style="margin:14px 0 6px">${T('<b>Følgere online</b> – hvor mange af følgerne der er på Instagram, i snit pr. time de seneste 4 uger. Mørkegrøn = flest. Meta oplyser det ikke for Facebook.', '<b>Followers online</b>: how many followers are on Instagram, average per hour over the last 4 weeks. Dark green = most. Meta does not provide this for Facebook.')}</div>`
       + '<div class="varmekort"><div></div>' + BLOKKE.map(b => `<div class="akse top">${blokNavn(b)}</div>`).join('')
       + online.map((raekke, d) => `<div class="akse">${UGEDAGE[d].slice(0, 3)}</div>` + raekke.map((o, b) => {
         // Fast skala (bleg -> moerkegroen, samme groenne som top 3), saa flest er moerkest i begge temaer
         const s = Math.round(100 * onl(o) / onlMaks);
-        return `<div class="celle" style="background:color-mix(in srgb, #15803d ${s}%, #dcfce7);color:${s > 55 ? '#fff' : '#062b14'}" title="${UGEDAGE[d]} kl. ${blokNavn(BLOKKE[b])}: ca. ${tal(Math.round(onl(o)))} følgere online i snit pr. time">${kortTal(Math.round(onl(o)))}</div>`;
+        return `<div class="celle" style="background:color-mix(in srgb, #15803d ${s}%, #dcfce7);color:${s > 55 ? '#fff' : '#062b14'}" title="${UGEDAGE[d]} ${KL()}${blokNavn(BLOKKE[b])}: ${T('ca.', 'about')} ${tal(Math.round(onl(o)))} ${T('følgere online i snit pr. time', 'followers online on average per hour')}">${kortTal(Math.round(onl(o)))}</div>`;
       }).join('')).join('') + '</div>';
   });
 }
@@ -1526,8 +1534,9 @@ function tegnTider() {
 // En time skal have mindst 3 opslag for at kunne kaldes bedst: en butik har typisk kun ~4 opslag i
 // samme time paa 90 dage, og ét opslag, der gik godt, er ikke et moenster.
 const TIME_NOK = 3;
+const KL = () => T('kl. ', 'at ');
 const timeKl = t => String(t).padStart(2, '0') + '–' + String(t + 1).padStart(2, '0');
-const gangeTal = s => Number(s).toLocaleString('da-DK', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '×';
+const gangeTal = s => Number(s).toLocaleString(LOC, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '×';
 let tidVis = null;    // det aabne felt: { pf, d, a, z, c, timer, valgt }
 let tidKald = 0;      // kun svaret paa det seneste kald maa tegnes
 
@@ -1550,23 +1559,23 @@ function tegnTimer() {
   const taeller = raekker.filter(r => r.antal >= TIME_NOK && r.score != null);
   const bedst = taeller.length > 1 ? taeller.reduce((m, r) => Number(r.score) > Number(m.score) ? r : m) : null;
   const svar = bedst
-    ? `<b>Bedst kl. ${timeKl(bedst.time)}:</b> ${gangeTal(bedst.score)} så mange visninger som et normalt opslag (${tal(bedst.antal)} opslag).`
+    ? (EN ? `<b>Best at ${timeKl(bedst.time)}:</b> ${gangeTal(bedst.score)} the views of a normal post (${tal(bedst.antal)} posts).` : `<b>Bedst kl. ${timeKl(bedst.time)}:</b> ${gangeTal(bedst.score)} så mange visninger som et normalt opslag (${tal(bedst.antal)} opslag).`)
     : taeller.length === 1
-      ? `Kun kl. ${timeKl(taeller[0].time)} har mindst ${TIME_NOK} opslag, så timerne kan ikke sammenlignes endnu.`
-      : `Ingen time har ${TIME_NOK} opslag endnu, så der er ingen bedste time. En længere periode (fx 90 dage) giver et sikrere svar.`;
+      ? (EN ? `Only ${timeKl(taeller[0].time)} has at least ${TIME_NOK} posts, so the hours cannot be compared yet.` : `Kun kl. ${timeKl(taeller[0].time)} har mindst ${TIME_NOK} opslag, så timerne kan ikke sammenlignes endnu.`)
+      : (EN ? `No hour has ${TIME_NOK} posts yet, so there is no best hour. A longer period (e.g. 90 days) gives a more reliable answer.` : `Ingen time har ${TIME_NOK} opslag endnu, så der er ingen bedste time. En længere periode (fx 90 dage) giver et sikrere svar.`);
   const skala = Math.max(1, ...raekker.filter(r => r.antal && r.score != null).map(r => Math.abs(timeLog(r))));
   const raekkeHtml = r => {
-    const kl = `<span class="time-kl">${timeKl(r.time)}${r === bedst ? '<small>Bedst</small>' : ''}</span>`;
+    const kl = `<span class="time-kl">${timeKl(r.time)}${r === bedst ? `<small>${T('Bedst', 'Best')}</small>` : ''}</span>`;
     const onl = online.has(r.time) ? `<br>${kortTal(Math.round(online.get(r.time)))} online` : '';
-    if (!r.antal) return `<div class="time-raekke ingen">${kl}<span class="time-spor"></span><span class="time-gange">–</span><span class="time-meta">Ingen opslag${onl}</span></div>`;
+    if (!r.antal) return `<div class="time-raekke ingen">${kl}<span class="time-spor"></span><span class="time-gange">–</span><span class="time-meta">${T('Ingen opslag', 'No posts')}${onl}</span></div>`;
     const gg = r.score == null ? '?' : gangeTal(r.score);
-    const label = `Kl. ${timeKl(r.time)}: ${r.score == null ? 'ingen visningstal' : gg + ' så mange visninger som et normalt opslag'}, ${tal(r.antal)} opslag${r === bedst ? ', bedste time' : ''}. Vis opslagene.`;
-    return `<button type="button" class="time-raekke${r === bedst ? ' bedst-time' : ''}${r.antal < TIME_NOK ? ' faa-opslag' : ''}" data-time="${r.time}" aria-pressed="${valgt === r.time}" aria-label="${label}">${kl}<span class="time-spor">${timeBar(r, skala)}</span><span class="time-gange">${gg}</span><span class="time-meta">${tal(r.antal)} opslag${onl}</span></button>`;
+    const label = EN ? `${timeKl(r.time)}: ${r.score == null ? 'no view numbers' : gg + ' the views of a normal post'}, ${tal(r.antal)} ${ordOpslag(r.antal)}${r === bedst ? ', best hour' : ''}. Show the posts.` : `Kl. ${timeKl(r.time)}: ${r.score == null ? 'ingen visningstal' : gg + ' så mange visninger som et normalt opslag'}, ${tal(r.antal)} opslag${r === bedst ? ', bedste time' : ''}. Vis opslagene.`;
+    return `<button type="button" class="time-raekke${r === bedst ? ' bedst-time' : ''}${r.antal < TIME_NOK ? ' faa-opslag' : ''}" data-time="${r.time}" aria-pressed="${valgt === r.time}" aria-label="${label}">${kl}<span class="time-spor">${timeBar(r, skala)}</span><span class="time-gange">${gg}</span><span class="time-meta">${tal(r.antal)} ${ordOpslag(r.antal)}${onl}</span></button>`;
   };
   boks.innerHTML = `<p class="timer-svar">${svar}</p>
-    <div class="timer-akse" aria-hidden="true"><span><i>Færre</i><i>1,0×</i><i>Flere</i></span></div>
+    <div class="timer-akse" aria-hidden="true"><span><i>${T('Færre', 'Fewer')}</i><i>${T('1,0×', '1.0×')}</i><i>${T('Flere', 'More')}</i></span></div>
     ${raekker.map(raekkeHtml).join('')}
-    <div class="timer-note">1,0× = et normalt opslag for butikken. Stiplet = under ${TIME_NOK} opslag, så timen kan ikke blive bedst.${online.size ? ' Bedst regnes kun på visninger; online er følgere på Instagram i snit de seneste 4 uger.' : ''}</div>`;
+    <div class="timer-note">${EN ? `1.0× = the store's normal post. Dashed = under ${TIME_NOK} posts, so the hour cannot be best.${online.size ? ' Best is based on views only; online is followers on Instagram, averaged over the last 4 weeks.' : ''}` : `1,0× = et normalt opslag for butikken. Stiplet = under ${TIME_NOK} opslag, så timen kan ikke blive bedst.${online.size ? ' Bedst regnes kun på visninger; online er følgere på Instagram i snit de seneste 4 uger.' : ''}`}</div>`;
   boks.hidden = false;
 }
 
@@ -1574,31 +1583,31 @@ async function hentTidListe() {
   const { pf, d, a, z, c, timer, valgt } = tidVis, p = periode(), liste = $('#tidListe'), kald = ++tidKald;
   const fra = valgt ?? a, til = valgt != null ? valgt + 1 : z;
   const antal = valgt != null ? ((timer || []).find(r => r.time === valgt) || {}).antal || 0 : c.antal;
-  const hoved = `<div class="tid-listehoved"><span>${valgt != null ? `${tal(antal)} opslag kl. ${timeKl(valgt)}` : `Alle ${tal(antal)} opslag i tidsrummet`}</span>${valgt != null ? '<button type="button" class="linkknap" id="tidAlle">Vis alle i tidsrummet</button>' : ''}</div>`;
-  liste.innerHTML = hoved + '<div class="lille" style="padding:12px 0">Henter opslagene …</div>';
+  const hoved = `<div class="tid-listehoved"><span>${valgt != null ? (EN ? `${tal(antal)} ${ordOpslag(antal)} at ${timeKl(valgt)}` : `${tal(antal)} opslag kl. ${timeKl(valgt)}`) : (EN ? `All ${tal(antal)} ${ordOpslag(antal)} in this time slot` : `Alle ${tal(antal)} opslag i tidsrummet`)}</span>${valgt != null ? `<button type="button" class="linkknap" id="tidAlle">${T('Vis alle i tidsrummet', 'Show all in this time slot')}</button>` : ''}</div>`;
+  liste.innerHTML = hoved + `<div class="lille" style="padding:12px 0">${T('Henter opslagene …', 'Loading the posts …')}</div>`;
   const arg = { p_fra: p.fra, p_til: p.til, p_platform: pf, p_ugedag: d + 1, p_time_fra: fra, p_time_til: til };
   const { data: o, error } = LINK
     ? await client.rpc('some_rapport_tid', { p_noegle: LINK, p_omfang: omfang, ...arg })
     : await client.rpc('some_tid_opslag', { p_butik: butik, ...arg });
   if (kald !== tidKald) return;
-  if (error || !o) { liste.innerHTML = hoved + '<div class="lille" style="padding:12px 0">Opslagene kunne ikke hentes. Prøv igen om lidt.</div>'; return; }
+  if (error || !o) { liste.innerHTML = hoved + `<div class="lille" style="padding:12px 0">${T('Opslagene kunne ikke hentes. Prøv igen om lidt.', 'The posts could not be loaded. Try again shortly.')}</div>`; return; }
   liste.innerHTML = hoved + (o.map(x => `<div class="opslag">
       ${x.billede_url ? `<img src="${esc(x.billede_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML='<div class=tom></div>'">` : '<div class="tom"></div>'}
-      <a href="${esc(/^https:\/\//.test(x.permalink || '') ? x.permalink : '#')}" target="_blank" rel="noopener"><div class="lille">${esc(x.some_konti.navn)}, ${new Date(x.oprettet_at).toLocaleString('da-DK', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}${x.type === 'REELS' ? ' · reel' : ''}</div><div class="tekst">${esc(x.tekst || '(uden tekst)')}</div></a>
-      <div class="tal2"><b>${tal(x.interaktioner)}</b> interaktioner<br>${tal(x.likes)} likes · ${tal(x.kommentarer)} komm. · ${tal(x.delinger)} delinger${x.visninger != null ? '<br>' + kortTal(x.visninger) + ' visninger' + (x.forhold != null ? ` · <span class="forhold">${gangeTal(x.forhold)}</span>` : '') : ''}</div>
-    </div>`).join('') + (o.length < antal ? `<div class="lille" style="padding:10px 0">Viser de ${o.length} opslag med flest interaktioner ud af ${tal(antal)}.</div>` : '')
-    || '<div class="lille" style="padding:12px 0">Ingen opslag i dette tidsrum.</div>');
+      <a href="${esc(/^https:\/\//.test(x.permalink || '') ? x.permalink : '#')}" target="_blank" rel="noopener"><div class="lille">${esc(x.some_konti.navn)}, ${new Date(x.oprettet_at).toLocaleString(LOC, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}${x.type === 'REELS' ? ' · reel' : ''}</div><div class="tekst">${esc(x.tekst || T('(uden tekst)', '(no text)'))}</div></a>
+      <div class="tal2"><b>${tal(x.interaktioner)}</b> ${T('interaktioner', 'interactions')}<br>${tal(x.likes)} likes · ${tal(x.kommentarer)} ${ordKomm(x.kommentarer)} · ${tal(x.delinger)} ${T('delinger', 'shares')}${x.visninger != null ? '<br>' + kortTal(x.visninger) + T(' visninger', ' views') + (x.forhold != null ? ` · <span class="forhold">${gangeTal(x.forhold)}</span>` : '') : ''}</div>
+    </div>`).join('') + (o.length < antal ? `<div class="lille" style="padding:10px 0">${EN ? `Showing the ${o.length} ${ordOpslag(o.length)} with the most interactions out of ${tal(antal)}.` : `Viser de ${o.length} opslag med flest interaktioner ud af ${tal(antal)}.`}</div>` : '')
+    || `<div class="lille" style="padding:12px 0">${T('Ingen opslag i dette tidsrum.', 'No posts in this time slot.')}</div>`);
 }
 
 async function visTidOpslag(pf, d, b, c) {
   const p = periode(), [a, z] = BLOKKE[b], dlg = $('#tidDialog');
   const kl = String(a).padStart(2, '0') + '–' + String(z).padStart(2, '0');
-  $('#tidTitel').textContent = `${PLATFORM[pf]}: ${UGEDAGE[d].toLowerCase()} kl. ${kl}`;
-  $('#tidUnder').textContent = `${c.score == null ? '' : gangeTal(c.score) + ' så mange visninger som normalt · '}${tal(c.antal)} opslag · ${$('#periodeTekst').textContent.split('·')[0].trim().replace(/^Viser /, '')}`;
+  $('#tidTitel').textContent = `${PLATFORM[pf]}: ${EN ? UGEDAGE[d] : UGEDAGE[d].toLowerCase()} ${KL()}${kl}`;
+  $('#tidUnder').textContent = `${c.score == null ? '' : gangeTal(c.score) + T(' så mange visninger som normalt · ', ' the normal views · ')}${tal(c.antal)} ${ordOpslag(c.antal)} · ${$('#periodeTekst').textContent.split('·')[0].trim().replace(/^(Viser|Showing) /, '')}`;
   tidVis = { pf, d, a, z, c, timer: null, valgt: null };
   const felt = tidVis, boks = $('#tidTimer');
   boks.hidden = false;
-  boks.innerHTML = '<div class="lille">Henter timerne …</div>';
+  boks.innerHTML = `<div class="lille">${T('Henter timerne …', 'Loading the hours …')}</div>`;
   if (!dlg.open) dlg.showModal();
   dlg.scrollTop = 0;
   hentTidListe();
@@ -1607,7 +1616,7 @@ async function visTidOpslag(pf, d, b, c) {
     ? await client.rpc('some_rapport_tid_timer', { p_noegle: LINK, p_omfang: omfang, ...arg })
     : await client.rpc('some_tid_timer', { p_butik: butik, ...arg });
   if (tidVis !== felt) return;
-  if (error || !timer) { boks.innerHTML = '<div class="lille">Timerne kunne ikke hentes. Prøv igen om lidt.</div>'; return; }
+  if (error || !timer) { boks.innerHTML = `<div class="lille">${T('Timerne kunne ikke hentes. Prøv igen om lidt.', 'The hours could not be loaded. Try again shortly.')}</div>`; return; }
   tidVis.timer = timer;
   tegnTimer();
 }
@@ -1678,11 +1687,11 @@ async function opdater() {
   if (opdaterer) return;
   opdaterer = true;
   const k = $('#opdater');
-  k.disabled = true; k.textContent = 'Henter…';
+  k.disabled = true; k.textContent = T('Henter…', 'Loading…');
   const { data: r, error } = await client.functions.invoke('some-sync', { body: { tving: true } });
-  k.disabled = false; k.textContent = 'Opdater nu';
+  k.disabled = false; k.textContent = T('Opdater nu', 'Update now');
   opdaterer = false;
-  if (error || !r || r.fejl) { besked((kanStyre && r && r.fejl) || 'De nye tal kunne ikke hentes lige nu. Prøv igen om lidt.', true); return; }
+  if (error || !r || r.fejl) { besked((kanStyre && r && r.fejl) || T('De nye tal kunne ikke hentes lige nu. Prøv igen om lidt.', 'The new numbers could not be collected right now. Try again shortly.'), true); return; }
   await hent();
 }
 const synlig = () => !document.hidden && innerWidth > 0; // 0 = iframen er skjult bag en anden fane
@@ -1697,17 +1706,18 @@ window.addEventListener('scroll', skjulPunkt, true);
 
 // ---------- Tema-knap paa butikslinket: System -> Lys -> Moerk ----------
 // I fanen sidder knappen i butik-redigerings topbar; valget deles via localStorage 'blho-tema'.
+const EN_TEMA = (da, en) => ({ toString: () => T(da, en) });   // sproget kendes foerst efter opstart
 const TEMA = {
   system: ['System', '<path d="M12 8a2.83 2.83 0 0 0 4 4 4 4 0 1 1-4-4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>'],
-  lys: ['Lys', '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>'],
-  moerk: ['Mørk', '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>'],
+  lys: [EN_TEMA('Lys', 'Light'), '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>'],
+  moerk: [EN_TEMA('Mørk', 'Dark'), '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>'],
 };
 const TEMA_NAESTE = { system: 'lys', lys: 'moerk', moerk: 'system' };
 function tegnTemaKnap() {
   const v = temaValg(), k = $('#temaKnap');
   k.hidden = !LINK;
   k.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${TEMA[v][1]}</svg>`;
-  k.title = `Tema: ${TEMA[v][0]} (klik for ${TEMA[TEMA_NAESTE[v]][0]})`;
+  k.title = EN ? `Theme: ${TEMA[v][0]} (click for ${TEMA[TEMA_NAESTE[v]][0]})` : `Tema: ${TEMA[v][0]} (klik for ${TEMA[TEMA_NAESTE[v]][0]})`;
   k.setAttribute('aria-label', k.title);
 }
 $('#temaKnap').addEventListener('click', e => {
@@ -1727,7 +1737,102 @@ $('#temaKnap').addEventListener('click', e => {
 window.addEventListener('storage', e => { if (e.key === 'blho-tema') tegnTemaKnap(); });
 tegnTemaKnap();
 
+// Alle faste tekster og tabeller paa engelsk, samlet ét sted
+function anvendEngelsk() {
+  EN = true; LOC = 'en-GB';
+  document.documentElement.lang = 'en';
+  document.title = 'SoMe performance';
+  METRIK = { visninger: 'Account views', raekkevidde: 'Reach', interaktioner: 'Interactions', nye_foelgere: 'New followers' };
+  UGEDAGE = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  SEKTION = {
+    facebook: {
+      indsats: [['Posts', 'opslag', 'Posts published in the period. Events are not included.']],
+      resultat: [
+        ['Views on posts', 'opslag_visninger', 'Views of the posts published in the period'],
+        ['Total views', 'samlede_visninger', "All views of the page's content in the period, including video, stories and older posts. The number comes from Facebook."],
+      ],
+    },
+    instagram: {
+      indsats: [
+        ['Posts', 'opslag', 'Photos and carousels published in the period'],
+        ['Reels', 'reels', 'Reels published in the period'],
+        ['Stories', 'stories', 'Stories published in the period'],
+      ],
+      resultat: [
+        ['Views on posts', 'opslag_visninger', 'Views of the photos and carousels published in the period'],
+        ['Views on reels', 'reel_visninger', 'Views of the reels published in the period'],
+        ['Views on stories', 'story_visninger', 'Views of the stories published in the period'],
+        ['Total views', 'samlede_visninger', 'Views on posts, reels and stories added together'],
+      ],
+    },
+  };
+  KOL = [
+    ['Posts', 'opslag', 'Posts published in the period, without reels, stories and events'],
+    ['Reels', 'reels', 'Reels published on Instagram in the period'],
+    ['Stories', 'stories', 'Stories published on Instagram in the period'],
+    ['Total views', 'samlede_visninger', "Facebook: all views of the page's content in the period. Instagram: posts, reels and stories added together."],
+    ['Interactions', 'interaktioner', 'Reactions, comments, shares and clicks on the account in the period'],
+    ['Followers', 'foelgere', 'Followers at the end of the period'],
+    ['New followers', 'nye_foelgere', 'New followers in the period. Instagram can take up to two days to deliver this number.'],
+  ];
+  const saet = (sel, tekst) => { const e = $(sel); if (e) e.textContent = tekst; };
+  const attr = (sel, navn, tekst) => { const e = $(sel); if (e) e.setAttribute(navn, tekst); };
+  saet('#laeserVis', ''); $('#laeserVis').insertAdjacentHTML('afterbegin', '<svg class="spinner" viewBox="0 0 50 50" aria-hidden="true"><circle cx="25" cy="25" r="20"/><circle class="bue" cx="25" cy="25" r="20"/></svg>Loading…');
+  saet('#ingenAdgangVis', 'Your account does not have access to the SoMe numbers.');
+  saet('#ugyldigtLinkVis', 'This link no longer works. Ask for a new link to your store\'s SoMe numbers.');
+  saet('#loginForm h2', 'Log in');
+  saet('#loginForm h2 + .lille', "Log in with your store login to read the SoMe report");
+  saet('label[for="loginKode"]', 'Password');
+  saet('#loginKnap', 'Log in');
+  saet('#loginForm a', 'Forgot password?');
+  saet('#loginFejl', 'Wrong email or password.');
+  saet('#nyKodeForm h2', 'Choose a new password');
+  saet('#nyKodeForm h2 + .lille', 'The first time, you need to choose your own password (at least 8 characters).');
+  saet('label[for="nyKode1"]', 'New password');
+  saet('label[for="nyKode2"]', 'Repeat password');
+  saet('#nyKodeKnap', 'Save and read the report');
+  saet('#titel', 'SoMe performance');
+  saet('[data-o="egen"]', 'My store');
+  saet('[data-o="faelles"]', 'All stores');
+  attr('#butik', 'aria-label', 'Store');
+  attr('#periode', 'aria-label', 'Period');
+  const per = { 7: 'Last 7 days', 28: 'Last 28 days', 90: 'Last 90 days', denne: 'This month', maaned: 'Last month', dettekvartal: 'This quarter', kvartal: 'Last quarter', aar: 'This year', valgfri: 'Choose dates …' };
+  [...$('#periode').options].forEach(o => { if (per[o.value]) o.textContent = per[o.value]; else if (o.value.startsWith('k:')) { const [a, q] = o.value.slice(2).split('-'); o.textContent = `Q${q} ${a}`; } });
+  attr('#kvartaler', 'label', 'Quarters');
+  attr('#fraDato', 'aria-label', 'From date');
+  attr('#tilDato', 'aria-label', 'To date');
+  attr('#sammenlignValg', 'aria-label', 'Compare with');
+  saet('#sammenlignValg option[value="aar"]', 'Compare with last year');
+  saet('#sammenlignValg option[value="foer"]', 'Compare with the previous period');
+  attr('#status', 'data-tip', 'Automatic collection\nThe numbers are collected from Facebook and Instagram once an hour.\nUpdate now collects them right away.');
+  saet('#opdater', 'Update now');
+  attr('#opdater', 'title', 'The numbers are collected automatically once an hour. Press to get the latest from Facebook and Instagram now.');
+  saet('#grafTitel', 'Views per day');
+  saet('.tabelvisning summary', 'Show the numbers as a table');
+  $('#foelgerTal').closest('.kort').querySelector('h2').textContent = 'Followers';
+  $('#kontiAntal').parentElement.firstChild.textContent = 'Stores and accounts ';
+  saet('[data-v="butik"]', 'By store');
+  saet('[data-v="konto"]', 'By account');
+  saet('#csv', 'Download as CSV');
+  attr('#csv', 'title', 'Download the table as a file that opens in Excel');
+  attr('#henterVis', 'aria-label', 'Loading numbers');
+  saet('#tidLuk', 'Close');
+  attr('#tidTimer', 'aria-label', 'Hour by hour');
+}
+// Sproget: ?sprog=, ellers butikken bag linket eller brugerens butik. Svarer serveren ikke (eller er
+// linket ugyldigt), afgoer browserens sprog det, saa en udenlandsk gaest ikke moedes af dansk.
+async function saetSprog() {
+  const onsket = new URLSearchParams(location.search).get('sprog');
+  let s = onsket === 'en' || onsket === 'da' ? onsket : null;
+  if (!s) {
+    const { data: d, error } = await client.rpc('some_sprog', { p_noegle: LINK });
+    s = d || (LINK || error ? (/^(da|nb|nn|no|sv)/i.test(navigator.language || '') ? 'da' : 'en') : 'da');
+  }
+  if (s === 'en' && !EN) { anvendEngelsk(); tegnTemaKnap(); }
+}
+
 async function start() {
+  await saetSprog();
   if (LINK) {
     const u = (await client.auth.getUser()).data.user;
     if (!u) { vis('loginVis'); return; }
@@ -1742,9 +1847,12 @@ async function start() {
   const { data: adg } = await client.from('some_adgang').select('bruger_id').eq('bruger_id', user.id).maybeSingle();
   if (!adg) { vis('ingenAdgangVis'); return; }
   vis('app');
-  const [, styr, grupper] = await Promise.all([hentRapporter(), client.rpc('kan_styre_some'), client.rpc('some_mail_grupper_hent')]);
+  // Fanen har ingen egen login: butik-redigering logger selve login'et, her logges, at SoMe blev aabnet
+  client.rpc('log_admin_handling', { p_handling: 'some_fane_aabnet' }).then(() => {});
+  const [, styr, grupper, sprog] = await Promise.all([hentRapporter(), client.rpc('kan_styre_some'), client.rpc('some_mail_grupper_hent'), client.rpc('some_sprog_liste')]);
   kanStyre = styr.data === true;
   mailGrupper = grupper.data || {};
+  sprogListe = sprog.data || {};
   await hent();
 }
 // Kvartalerne i periodevaelgeren: fra det igangvaerende og tilbage til 1. kvartal 2025 (tallene
@@ -1780,17 +1888,18 @@ $('#nyKodeForm').addEventListener('submit', async e => {
   const fejl = t => { const f = $('#nyKodeFejl'); f.textContent = t; f.hidden = !t; };
   const p1 = $('#nyKode1').value;
   fejl('');
-  if (p1.length < 8) { fejl('Adgangskoden skal være mindst 8 tegn.'); return; }
-  if (p1 !== $('#nyKode2').value) { fejl('De to adgangskoder er ikke ens.'); return; }
-  if (p1 === '12345678') { fejl('Vælg en anden adgangskode end startkoden.'); return; }
+  if (p1.length < 8) { fejl(T('Adgangskoden skal være mindst 8 tegn.', 'The password must be at least 8 characters.')); return; }
+  if (p1 !== $('#nyKode2').value) { fejl(T('De to adgangskoder er ikke ens.', 'The two passwords do not match.')); return; }
+  if (p1 === '12345678') { fejl(T('Vælg en anden adgangskode end startkoden.', 'Choose a different password than the starting code.')); return; }
   const knap = $('#nyKodeKnap'); knap.disabled = true;
   const { error } = await client.auth.updateUser({ password: p1 });
   const { error: e2 } = error ? { error } : await client.rpc('mark_password_set');
   knap.disabled = false;
-  if (error || e2) { fejl('Kunne ikke gemme adgangskoden: ' + (error || e2).message); return; }
+  if (error || e2) { fejl(T('Kunne ikke gemme adgangskoden: ', 'The password could not be saved: ') + (error || e2).message); return; }
+  client.rpc('log_admin_handling', { p_handling: 'adgangskode_valgt', p_detaljer: 'SoMe-rapport' }).then(() => {});
   $('#laeserVis').hidden = false;
   start().catch(() => vis('ugyldigtLinkVis'));
 });
-if (window.top !== window || LINK) start().catch(() => vis(LINK ? 'ugyldigtLinkVis' : 'ingenAdgangVis'));
+if (window.top !== window || LINK || new URLSearchParams(location.search).has('sprog')) start().catch(() => vis(LINK ? 'ugyldigtLinkVis' : 'ingenAdgangVis'));
 </script>
 </body></html>

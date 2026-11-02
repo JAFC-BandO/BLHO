@@ -51,12 +51,12 @@ const db = (sti: string, init: RequestInit) => fetch(SB + '/rest/v1/' + sti, {
 }).catch(() => null);
 const dag = (d: string) => new Date(d + 'T12:00:00Z');
 // "september 2026" for en hel kalendermaaned, ellers "12. september – 9. oktober 2026"
-function periodeNavn(fra: string, til: string): string {
+function periodeNavn(fra: string, til: string, sprog = 'da-DK'): string {
   const sidste = new Date(Date.UTC(+til.slice(0, 4), +til.slice(5, 7), 0)).getUTCDate();
   if (fra.slice(0, 7) === til.slice(0, 7) && fra.endsWith('-01') && +til.slice(8) === sidste) {
-    return dag(fra).toLocaleDateString('da-DK', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    return dag(fra).toLocaleDateString(sprog, { month: 'long', year: 'numeric', timeZone: 'UTC' });
   }
-  const dato = (d: string, aar: boolean) => dag(d).toLocaleDateString('da-DK', { day: 'numeric', month: 'long', ...(aar ? { year: 'numeric' } : {}), timeZone: 'UTC' });
+  const dato = (d: string, aar: boolean) => dag(d).toLocaleDateString(sprog, { day: 'numeric', month: 'long', ...(aar ? { year: 'numeric' } : {}), timeZone: 'UTC' });
   return dato(fra, fra.slice(0, 4) !== til.slice(0, 4)) + ' – ' + dato(til, true);
 }
 
@@ -92,8 +92,12 @@ Deno.serve(async (req) => {
   if (!d.noegle) return svar({ fejl: 'Mail er ikke sat op endnu (Resend-nøglen mangler i Supabase).', kode: 'ingen_noegle' });
   if (!d.rapport) return svar({ fejl: 'Butikken har ingen gemt rapport.' });
 
-  const butik = String(d.butik ?? 'butikken').replace(/^Butik\s+/, 'Børneloppen ');
-  const periode = periodeNavn(d.rapport.fra, d.rapport.til);
+  // Butikker uden for Danmark (butikker.sprog = 'en') faar mailen paa engelsk, ligesom siden
+  const sr = await db('butikker?select=sprog&id=eq.' + encodeURIComponent(String(body.butik)), { method: 'GET' });
+  const EN = sr && sr.ok ? (await sr.json().catch(() => []))?.[0]?.sprog === 'en' : false;
+  const L = (da: string, en: string) => EN ? en : da;
+  const butik = EN && d.butik === 'Butik Island' ? 'Barnaloppan Island' : String(d.butik ?? 'butikken').replace(/^Butik\s+/, 'Børneloppen ');
+  const periode = periodeNavn(d.rapport.fra, d.rapport.til, EN ? 'en-GB' : 'da-DK');
   const kontakt = typeof d.kontakt === 'string' ? d.kontakt.trim() : '';
   // Et brev paa Boerneloppens brevpapir: logoet paa den blaa flade som paa login-siden, og under
   // det et almindeligt brev med én knap -- ingen overskrifter, maerkater eller anden skabelon-pynt.
@@ -107,7 +111,7 @@ Deno.serve(async (req) => {
   // farver i stedet for at vende de lyse om selv. Lyst: logoet paa Night som sitets header.
   // Moerkt: logoet og knappen paa brand-blaa (#33a3dc), kort #1e2029 paa side #15161b. Klasserne
   // styrer kun den moerke variant; de faste farver inline er den lyse. [data-ogsc] er Outlook.com.
-  const html = (url: string, ny: boolean, mail: string) => `<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>
+  const html = (url: string, ny: boolean, mail: string) => `<!doctype html><html lang="${L('da', 'en')}"><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>
 :root{color-scheme:light dark;supported-color-schemes:light dark}
 @media (prefers-color-scheme:dark){
  .side,body{background:#15161b!important}
@@ -117,29 +121,32 @@ Deno.serve(async (req) => {
  .knap{background:#33a3dc!important}
 }
 [data-ogsc] .side{background:#15161b!important}[data-ogsc] .hoved,[data-ogsc] .hoved img{background:#33a3dc!important}[data-ogsc] .kort{background:#1e2029!important;border-color:#3a3d4a!important;color:#e8e8ee!important}[data-ogsc] .kort a.lnk{color:#7fc7ea!important}[data-ogsc] .knap{background:#33a3dc!important}
-</style></head><body class="side" style="margin:0;background:#f3f8fc"><div style="display:none;max-height:0;overflow:hidden;opacity:0">Jeres SoMe-rapport for ${esc(periode)} er klar.</div>
+</style></head><body class="side" style="margin:0;background:#f3f8fc"><div style="display:none;max-height:0;overflow:hidden;opacity:0">${L(`Jeres SoMe-rapport for ${esc(periode)} er klar.`, `Your SoMe report for ${esc(periode)} is ready.`)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f3f8fc" class="side" style="background:#f3f8fc"><tr><td align="center" class="side" style="padding:32px 12px">
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;text-align:left">
 <tr><td align="center" bgcolor="#143546" class="hoved" style="background:#143546;border-radius:12px 12px 0 0;padding:28px 20px"><img src="cid:logo" width="180" height="108" alt="Børneloppen" style="display:block;width:180px;height:108px;border:0;background:#143546;font-family:${skrift};font-size:22px;font-weight:bold;color:#ffffff"></td></tr>
 <tr><td bgcolor="#ffffff" class="kort" style="background:#ffffff;border:1px solid #d9e4ec;border-top:0;border-radius:0 0 12px 12px;padding:32px 34px 34px;font-family:${skrift};font-size:16px;line-height:1.6;color:#143546">
-<p style="margin:0 0 16px">Kære ${esc(butik)}</p>
-<p style="margin:0 0 16px">Nedenfor finder I SoMe-rapporten for ${esc(butik)} for perioden <b>${esc(periode).replace(/(\d\.) /g, '$1&nbsp;')}</b>.</p>
-<p style="margin:0 0 16px">Følg linket og log ind for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.</p>
-<p style="margin:0 0 26px">${ny ? `Log ind med din Børneloppen-mail <b>${esc(mail)}</b> og adgangskoden <b>${STARTKODE}</b>. Du bliver bedt om at vælge en ny adgangskode, første gang du logger ind.` : `Log ind med din Børneloppen-mail <b>${esc(mail)}</b> og din egen adgangskode.`}</p>
-<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#33a3dc" class="knap" style="background:#33a3dc;border-radius:999px;mso-padding-alt:13px 26px"><a href="${esc(url)}" style="display:inline-block;padding:13px 26px;font-family:${skrift};font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none">Log ind og læs rapporten</a></td></tr></table>
-${kontakt ? `<p style="margin:26px 0 0">Har I spørgsmål til rapporten, er I velkomne til at skrive til <a href="mailto:${esc(kontakt)}" class="lnk" style="color:#143546">${esc(kontakt)}</a>.</p>` : ''}
-<p style="margin:${kontakt ? 16 : 26}px 0 0">Med venlig hilsen<br>Børneloppen-teamet</p>
+<p style="margin:0 0 16px">${L('Kære', 'Dear')} ${esc(butik)}</p>
+<p style="margin:0 0 16px">${L(`Nedenfor finder I SoMe-rapporten for ${esc(butik)} for perioden`, `Here is the SoMe report for ${esc(butik)} for the period`)} <b>${esc(periode).replace(/(\d\.) /g, '$1&nbsp;')}</b>.</p>
+<p style="margin:0 0 16px">${L('Følg linket og log ind for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.', 'Follow the link and log in to read what you did well and what you could improve.')}</p>
+<p style="margin:0 0 26px">${EN ? (ny ? `Log in with your email <b>${esc(mail)}</b> and the password <b>${STARTKODE}</b>. You will be asked to choose a new password the first time you log in.` : `Log in with your email <b>${esc(mail)}</b> and your own password.`) : ny ? `Log ind med din Børneloppen-mail <b>${esc(mail)}</b> og adgangskoden <b>${STARTKODE}</b>. Du bliver bedt om at vælge en ny adgangskode, første gang du logger ind.` : `Log ind med din Børneloppen-mail <b>${esc(mail)}</b> og din egen adgangskode.`}</p>
+<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#33a3dc" class="knap" style="background:#33a3dc;border-radius:999px;mso-padding-alt:13px 26px"><a href="${esc(url)}" style="display:inline-block;padding:13px 26px;font-family:${skrift};font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none">${L('Log ind og læs rapporten', 'Log in and read the report')}</a></td></tr></table>
+${kontakt ? `<p style="margin:26px 0 0">${L('Har I spørgsmål til rapporten, er I velkomne til at skrive til', 'If you have questions about the report, you are welcome to write to')} <a href="mailto:${esc(kontakt)}" class="lnk" style="color:#143546">${esc(kontakt)}</a>.</p>` : ''}
+<p style="margin:${kontakt ? 16 : 26}px 0 0">${L('Med venlig hilsen<br>Børneloppen-teamet', 'Kind regards<br>The Børneloppen team')}</p>
 </td></tr>
 </table>
 </td></tr></table></body></html>`;
-  const text = (url: string, ny: boolean, mail: string) => `Kære ${butik}\n\nNedenfor finder I SoMe-rapporten for ${butik} for perioden ${periode}. Følg linket og log ind for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.\n\n${url}\n\n`
+  const text = (url: string, ny: boolean, mail: string) => EN ? `Dear ${butik}\n\nHere is the SoMe report for ${butik} for the period ${periode}. Follow the link and log in to read what you did well and what you could improve.\n\n${url}\n\n`
+    + (ny ? `Log in with your email ${mail} and the password ${STARTKODE}. You will be asked to choose a new password the first time you log in.\n\n` : `Log in with your email ${mail} and your own password.\n\n`)
+    + (kontakt ? `If you have questions about the report, you are welcome to write to ${kontakt}.\n\n` : '') + 'Kind regards\nThe Børneloppen team'
+    : `Kære ${butik}\n\nNedenfor finder I SoMe-rapporten for ${butik} for perioden ${periode}. Følg linket og log ind for at læse mere om, hvad I har gjort godt, og hvad I eventuelt kan forbedre.\n\n${url}\n\n`
     + (ny ? `Log ind med din Børneloppen-mail ${mail} og adgangskoden ${STARTKODE}. Du bliver bedt om at vælge en ny adgangskode, første gang du logger ind.\n\n` : `Log ind med din Børneloppen-mail ${mail} og din egen adgangskode.\n\n`)
     + (kontakt ? `Har I spørgsmål til rapporten, er I velkomne til at skrive til ${kontakt}.\n\n` : '') + 'Med venlig hilsen\nBørneloppen-teamet';
   const send = (from: string, modtager: string, url: string, ny: boolean) => fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + d.noegle, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from, to: [modtager], ...(kontakt ? { reply_to: kontakt } : {}), subject: `SoMe-rapport for ${butik}, ${periode}`,
+      from, to: [modtager], ...(kontakt ? { reply_to: kontakt } : {}), subject: L(`SoMe-rapport for ${butik}, ${periode}`, `SoMe report for ${butik}, ${periode}`),
       html: html(url, ny, modtager), text: text(url, ny, modtager),
       attachments: [{ path: LOGO, filename: 'boerneloppen.png', content_type: 'image/png', content_id: 'logo' }],
     }),

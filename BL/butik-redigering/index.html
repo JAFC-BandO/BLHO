@@ -745,6 +745,8 @@
           <option value="gem_indhold">Gemt indhold</option>
           <option value="gem_skabelon">Gemt fælles skabelon</option>
           <option value="some_rapport_aabnet">SoMe-rapport åbnet</option>
+          <option value="some_fane_aabnet">SoMe-fane åbnet</option>
+          <option value="adgangskode_valgt">Adgangskode valgt</option>
           <option value="js_fejl">JS-fejl</option>
           <option value="status">Status (heartbeat)</option>
           <option value="checkin_loop_start">Check-in-loop startet</option>
@@ -1634,7 +1636,7 @@
         const ramme = document.createElement('iframe');
         ramme.title = 'SoMe-performance';
         // ?v= skal bumpes naar some/index.html aendres (samme grund som for vagtplanen nedenfor)
-        ramme.src = '../some/?indlejret=1&v=2026-11-01-2';
+        ramme.src = '../some/?indlejret=1&v=2026-11-02-1';
         vis.appendChild(ramme);
       }
       updateSlideOverlay();
@@ -2663,7 +2665,7 @@
       .then(({ error }) => { if (error) dbgWarn('[aktivitetslog] kunne ikke logge:', error.message); });
   }
 
-  const HANDLING_LABELS = { login: 'Login', gem_indhold: 'Gemte indhold', gem_skabelon: 'Gemte fælles skabelon', some_rapport_aabnet: 'Åbnede SoMe-rapporten', js_fejl: 'JS-fejl', status: 'Status', checkin_loop_start: 'Check-in-loop startet', proaktiv_genstart: 'Proaktiv genstart (lav hukommelse)' };
+  const HANDLING_LABELS = { login: 'Login', gem_indhold: 'Gemte indhold', gem_skabelon: 'Gemte fælles skabelon', some_rapport_aabnet: 'Åbnede SoMe-rapporten', some_fane_aabnet: 'Åbnede SoMe-fanen', adgangskode_valgt: 'Valgte adgangskode', js_fejl: 'JS-fejl', status: 'Status', checkin_loop_start: 'Check-in-loop startet', proaktiv_genstart: 'Proaktiv genstart (lav hukommelse)' };
 
   async function loadAktivitetslog() {
     const butikFilter = document.getElementById('aktivitetslogButikFilter').value;
@@ -2686,9 +2688,9 @@
     }
     liste.innerHTML = data.map(row => {
       const butikNavn = row.butik_navn || '(ukendt butik)';
-      // En SoMe-rapport aabnes uden login via modtagerens personlige link: adressen staar i detaljer
+      // SoMe-rapporten: den indloggede bruger, og hvilket link der blev brugt (aeldre raekker har kun linket)
       const erSome = row.handling === 'some_rapport_aabnet';
-      const brugerEmail = erSome ? row.detaljer : row.bruger_email || '(ukendt bruger)';
+      const brugerEmail = erSome ? (row.bruger_email ? row.bruger_email + ', via ' + row.detaljer : row.detaljer) : row.bruger_email || '(ukendt bruger)';
       const label = HANDLING_LABELS[row.handling] || row.handling;
       const erFejl = row.handling === 'js_fejl';
       return '<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px; background:' + (erFejl ? 'var(--ui-flade-fejl)' : 'var(--ui-flade-graa)') + '; border-radius:8px; padding:8px 12px; font-size:13px;">' +

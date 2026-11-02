@@ -467,7 +467,8 @@ begin
         and (o.type is null or o.type not in ('STORY', 'created_event'))) t where t.nr <= 5), '[]'::jsonb));
 end $$;
 revoke execute on function public.some_rapport(text, date, date, text, text) from public;
-grant execute on function public.some_rapport(text, date, date, text, text) to anon, authenticated;
+revoke execute on function public.some_rapport(text, date, date, text, text) from anon;
+grant execute on function public.some_rapport(text, date, date, text, text) to authenticated;
 
 -- ---------- Samme svar, men med valgfri sammenligningsperiode (det siden bruger nu) ----------
 create or replace function public.some_overblik2(p_fra date, p_til date, p_butik uuid, p_f_fra date, p_f_til date)
@@ -504,7 +505,8 @@ begin
         and (o.type is null or o.type not in ('STORY', 'created_event'))) t where t.nr <= 5), '[]'::jsonb));
 end $$;
 revoke execute on function public.some_rapport2(text, date, date, text, text, date, date) from public;
-grant execute on function public.some_rapport2(text, date, date, text, text, date, date) to anon, authenticated;
+revoke execute on function public.some_rapport2(text, date, date, text, text, date, date) from anon;
+grant execute on function public.some_rapport2(text, date, date, text, text, date, date) to authenticated;
 
 -- ---------- Opslagene bag ét felt i "Bedste tidspunkter at poste" ----------
 -- p_ugedag 1-7 = mandag-soendag, timerne er dansk tid (samme afgraensning som 'tider' i kernen).
@@ -552,7 +554,8 @@ begin
   return public.some_tid_kerne(p_fra, p_til, case when p_omfang = 'faelles' then null else v_butik end, p_platform, p_ugedag, p_time_fra, p_time_til);
 end $$;
 revoke execute on function public.some_rapport_tid(text, date, date, text, text, int, int, int) from public;
-grant execute on function public.some_rapport_tid(text, date, date, text, text, int, int, int) to anon, authenticated;
+revoke execute on function public.some_rapport_tid(text, date, date, text, text, int, int, int) from anon;
+grant execute on function public.some_rapport_tid(text, date, date, text, text, int, int, int) to authenticated;
 
 -- ---------- Et felt time for time (dialogen bag "Bedste tidspunkter at poste") ----------
 -- Samme score som felterne i 'tider': median af visninger ift. kontoens median i perioden.
@@ -593,7 +596,8 @@ begin
   return public.some_tid_timer_kerne(p_fra, p_til, case when p_omfang = 'faelles' then null else v_butik end, p_platform, p_ugedag, p_time_fra, p_time_til);
 end $$;
 revoke execute on function public.some_rapport_tid_timer(text, date, date, text, text, int, int, int) from public;
-grant execute on function public.some_rapport_tid_timer(text, date, date, text, text, int, int, int) to anon, authenticated;
+revoke execute on function public.some_rapport_tid_timer(text, date, date, text, text, int, int, int) from anon;
+grant execute on function public.some_rapport_tid_timer(text, date, date, text, text, int, int, int) to authenticated;
 
 -- ---------- Grundlag for signifikanstesten i browserens konsol ----------
 -- Kun opsummeringer, ingen enkeltopslag. 'klynger' = én raekke pr. kalendertime (sum af centreret
@@ -630,6 +634,43 @@ begin
 end $$;
 revoke execute on function public.some_signifikans(date, date, uuid) from public, anon;
 grant execute on function public.some_signifikans(date, date, uuid) to authenticated;
+
+-- ---------- Sprog pr. butik og hvem der aabner rapporten ----------
+alter table public.butikker add column if not exists sprog text not null default 'da' check (sprog in ('da', 'en'));
+update public.butikker set sprog = 'en' where navn in ('Butik Island', 'Butik Liège');
+
+-- Sidens sprog: butikken bag linket, ellers den indloggede brugers butik. Afsloerer kun 'da'/'en'.
+create or replace function public.some_sprog(p_noegle text default null)
+returns text language sql stable security definer set search_path = public as $$
+  select coalesce(
+    (select b.sprog from butikker b where b.id = public.some_link_butik(p_noegle)),
+    (select b.sprog from brugere u join butikker b on b.id = u.butik_id where u.id = auth.uid()));
+$$;
+revoke execute on function public.some_sprog(text) from public;
+grant execute on function public.some_sprog(text) to anon, authenticated;
+
+create or replace function public.some_sprog_liste()
+returns jsonb language sql stable security definer set search_path = public as $$
+  select case when public.har_some_adgang() then (select coalesce(jsonb_object_agg(id, sprog), '{}'::jsonb) from butikker where sprog <> 'da') end;
+$$;
+revoke execute on function public.some_sprog_liste() from public, anon;
+grant execute on function public.some_sprog_liste() to authenticated;
+
+-- Aabninger af rapporten: nu ogsaa med den indloggede bruger, saa Aktivitetsloggen viser hvem
+create or replace function public.some_rapporter_link(p_noegle text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_butik uuid := public.some_link_butik(p_noegle); v_modtager text;
+begin
+  if v_butik is null then return null; end if;
+  update some_mail_log set aabninger = aabninger + 1, aabnet_foerst = coalesce(aabnet_foerst, now()), aabnet_sidst = now()
+  where kode = p_noegle returning modtager into v_modtager;
+  insert into admin_log (bruger_id, butik_id, handling, detaljer) values (auth.uid(), v_butik, 'some_rapport_aabnet', coalesce(v_modtager, 'butikkens faste link'));
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('id', r.id, 'butik_id', r.butik_id, 'fra', r.fra, 'til', r.til, 'titel', r.titel,
+      'tekst', r.tekst, 'opdateret_at', r.opdateret_at, 'arkiveret_at', r.arkiveret_at)
+      order by (r.arkiveret_at is not null), r.til desc, r.fra desc, r.opdateret_at desc)
+    from some_rapporter r where r.slettet_at is null and (r.butik_id is null or r.butik_id = v_butik)), '[]'::jsonb);
+end $$;
 
 -- ---------- Styring af adgangen (Admin-menuen i butik-redigering) ----------
 -- Kun brugere med kan_styre maa se og aendre, hvem der har SoMe-fanen. Flaget saettes med SQL:
@@ -788,7 +829,8 @@ returns jsonb language sql stable security definer set search_path = public as $
   from (select public.some_link_butik(p_noegle) as butik) l where l.butik is not null;
 $$;
 revoke execute on function public.some_rapporter_link(text) from public;
-grant execute on function public.some_rapporter_link(text) to anon, authenticated;
+revoke execute on function public.some_rapporter_link(text) from anon;
+grant execute on function public.some_rapporter_link(text) to authenticated;
 
 -- Gemmer butikkens rapport for perioden. Er perioden den samme som den aktive rapports, rettes
 -- teksten; ellers bliver den gamle raekke til en tidligere rapport, og teksten faar en ny raekke.
