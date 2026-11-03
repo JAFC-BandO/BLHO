@@ -431,7 +431,8 @@ const kladder = new Map();  // ikke-gemte tekster pr. butik ('alle' = den faelle
 let foerUdkast = null;      // det, der stod i skrivefeltet, foer AI-udkastet blev sat ind (til "Fortryd")
 const bedsteTider = {};     // de bedste tidspunkter pr. platform, som tekst (til AI-udkastet)
 let sprogListe = {};        // butikker, der ikke laeser dansk: { butik_id: 'en' } (kun i fanen)
-let periodeFraUrl = false;  // adressen bad selv om en bestemt periode
+let periodeFraUrl = false;
+let sammenlignFraUrl = false;  // adressen bad selv om en bestemt sammenligning (&sammenlign=)  // adressen bad selv om en bestemt periode
 let sammenligning = 'aar';  // 'aar' = samme periode sidste aar, 'foer' = perioden lige foer
 const foerNavn = () => sammenligning === 'aar' ? T('Samme periode sidste år', 'Same period last year') : T('Perioden lige før', 'The previous period');
 
@@ -747,10 +748,20 @@ function saetPeriode(fra, til) {
   if (!fast) { v.value = 'valgfri'; $('#fraDato').value = fra; $('#tilDato').value = til; }
   visDatoer();
 }
-// Butikslinket: start paa rapportens periode -- medmindre adressen selv beder om en bestemt periode
+// En rapport vises med den periode OG den sammenligning, den blev gemt med
+const sammenligningAf = r => r && r.sammenligning === 'foer' ? 'foer' : 'aar';
+const foerNavnAf = v => v === 'aar' ? T('samme periode sidste år', 'the same period last year') : T('perioden lige før', 'the previous period');
+function saetRapport(r, medPeriode = true) {
+  if (medPeriode) saetPeriode(r.fra, r.til);
+  sammenligning = sammenligningAf(r);
+  $('#sammenlignValg').value = sammenligning;
+}
+// Butikslinket: start paa rapportens periode og sammenligning -- medmindre adressen selv beder om noget andet
 function vaelgStandardRapport() {
   const r = egenRapport() || faellesRapport();
-  if (r && !periodeFraUrl) saetPeriode(r.fra, r.til);
+  if (!r) return;
+  if (!periodeFraUrl) saetPeriode(r.fra, r.til);
+  if (!sammenlignFraUrl) saetRapport(r, false);
 }
 // Skrivefeltet hoerer til en butik ('alle' = den faelles tekst) -- ikke til en periode. Skifter
 // man periode, mens man skriver, bliver teksten staaende; perioden er den, der er valgt oeverst,
@@ -804,7 +815,9 @@ function tegnRapport(status) {
     ${vist.titel ? `<h2>${esc(vist.titel)}</h2>` : ''}
     <div class="rapport-tekst">${esc(vist.tekst)}</div>
     ${vist === egen && faelles ? `<div class="rapport-faelles"><span class="rapport-maerke">${T('Til alle butikker', 'To all stores')}${navn(faelles) === navn(egen) ? '' : ' · ' + esc(navn(faelles))}</span>${faelles.titel ? `<h2>${esc(faelles.titel)}</h2>` : ''}<div class="rapport-tekst">${esc(faelles.tekst)}</div></div>` : ''}
-    ${vist.fra === p.fra && vist.til === p.til ? '' : `<div class="rapport-note">${EN ? `This report covers ${esc(navn(vist))}, but you are looking at a different period.` : `Rapporten handler om ${esc(navn(vist))}, men du kigger lige nu på en anden periode.`} <button type="button" class="linkknap" data-r="periode">${T('Vis rapportens periode', "Show the report's period")}</button></div>`}
+    ${vist.fra === p.fra && vist.til === p.til && sammenligningAf(vist) === sammenligning ? '' : `<div class="rapport-note">${vist.fra === p.fra && vist.til === p.til
+      ? (EN ? `This report compares with ${foerNavnAf(sammenligningAf(vist))}, but you are comparing with ${foerNavnAf(sammenligning)}.` : `Rapporten sammenligner med ${foerNavnAf(sammenligningAf(vist))}, men du sammenligner lige nu med ${foerNavnAf(sammenligning)}.`)
+      : (EN ? `This report covers ${esc(navn(vist))}, but you are looking at a different period.` : `Rapporten handler om ${esc(navn(vist))}, men du kigger lige nu på en anden periode.`)} <button type="button" class="linkknap" data-r="periode">${T('Vis rapportens periode', "Show the report's period")}</button></div>`}
   </div>`;
 }
 function tegnEditor(status) {
@@ -863,10 +876,10 @@ function tegnTidligere() {
 // Linjen om, hvilken periode rapporten gemmes for -- rettes uden at roere selve skrivefeltet
 function tegnEditorPeriode(status) {
   const p = periode(), n = rapNoegle(), gemt = gemtRapport(n), navn = periodeNavn(p.fra, p.til);
-  const gemtNavn = gemt && (gemt.fra !== p.fra || gemt.til !== p.til) ? periodeNavn(gemt.fra, gemt.til) : '';
-  $('#rapPeriode').innerHTML = `Rapporten gemmes for <b>${esc(navn)}</b>${navn === nuTekst ? '' : ' (' + esc(nuTekst) + ')'} – perioden valgt øverst. Det er den periode, butikken lander på, når den åbner sit link; den kan selv vælge en anden bagefter.`
+  const gemtNavn = gemt && (gemt.fra !== p.fra || gemt.til !== p.til || sammenligningAf(gemt) !== sammenligning) ? periodeNavn(gemt.fra, gemt.til) + ' sammenlignet med ' + foerNavnAf(sammenligningAf(gemt)) : '';
+  $('#rapPeriode').innerHTML = `Rapporten gemmes for <b>${esc(navn)}</b>${navn === nuTekst ? '' : ' (' + esc(nuTekst) + ')'} sammenlignet med <b>${esc(foerNavnAf(sammenligning))}</b> – det, der er valgt øverst. Det er det, butikken lander på, når den åbner sit link; den kan selv vælge noget andet bagefter.`
     + (butik && sprogListe[butik] === 'en' ? '<br><b>Butikken læser siden på engelsk:</b> skriv rapporten på engelsk. AI-udkastet og mailen kommer på engelsk af sig selv.' : '')
-    + (gemtNavn ? `<br>Den gemte rapport dækker <b>${esc(gemtNavn)}</b>. Gemmer du nu, kommer den til at dække perioden ovenfor i stedet. <button type="button" class="linkknap" data-r="periode">Skift til ${esc(gemtNavn)}</button>` : '');
+    + (gemtNavn ? `<br>Den gemte rapport dækker <b>${esc(gemtNavn)}</b>. Gemmer du nu, kommer den til at dække det ovenfor i stedet. <button type="button" class="linkknap" data-r="periode">Skift til ${esc(gemtNavn)}</button>` : '');
   $('#rapStatus').textContent = status || (kladder.has(n) ? 'Ændringerne er ikke gemt endnu.' : '');
 }
 function tegnUdkastNote(besked) {
@@ -1011,7 +1024,7 @@ $('#rapportBoks').addEventListener('click', async e => {
   if (h === 'periode') {
     // I skrivefeltet: den gemte rapports periode. Ellers: perioden for den rapport, der vises
     const r = document.querySelector('#rapportBoks [data-noegle]') ? gemtRapport(rapNoegle()) : vistNu();
-    if (r) { saetPeriode(r.fra, r.til); hent(); }
+    if (r) { saetRapport(r); hent(); }
     return;
   }
   // Resten hoerer til skrivefeltet og gaelder den butik, feltet er tegnet for
@@ -1022,7 +1035,7 @@ $('#rapportBoks').addEventListener('click', async e => {
     const p = periode(), tekst = $('#rapTekst').value, titel = $('#rapTitel').value;
     if (!tekst.trim()) { $('#rapStatus').textContent = 'Skriv en tekst først.'; return; }
     k.disabled = true; $('#rapStatus').textContent = 'Gemmer …';
-    const { error } = await client.rpc('some_rapporter_gem', { p_butik: b, p_fra: p.fra, p_til: p.til, p_titel: titel, p_tekst: tekst });
+    const { error } = await client.rpc('some_rapporter_gem', { p_butik: b, p_fra: p.fra, p_til: p.til, p_titel: titel, p_tekst: tekst, p_sammenligning: sammenligning });
     if (error) { k.disabled = false; $('#rapStatus').textContent = 'Rapporten kunne ikke gemmes: ' + error.message; return; }
     kladder.delete(n);
     if (foerUdkast && foerUdkast.noegle === n) foerUdkast = null;
@@ -1127,7 +1140,7 @@ $('#rapportBoks').addEventListener('change', e => {
   const v = e.target.closest('.rapportValg'); if (!v || !v.value) return;
   const r = rapporter.find(x => x.id === v.value); if (!r) return;
   vistRapport = r.arkiveret_at ? r.id : null;
-  saetPeriode(r.fra, r.til); hent();
+  saetRapport(r); hent();
 });
 
 // ---------- Indsats og resultat pr. platform ----------
@@ -1880,7 +1893,7 @@ async function start() {
   const q = new URLSearchParams(location.search), v = q.get('periode'), dato = /^\d{4}-\d{2}-\d{2}$/;
   if (dato.test(q.get('fra') || '') && dato.test(q.get('til') || '')) { $('#periode').value = 'valgfri'; $('#fraDato').value = q.get('fra'); $('#tilDato').value = q.get('til'); periodeFraUrl = true; }
   else if (v && v !== 'valgfri' && [...$('#periode').options].some(o => o.value === v)) { $('#periode').value = v; periodeFraUrl = true; }
-  if (q.get('sammenlign') === 'foer') { sammenligning = 'foer'; $('#sammenlignValg').value = 'foer'; }
+  if (q.get('sammenlign') === 'foer' || q.get('sammenlign') === 'aar') { sammenligning = q.get('sammenlign'); $('#sammenlignValg').value = sammenligning; sammenlignFraUrl = true; }
   visDatoer();
 }
 $('#loginForm').addEventListener('submit', async e => {

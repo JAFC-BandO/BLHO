@@ -672,6 +672,63 @@ begin
     from some_rapporter r where r.slettet_at is null and (r.butik_id is null or r.butik_id = v_butik)), '[]'::jsonb);
 end $$;
 
+-- ---------- Rapporten husker ogsaa sin sammenligning ----------
+-- 'aar' = samme periode sidste aar, 'foer' = perioden lige foer. Linket aabner rapporten med begge dele.
+alter table public.some_rapporter add column if not exists sammenligning text not null default 'aar' check (sammenligning in ('aar', 'foer'));
+
+drop function if exists public.some_rapporter_gem(uuid, date, date, text, text);
+create or replace function public.some_rapporter_gem(p_butik uuid, p_fra date, p_til date, p_titel text, p_tekst text, p_sammenligning text default 'aar')
+returns uuid language plpgsql security definer set search_path = public as $$
+declare v_id uuid; v_fra date; v_til date; v_sml text := case when p_sammenligning = 'foer' then 'foer' else 'aar' end;
+begin
+  if not public.kan_styre_some() then raise exception 'Ingen adgang'; end if;
+  if p_fra is null or p_til is null or p_til < p_fra then raise exception 'Ugyldig periode'; end if;
+  if coalesce(btrim(p_tekst), '') = '' then raise exception 'Rapporten mangler tekst'; end if;
+  if length(p_tekst) > 8000 then raise exception 'Teksten er for lang (hoejst 8000 tegn)'; end if;
+  select id, fra, til into v_id, v_fra, v_til from some_rapporter
+    where butik_id is not distinct from p_butik and slettet_at is null and arkiveret_at is null for update;
+  -- Samme periode: rapporten rettes (ogsaa hvis kun sammenligningen er skiftet)
+  if v_id is not null and v_fra = p_fra and v_til = p_til then
+    update some_rapporter set titel = nullif(btrim(p_titel), ''), tekst = p_tekst, sammenligning = v_sml, opdateret_at = now(), opdateret_af = auth.uid()
+    where id = v_id;
+    return v_id;
+  end if;
+  if v_id is not null then
+    update some_rapporter set arkiveret_at = now() where id = v_id;
+  end if;
+  insert into some_rapporter (butik_id, fra, til, titel, tekst, sammenligning, opdateret_af)
+  values (p_butik, p_fra, p_til, nullif(btrim(p_titel), ''), p_tekst, v_sml, auth.uid()) returning id into v_id;
+  return v_id;
+end $$;
+revoke execute on function public.some_rapporter_gem(uuid, date, date, text, text, text) from public, anon;
+grant execute on function public.some_rapporter_gem(uuid, date, date, text, text, text) to authenticated;
+
+create or replace function public.some_rapporter_hent()
+returns jsonb language sql stable security definer set search_path = public as $$
+  select case when public.har_some_adgang() then coalesce((
+    select jsonb_agg(jsonb_build_object('id', r.id, 'butik_id', r.butik_id, 'fra', r.fra, 'til', r.til, 'titel', r.titel,
+      'tekst', r.tekst, 'sammenligning', r.sammenligning, 'opdateret_at', r.opdateret_at, 'arkiveret_at', r.arkiveret_at)
+      order by (r.arkiveret_at is not null), r.til desc, r.fra desc, r.opdateret_at desc)
+    from some_rapporter r where r.slettet_at is null), '[]'::jsonb) end;
+$$;
+
+create or replace function public.some_rapporter_link(p_noegle text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_butik uuid := public.some_link_butik(p_noegle); v_modtager text;
+begin
+  if v_butik is null then return null; end if;
+  update some_mail_log set aabninger = aabninger + 1, aabnet_foerst = coalesce(aabnet_foerst, now()), aabnet_sidst = now()
+  where kode = p_noegle returning modtager into v_modtager;
+  insert into admin_log (bruger_id, butik_id, handling, detaljer) values (auth.uid(), v_butik, 'some_rapport_aabnet', coalesce(v_modtager, 'butikkens faste link'));
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('id', r.id, 'butik_id', r.butik_id, 'fra', r.fra, 'til', r.til, 'titel', r.titel,
+      'tekst', r.tekst, 'sammenligning', r.sammenligning, 'opdateret_at', r.opdateret_at, 'arkiveret_at', r.arkiveret_at)
+      order by (r.arkiveret_at is not null), r.til desc, r.fra desc, r.opdateret_at desc)
+    from some_rapporter r where r.slettet_at is null and (r.butik_id is null or r.butik_id = v_butik)), '[]'::jsonb);
+end $$;
+revoke execute on function public.some_rapporter_link(text) from public, anon;
+grant execute on function public.some_rapporter_link(text) to authenticated;
+
 -- ---------- Styring af adgangen (Admin-menuen i butik-redigering) ----------
 -- Kun brugere med kan_styre maa se og aendre, hvem der har SoMe-fanen. Flaget saettes med SQL:
 --   update public.some_adgang set kan_styre = true where bruger_id = (select id from auth.users where email = '...');
